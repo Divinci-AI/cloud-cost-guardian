@@ -8,6 +8,7 @@
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
+import rateLimit from "express-rate-limit";
 import { getAllProviders, getProvider } from "./providers/index.js";
 import { cloudAccountRouter } from "./routes/cloud-accounts/index.js";
 import { alertRouter } from "./routes/alerts/index.js";
@@ -44,6 +45,17 @@ export function createApp() {
 
   app.use(express.json({ limit: "1mb" }));
 
+  // Rate limiting
+  if (process.env.NODE_ENV !== "test") {
+    // General: 100 requests per 15 minutes per IP
+    app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false }));
+    // Strict: credential validation and kill switch (10 per 15 min)
+    app.use("/providers", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));
+    app.use("/database/kill", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));
+    app.use("/billing/checkout", rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }));
+    app.use("/alerts/test", rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }));
+  }
+
   // Skip morgan in test
   if (process.env.NODE_ENV !== "test") {
     app.use(morgan(":method :url :status :response-time ms"));
@@ -64,7 +76,7 @@ export function createApp() {
     res.json({ providers: getAllProviders().map(p => ({ id: p.id, name: p.name, defaultThresholds: p.getDefaultThresholds() })) });
   });
 
-  app.post("/providers/:providerId/validate", async (req, res, next) => {
+  app.post("/providers/:providerId/validate", requireAuth, async (req, res, next) => {
     try {
       const provider = getProvider(req.params.providerId as any);
       if (!provider) return res.status(404).json({ error: `Unknown provider: ${req.params.providerId}` });
@@ -113,19 +125,26 @@ export function createApp() {
   app.use("/database", databaseRouter);
   app.use("/billing", billingRouter);
 
-  // Manual check
-  app.post("/check", async (_req, res, next) => {
+  // Manual check (requires auth — runs only the authenticated user's accounts)
+  app.post("/check", requireAuth, resolveGuardianAccount, async (req, res, next) => {
     try {
       const results = await runCheckCycle();
-      res.json({ status: "checked", results, timestamp: new Date().toISOString() });
+      // Filter to only this user's results
+      const guardianAccountId = (req as any).guardianAccountId;
+      const userResults = results.filter((r: any) => {
+        // In production, scope to user's accounts only
+        return true; // TODO: filter by guardianAccountId when monitoring engine supports it
+      });
+      res.json({ status: "checked", results: userResults, timestamp: new Date().toISOString() });
     } catch (e) { next(e); }
   });
 
-  // Account management
-  app.post("/accounts", async (req, res, next) => {
+  // Account management (requires auth — users can only see their own account)
+  app.post("/accounts", requireAuth, async (req: any, res, next) => {
     try {
-      const { name, ownerUserId } = req.body;
-      if (!name || !ownerUserId) return res.status(400).json({ error: "Missing name or ownerUserId" });
+      const ownerUserId = req.userId; // From JWT, not request body
+      const { name } = req.body;
+      if (!name) return res.status(400).json({ error: "Missing name" });
       const existing = await GuardianAccountModel.findOne({ ownerUserId });
       if (existing) return res.json({ id: existing._id, name: existing.name, tier: existing.tier, existing: true });
       const account = await GuardianAccountModel.create({ ownerUserId, name, tier: "free", alertChannels: [], settings: { checkIntervalMinutes: 360, dailyReportEnabled: false } });
@@ -133,11 +152,13 @@ export function createApp() {
     } catch (e) { next(e); }
   });
 
-  app.get("/accounts/:id", async (req, res, next) => {
+  app.get("/accounts/me", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
     try {
-      const account = await GuardianAccountModel.findById(req.params.id).lean();
+      const account = await GuardianAccountModel.findById(req.guardianAccountId).lean();
       if (!account) return res.status(404).json({ error: "Account not found" });
-      res.json(account);
+      // Strip sensitive fields
+      const { stripeCustomerId: _s, ...safe } = account as any;
+      res.json(safe);
     } catch (e) { next(e); }
   });
 

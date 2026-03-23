@@ -58,7 +58,7 @@ async function queryDOUsage(token: string, accountId: string): Promise<ServiceUs
   const today = new Date().toISOString().split("T")[0];
   const query = `{
     viewer {
-      accounts(filter: {accountTag: "${accountId}"}) {
+      accounts(filter: {accountTag: "${accountId.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
         durableObjectsInvocationsAdaptiveGroups(
           limit: 50,
           filter: {date_geq: "${today}"},
@@ -95,7 +95,7 @@ async function queryWorkerUsage(token: string, accountId: string): Promise<Servi
   const today = new Date().toISOString().split("T")[0];
   const query = `{
     viewer {
-      accounts(filter: {accountTag: "${accountId}"}) {
+      accounts(filter: {accountTag: "${accountId.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
         workersInvocationsAdaptive(
           limit: 50,
           filter: {date_geq: "${today}"},

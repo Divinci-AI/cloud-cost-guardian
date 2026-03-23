@@ -228,6 +228,14 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // Auth: require GUARDIAN_API_KEY for non-health endpoints
+    if (url.pathname !== "/") {
+      const authHeader = request.headers.get("Authorization");
+      if (env.GUARDIAN_API_KEY && authHeader !== `Bearer ${env.GUARDIAN_API_KEY}`) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
     if (url.pathname === "/check") {
       const result = await runCheck(env);
       await reportToGuardian(env, result);

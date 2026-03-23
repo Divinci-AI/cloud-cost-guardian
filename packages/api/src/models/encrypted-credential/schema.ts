@@ -34,7 +34,7 @@ function encrypt(plaintext: string): { encrypted: string; iv: string; authTag: s
   const masterKey = getMasterKey();
   const salt = randomBytes(SALT_LENGTH);
   const iv = randomBytes(IV_LENGTH);
-  const key = scryptSync(masterKey, salt, KEY_LENGTH);
+  const key = scryptSync(masterKey, salt, KEY_LENGTH, { N: 32768, r: 8, p: 1 });
   const cipher = createCipheriv(ALGORITHM, key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
@@ -52,7 +52,7 @@ function decrypt(data: { encrypted: string; iv: string; authTag: string; salt: s
   const iv = Buffer.from(data.iv, "base64");
   const authTag = Buffer.from(data.authTag, "base64");
   const encrypted = Buffer.from(data.encrypted, "base64");
-  const key = scryptSync(masterKey, salt, KEY_LENGTH);
+  const key = scryptSync(masterKey, salt, KEY_LENGTH, { N: 32768, r: 8, p: 1 });
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
   const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);

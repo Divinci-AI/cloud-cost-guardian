@@ -67,7 +67,7 @@ async function queryDOUsage(env: Env): Promise<DOUsage[]> {
   const today = new Date().toISOString().split("T")[0];
   const query = `{
     viewer {
-      accounts(filter: {accountTag: "${env.CLOUDFLARE_ACCOUNT_ID}"}) {
+      accounts(filter: {accountTag: "${env.CLOUDFLARE_ACCOUNT_ID.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
         durableObjectsInvocationsAdaptiveGroups(
           limit: 50,
           filter: {date_geq: "${today}"},
@@ -93,7 +93,7 @@ async function queryWorkerUsage(env: Env): Promise<WorkerUsage[]> {
   const today = new Date().toISOString().split("T")[0];
   const query = `{
     viewer {
-      accounts(filter: {accountTag: "${env.CLOUDFLARE_ACCOUNT_ID}"}) {
+      accounts(filter: {accountTag: "${env.CLOUDFLARE_ACCOUNT_ID.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
         workersInvocationsAdaptive(
           limit: 50,
           filter: {date_geq: "${today}"},
@@ -452,6 +452,15 @@ export default {
 
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // Auth: require ADMIN_SECRET for all non-health endpoints
+    const adminSecret = (env as any).ADMIN_SECRET;
+    if (adminSecret && url.pathname !== "/") {
+      const authHeader = request.headers.get("Authorization");
+      if (authHeader !== `Bearer ${adminSecret}`) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
 
     // Manual check trigger
     if (url.pathname === "/check") {
