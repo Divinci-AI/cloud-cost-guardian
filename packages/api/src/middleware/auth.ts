@@ -28,8 +28,8 @@ export interface AuthenticatedRequest extends Request {
  * Extracts userId from the `sub` claim.
  */
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
-  // Development bypass: allow X-Guardian-Account-Id header
-  if (process.env.NODE_ENV === "development" || process.env.ENVIRONMENT === "local") {
+  // Development bypass: ONLY active when GUARDIAN_DEV_AUTH_BYPASS=true AND NOT in production
+  if (process.env.GUARDIAN_DEV_AUTH_BYPASS === "true" && process.env.NODE_ENV !== "production") {
     const devAccountId = req.headers["x-guardian-account-id"] as string;
     const devUserId = req.headers["x-guardian-user-id"] as string;
     if (devAccountId || devUserId) {

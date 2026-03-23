@@ -171,11 +171,10 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
   let event: Stripe.Event;
 
   try {
-    if (STRIPE_WEBHOOK_SECRET) {
-      event = stripe.webhooks.constructEvent(req.body, req.headers["stripe-signature"] as string, STRIPE_WEBHOOK_SECRET);
-    } else {
-      event = req.body as Stripe.Event;
+    if (!STRIPE_WEBHOOK_SECRET) {
+      return res.status(503).send("Webhook secret not configured — cannot verify signatures");
     }
+    event = stripe.webhooks.constructEvent(req.body, req.headers["stripe-signature"] as string, STRIPE_WEBHOOK_SECRET);
   } catch (err: any) {
     console.error("[guardian] Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);

@@ -9,6 +9,35 @@ import type { AlertChannel } from "../models/guardian-account/schema.js";
 
 type Severity = "critical" | "error" | "warning" | "info";
 
+/**
+ * SSRF Protection: Validate webhook URLs are safe to call.
+ * Blocks private/internal IPs and non-HTTPS URLs.
+ */
+function isUrlSafe(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    // Only allow HTTPS
+    if (url.protocol !== "https:") return false;
+    // Block known internal hostnames
+    const blocked = ["localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]", "metadata.google.internal"];
+    if (blocked.includes(url.hostname)) return false;
+    // Block private IP ranges
+    const parts = url.hostname.split(".");
+    if (parts.length === 4) {
+      const first = parseInt(parts[0]);
+      const second = parseInt(parts[1]);
+      if (first === 10) return false;
+      if (first === 172 && second >= 16 && second <= 31) return false;
+      if (first === 192 && second === 168) return false;
+      if (first === 127) return false;
+      if (first === 169 && second === 254) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function sendAlerts(
   channels: AlertChannel[],
   summary: string,
@@ -73,7 +102,7 @@ async function alertPagerDuty(channel: AlertChannel, summary: string, severity: 
 
 async function alertDiscord(channel: AlertChannel, summary: string, severity: Severity, details: Record<string, unknown>): Promise<void> {
   const webhookUrl = channel.config.webhookUrl;
-  if (!webhookUrl) return;
+  if (!webhookUrl || !isUrlSafe(webhookUrl)) return;
 
   const colorMap = { critical: 0xFF0000, error: 0xFF6600, warning: 0xFFCC00, info: 0x0099FF };
 
@@ -98,7 +127,7 @@ async function alertDiscord(channel: AlertChannel, summary: string, severity: Se
 
 async function alertSlack(channel: AlertChannel, summary: string, severity: Severity, details: Record<string, unknown>): Promise<void> {
   const webhookUrl = channel.config.webhookUrl;
-  if (!webhookUrl) return;
+  if (!webhookUrl || !isUrlSafe(webhookUrl)) return;
 
   const emojiMap = { critical: ":rotating_light:", error: ":warning:", warning: ":large_yellow_circle:", info: ":information_source:" };
 
@@ -113,7 +142,7 @@ async function alertSlack(channel: AlertChannel, summary: string, severity: Seve
 
 async function alertWebhook(channel: AlertChannel, summary: string, severity: Severity, details: Record<string, unknown>): Promise<void> {
   const webhookUrl = channel.config.webhookUrl;
-  if (!webhookUrl) return;
+  if (!webhookUrl || !isUrlSafe(webhookUrl)) return;
 
   await fetch(webhookUrl, {
     method: "POST",

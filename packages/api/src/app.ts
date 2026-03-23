@@ -23,7 +23,25 @@ import { getUsageHistory, getAlertHistory } from "./globals/index.js";
 export function createApp() {
   const app = express();
 
-  app.use(cors({ origin: true, credentials: true }));
+  // CORS — restrict to known origins in production
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:3000"];
+  app.use(cors({
+    origin: process.env.NODE_ENV === "production" ? allowedOrigins : true,
+    credentials: true,
+  }));
+
+  // Security headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "same-origin");
+    if (process.env.NODE_ENV === "production") {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+    next();
+  });
+
   app.use(express.json({ limit: "1mb" }));
 
   // Skip morgan in test
@@ -146,7 +164,7 @@ export function createApp() {
 
   // Error handler
   app.use((err: any, _req: any, res: any, _next: any) => {
-    res.status(err.status || 500).json({ error: err.message || "Internal server error" });
+    res.status(err.status || 500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : (err.message || "Internal server error") });
   });
 
   return app;

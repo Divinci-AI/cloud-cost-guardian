@@ -107,7 +107,8 @@ cloudAccountRouter.get("/", async (req, res, next) => {
  */
 cloudAccountRouter.get("/:id", async (req, res, next) => {
   try {
-    const account = await CloudAccountModel.findById(req.params.id).lean();
+    const guardianAccountId = (req as any).guardianAccountId;
+    const account = await CloudAccountModel.findOne({ _id: req.params.id, guardianAccountId }).lean();
     if (!account) {
       return res.status(404).json({ error: "Cloud account not found" });
     }
@@ -132,7 +133,10 @@ cloudAccountRouter.put("/:id", async (req, res, next) => {
     if (name) update.name = name;
     if (status && ["active", "paused"].includes(status)) update.status = status;
 
-    const account = await CloudAccountModel.findByIdAndUpdate(req.params.id, update, { new: true });
+    const guardianAccountId = (req as any).guardianAccountId;
+    const account = await CloudAccountModel.findOneAndUpdate(
+      { _id: req.params.id, guardianAccountId }, update, { new: true }
+    );
     if (!account) {
       return res.status(404).json({ error: "Cloud account not found" });
     }
@@ -148,7 +152,8 @@ cloudAccountRouter.put("/:id", async (req, res, next) => {
  */
 cloudAccountRouter.delete("/:id", async (req, res, next) => {
   try {
-    const account = await CloudAccountModel.findById(req.params.id);
+    const guardianAccountId = (req as any).guardianAccountId;
+    const account = await CloudAccountModel.findOne({ _id: req.params.id, guardianAccountId });
     if (!account) {
       return res.status(404).json({ error: "Cloud account not found" });
     }

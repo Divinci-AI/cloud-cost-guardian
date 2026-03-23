@@ -105,7 +105,7 @@ export function initiateKillSequence(
   trigger: string,
   actions: DatabaseKillAction[] = ["snapshot", "verify-snapshot", "isolate", "nuke"]
 ): KillSequenceState {
-  const id = `dbkill-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+  const id = `dbkill-${crypto.randomUUID()}`;
   const target = credential.clusterName || credential.instanceName || credential.redisHost || "unknown";
 
   const sequence: KillSequenceState = {
