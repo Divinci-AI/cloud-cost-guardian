@@ -32,11 +32,18 @@ interface Env {
   DO_REQUEST_THRESHOLD: string;           // Daily DO requests before alerting
   DO_WALLTIME_HOURS_THRESHOLD: string;    // Daily DO wall-time hours before alerting
   WORKER_REQUEST_THRESHOLD: string;       // Daily Worker requests before alerting
+  R2_OPS_THRESHOLD: string;              // Daily R2 operations before alerting
+  R2_STORAGE_GB_THRESHOLD: string;       // R2 storage GB before alerting
+  D1_ROWS_READ_THRESHOLD: string;        // Daily D1 rows read before alerting
+  D1_ROWS_WRITTEN_THRESHOLD: string;     // Daily D1 rows written before alerting
+  QUEUE_OPS_THRESHOLD: string;           // Daily queue operations before alerting
+  STREAM_MINUTES_THRESHOLD: string;      // Stream minutes before alerting
 
   // Kill switch behavior
   AUTO_DISCONNECT: string;   // "true" to auto-disconnect routes (reversible)
   AUTO_DELETE: string;       // "true" to auto-delete workers (nuclear, irreversible)
   PROTECTED_WORKERS: string; // Comma-separated worker names to never kill
+  PROTECTED_RESOURCES: string; // Comma-separated R2/D1/Queue names to never kill
 
   ENVIRONMENT: string;
 }
@@ -209,6 +216,102 @@ async function deleteWorker(env: Env, scriptName: string): Promise<string> {
   }
   const text = await res.text();
   return `Failed to delete ${scriptName}: ${res.status} ${text.substring(0, 100)}`;
+}
+
+// ─── Extended Service Queries (R2, D1, Queues, Stream) ──────────────────────
+
+interface R2Usage { bucketName: string; ops: number; storageGB: number; }
+interface D1Usage { dbName: string; rowsRead: number; rowsWritten: number; }
+interface QueueUsage { queueName: string; messages: number; }
+
+async function queryR2Usage(env: Env): Promise<R2Usage[]> {
+  const today = new Date().toISOString().split("T")[0];
+  const query = `{
+    viewer {
+      accounts(filter: {accountTag: "${env.CLOUDFLARE_ACCOUNT_ID.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
+        r2StorageAdaptiveGroups(
+          limit: 50,
+          filter: {date_geq: "${today}"},
+          orderBy: [sum_objectCount_DESC]
+        ) {
+          dimensions { bucketName }
+          sum { objectCount payloadSize uploadCount downloadCount }
+        }
+      }
+    }
+  }`;
+
+  try {
+    const data = await cfGraphQL(env, query);
+    const groups = data?.data?.viewer?.accounts?.[0]?.r2StorageAdaptiveGroups ?? [];
+    return groups.map((g: any) => ({
+      bucketName: g.dimensions.bucketName,
+      ops: (g.sum.uploadCount || 0) + (g.sum.downloadCount || 0),
+      storageGB: (g.sum.payloadSize || 0) / (1024 * 1024 * 1024),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function queryD1Usage(env: Env): Promise<D1Usage[]> {
+  const today = new Date().toISOString().split("T")[0];
+  const query = `{
+    viewer {
+      accounts(filter: {accountTag: "${env.CLOUDFLARE_ACCOUNT_ID.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
+        d1AnalyticsAdaptiveGroups(
+          limit: 50,
+          filter: {date_geq: "${today}"},
+          orderBy: [sum_readQueries_DESC]
+        ) {
+          dimensions { databaseId }
+          sum { readQueries writeQueries rowsRead rowsWritten }
+        }
+      }
+    }
+  }`;
+
+  try {
+    const data = await cfGraphQL(env, query);
+    const groups = data?.data?.viewer?.accounts?.[0]?.d1AnalyticsAdaptiveGroups ?? [];
+    return groups.map((g: any) => ({
+      dbName: g.dimensions.databaseId,
+      rowsRead: g.sum.rowsRead || 0,
+      rowsWritten: g.sum.rowsWritten || 0,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ─── Extended Kill Actions ──────────────────────────────────────────────────
+
+async function deleteR2Bucket(env: Env, bucketName: string): Promise<string> {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/r2/buckets/${bucketName}`,
+    { method: "DELETE", headers: { "Authorization": `Bearer ${env.CLOUDFLARE_API_TOKEN}` } }
+  );
+  return res.ok ? `DELETED R2 bucket ${bucketName}` : `Failed to delete R2 bucket ${bucketName}: ${res.status}`;
+}
+
+async function deleteD1Database(env: Env, dbId: string): Promise<string> {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${dbId}`,
+    { method: "DELETE", headers: { "Authorization": `Bearer ${env.CLOUDFLARE_API_TOKEN}` } }
+  );
+  return res.ok ? `DELETED D1 database ${dbId}` : `Failed to delete D1 database ${dbId}: ${res.status}`;
+}
+
+async function pauseZone(env: Env, zoneId: string): Promise<string> {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/zones/${zoneId}`,
+    {
+      method: "PATCH",
+      headers: { "Authorization": `Bearer ${env.CLOUDFLARE_API_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ paused: true }),
+    }
+  );
+  return res.ok ? `PAUSED zone ${zoneId}` : `Failed to pause zone ${zoneId}: ${res.status}`;
 }
 
 // ─── Alerting ───────────────────────────────────────────────────────────────
@@ -417,6 +520,57 @@ async function checkUsage(env: Env): Promise<CheckResult> {
       if (autoDisconnect) {
         const results = await disconnectWorker(env, usage.scriptName);
         actions.push(...results);
+      }
+    }
+  }
+
+  // Check R2 usage
+  const r2OpsThreshold = parseInt(env.R2_OPS_THRESHOLD || "10000000");
+  const r2StorageThreshold = parseFloat(env.R2_STORAGE_GB_THRESHOLD || "10");
+  const protectedResources = (env.PROTECTED_RESOURCES || "").split(",").map(s => s.trim()).filter(Boolean);
+
+  console.error("[kill-switch] Checking R2 usage...");
+  const r2Usage = await queryR2Usage(env);
+
+  for (const usage of r2Usage) {
+    if (usage.ops > r2OpsThreshold || usage.storageGB > r2StorageThreshold) {
+      const msg = `R2 THRESHOLD EXCEEDED: ${usage.bucketName} - ${usage.ops.toLocaleString()} ops, ${usage.storageGB.toFixed(2)} GB`;
+      violations.push(msg);
+      console.error(`[kill-switch] ${msg}`);
+
+      if (protectedResources.includes(usage.bucketName)) {
+        actions.push(`PROTECTED: R2 bucket ${usage.bucketName}`);
+        continue;
+      }
+
+      if (autoDelete) {
+        const result = await deleteR2Bucket(env, usage.bucketName);
+        actions.push(result);
+      }
+    }
+  }
+
+  // Check D1 usage
+  const d1RowsReadThreshold = parseInt(env.D1_ROWS_READ_THRESHOLD || "5000000");
+  const d1RowsWrittenThreshold = parseInt(env.D1_ROWS_WRITTEN_THRESHOLD || "1000000");
+
+  console.error("[kill-switch] Checking D1 usage...");
+  const d1Usage = await queryD1Usage(env);
+
+  for (const usage of d1Usage) {
+    if (usage.rowsRead > d1RowsReadThreshold || usage.rowsWritten > d1RowsWrittenThreshold) {
+      const msg = `D1 THRESHOLD EXCEEDED: ${usage.dbName} - ${usage.rowsRead.toLocaleString()} rows read, ${usage.rowsWritten.toLocaleString()} rows written`;
+      violations.push(msg);
+      console.error(`[kill-switch] ${msg}`);
+
+      if (protectedResources.includes(usage.dbName)) {
+        actions.push(`PROTECTED: D1 database ${usage.dbName}`);
+        continue;
+      }
+
+      if (autoDelete) {
+        const result = await deleteD1Database(env, usage.dbName);
+        actions.push(result);
       }
     }
   }

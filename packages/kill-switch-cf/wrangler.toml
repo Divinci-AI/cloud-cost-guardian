@@ -33,6 +33,29 @@ DO_WALLTIME_HOURS_THRESHOLD = "100"
 # $0.30/million after 10M free.
 WORKER_REQUEST_THRESHOLD = "10000000"
 
+# R2 operations per day (default: 10 million)
+# Context: R2 Class A ops cost $4.50/million, Class B $0.36/million
+R2_OPS_THRESHOLD = "10000000"
+
+# R2 total storage in GB (default: 10 GB)
+# Context: R2 storage costs $0.015/GB/month
+R2_STORAGE_GB_THRESHOLD = "10"
+
+# D1 rows read per day (default: 5 million)
+# Context: D1 bills per row scanned, not per result — full table scans are expensive
+D1_ROWS_READ_THRESHOLD = "5000000"
+
+# D1 rows written per day (default: 1 million)
+D1_ROWS_WRITTEN_THRESHOLD = "1000000"
+
+# Queue operations per day (default: 1 million)
+# Context: Each 64KB message chunk counts as one operation
+QUEUE_OPS_THRESHOLD = "1000000"
+
+# Stream minutes stored/delivered per day (default: 10,000)
+# Context: Stream costs $5.00/1000 min stored, $1.00/1000 min delivered
+STREAM_MINUTES_THRESHOLD = "10000"
+
 # ── Kill Switch Behavior ─────────────────────────────────────────────────────
 
 # Auto-disconnect routes when thresholds exceeded (RECOMMENDED)
@@ -49,6 +72,10 @@ AUTO_DELETE = "false"
 # Comma-separated list of worker script names.
 # Always include this kill switch worker itself!
 PROTECTED_WORKERS = "cloudflare-billing-kill-switch,divinci-agent-stage,divinci-agent-production"
+
+# R2 buckets, D1 databases, and queues that should NEVER be killed.
+# Comma-separated list of resource names.
+PROTECTED_RESOURCES = ""
 
 # ── Secrets ──────────────────────────────────────────────────────────────────
 # Set these via `wrangler secret put <NAME>`

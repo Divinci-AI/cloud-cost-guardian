@@ -103,7 +103,7 @@ export async function storeCredential(
   const plaintext = JSON.stringify(credential);
 
   // Get preview (last 4 chars of the primary token)
-  const primaryKey = credential.apiToken || credential.projectId || "";
+  const primaryKey = credential.apiToken || credential.awsAccessKeyId || credential.projectId || "";
   const keyPreview = primaryKey.length >= 4 ? primaryKey.slice(-4) : "****";
 
   const encryptedData = encrypt(plaintext);

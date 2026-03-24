@@ -195,6 +195,37 @@ async function captureGCPSnapshot(
 }
 
 /**
+ * Capture a forensic snapshot for an AWS service
+ */
+async function captureAWSSnapshot(
+  credential: DecryptedCredential,
+  serviceName: string,
+  trigger: string
+): Promise<Partial<ForensicSnapshot["data"]>> {
+  // AWS forensics require SDK calls — for now capture basic metadata
+  // Full implementation would use EC2 DescribeInstances, Lambda GetFunction, etc.
+  const data: Partial<ForensicSnapshot["data"]> = {};
+
+  const [serviceType, ...rest] = serviceName.split(":");
+  const serviceId = rest.join(":");
+
+  data.serviceConfig = {
+    serviceType,
+    serviceId,
+    region: credential.awsRegion || "us-east-1",
+    capturedAt: new Date().toISOString(),
+    trigger,
+  };
+
+  // Environment variable names are not accessible without SDK calls
+  // This is intentionally minimal — extended in future with SDK integration
+  data.environmentVariables = [];
+  data.recentLogs = [`Forensic snapshot triggered by: ${trigger}`];
+
+  return data;
+}
+
+/**
  * Capture a complete forensic snapshot
  */
 export async function captureSnapshot(
@@ -211,6 +242,8 @@ export async function captureSnapshot(
     providerData = await captureCloudflareSnapshot(credential, serviceName, trigger);
   } else if (credential.provider === "gcp") {
     providerData = await captureGCPSnapshot(credential, serviceName, trigger);
+  } else if (credential.provider === "aws") {
+    providerData = await captureAWSSnapshot(credential, serviceName, trigger);
   }
 
   const snapshot: ForensicSnapshot = {

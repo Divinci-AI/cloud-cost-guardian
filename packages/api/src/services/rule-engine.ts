@@ -276,4 +276,75 @@ export const PRESET_RULES = {
       forensicsEnabled: true,
     };
   },
+
+  /**
+   * GPU Runaway — detect unexpected GPU instances (crypto mining, leaked keys)
+   * Default: alert on any GPU instance (threshold 0)
+   */
+  gpuRunaway(maxGPUInstances = 0): KillSwitchRule {
+    return {
+      id: "preset-gpu-runaway",
+      name: "GPU Instance Runaway",
+      enabled: true,
+      trigger: "cost",
+      conditions: [
+        { metric: "ec2GPUInstanceCount", operator: "gt", value: maxGPUInstances },
+        { metric: "computeGPUCount", operator: "gt", value: maxGPUInstances },
+      ],
+      conditionLogic: "any",
+      actions: [
+        { type: "stop-instances", target: "*" },
+        { type: "snapshot" },
+      ],
+      cooldownMinutes: 30,
+      forensicsEnabled: true,
+    };
+  },
+
+  /**
+   * Lambda Loop — detect recursive invocation spirals
+   * Default: 500 concurrent executions
+   */
+  lambdaLoop(maxConcurrency = 500): KillSwitchRule {
+    return {
+      id: "preset-lambda-loop",
+      name: "Lambda Recursive Loop Detection",
+      enabled: true,
+      trigger: "cost",
+      conditions: [
+        { metric: "lambdaConcurrentExecutions", operator: "gt", value: maxConcurrency },
+      ],
+      conditionLogic: "any",
+      actions: [
+        { type: "throttle-lambda", target: "*" },
+        { type: "snapshot" },
+      ],
+      cooldownMinutes: 15,
+      forensicsEnabled: true,
+    };
+  },
+
+  /**
+   * AWS Cost Runaway — emergency stop when daily cost spikes
+   * Default: $100/day
+   */
+  awsCostRunaway(dailyCostUSD = 100): KillSwitchRule {
+    return {
+      id: "preset-aws-cost-runaway",
+      name: "AWS Daily Cost Runaway",
+      enabled: true,
+      trigger: "cost",
+      conditions: [
+        { metric: "awsDailyCostUSD", operator: "gt", value: dailyCostUSD },
+      ],
+      conditionLogic: "any",
+      actions: [
+        { type: "stop-instances", target: "*" },
+        { type: "throttle-lambda", target: "*" },
+        { type: "snapshot" },
+      ],
+      cooldownMinutes: 60,
+      forensicsEnabled: true,
+    };
+  },
 };

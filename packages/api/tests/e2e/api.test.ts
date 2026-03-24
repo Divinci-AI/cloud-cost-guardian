@@ -393,6 +393,88 @@ describe("E2E: Kill Switch Rules", () => {
     expect(res.status).toBe(201);
   });
 
+  it("GET /rules lists rules for account", async () => {
+    const res = await request(app)
+      .get("/rules")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(200);
+    expect(res.body.rules).toBeDefined();
+    expect(Array.isArray(res.body.rules)).toBe(true);
+  });
+
+  it("PUT /rules/:ruleId updates an existing rule", async () => {
+    // First create a rule
+    await request(app)
+      .post("/rules")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({
+        id: "update-test", name: "Test Rule", enabled: true, trigger: "cost",
+        conditions: [{ metric: "totalEstimatedDailyCostUSD", operator: "gt", value: 50 }],
+        conditionLogic: "any", actions: [{ type: "disconnect" }], cooldownMinutes: 30, forensicsEnabled: false,
+      });
+
+    // Now update it
+    const res = await request(app)
+      .put("/rules/update-test")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({ name: "Updated Rule", cooldownMinutes: 60 });
+    expect(res.status).toBe(200);
+    expect(res.body.rule.name).toBe("Updated Rule");
+    expect(res.body.rule.cooldownMinutes).toBe(60);
+    expect(res.body.rule.id).toBe("update-test"); // ID should not change
+  });
+
+  it("PUT /rules/:ruleId returns 404 for nonexistent rule", async () => {
+    const res = await request(app)
+      .put("/rules/nonexistent")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({ name: "won't work" });
+    expect(res.status).toBe(404);
+  });
+
+  it("DELETE /rules/:ruleId deletes a rule", async () => {
+    // Create a rule to delete
+    await request(app)
+      .post("/rules")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({
+        id: "delete-me", name: "Delete Me", enabled: true, trigger: "cost",
+        conditions: [{ metric: "totalEstimatedDailyCostUSD", operator: "gt", value: 100 }],
+        conditionLogic: "any", actions: [{ type: "disconnect" }], cooldownMinutes: 30, forensicsEnabled: false,
+      });
+
+    const res = await request(app)
+      .delete("/rules/delete-me")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(true);
+  });
+
+  it("POST /rules/:ruleId/toggle toggles rule enabled state", async () => {
+    // Create a rule to toggle
+    await request(app)
+      .post("/rules")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({
+        id: "toggle-me", name: "Toggle Me", enabled: true, trigger: "cost",
+        conditions: [{ metric: "totalEstimatedDailyCostUSD", operator: "gt", value: 100 }],
+        conditionLogic: "any", actions: [{ type: "disconnect" }], cooldownMinutes: 30, forensicsEnabled: false,
+      });
+
+    const res = await request(app)
+      .post("/rules/toggle-me/toggle")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(200);
+    expect(res.body.rule.enabled).toBe(false); // Was true, now false
+  });
+
+  it("POST /rules/:ruleId/toggle returns 404 for nonexistent rule", async () => {
+    const res = await request(app)
+      .post("/rules/nonexistent/toggle")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(404);
+  });
+
   it("POST /rules rejects incomplete rules", async () => {
     const res = await request(app)
       .post("/rules")

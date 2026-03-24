@@ -5,6 +5,9 @@ import { setTokenGetter } from "./api/client";
 import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { CloudAccountsList } from "./pages/CloudAccounts/CloudAccountsList";
 import { ConnectCloudflare } from "./pages/CloudAccounts/ConnectCloudflare";
+import { ConnectGCP } from "./pages/CloudAccounts/ConnectGCP";
+import { ConnectAWS } from "./pages/CloudAccounts/ConnectAWS";
+import { ConnectProvider } from "./pages/CloudAccounts/ConnectProvider";
 import { AlertsHistory } from "./pages/Alerts/AlertsHistory";
 import { BillingPage } from "./pages/Billing/BillingPage";
 
@@ -64,7 +67,10 @@ function AuthenticatedApp() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/accounts" element={<CloudAccountsList />} />
+          <Route path="/accounts/connect" element={<ConnectProvider />} />
           <Route path="/accounts/connect/cloudflare" element={<ConnectCloudflare />} />
+          <Route path="/accounts/connect/gcp" element={<ConnectGCP />} />
+          <Route path="/accounts/connect/aws" element={<ConnectAWS />} />
           <Route path="/alerts" element={<AlertsHistory />} />
           <Route path="/billing" element={<BillingPage />} />
           <Route path="*" element={<Navigate to="/" />} />

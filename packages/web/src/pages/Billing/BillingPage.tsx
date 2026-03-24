@@ -4,6 +4,7 @@ import { api } from "../../api/client";
 interface Plan {
   tier: string;
   name: string;
+  price?: number;
   monthlyPrice?: number;
   annualPrice?: number;
   features: string[];
@@ -79,8 +80,9 @@ export function BillingPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px" }}>
         {plans.map(plan => {
           const isCurrent = plan.tier === status?.tier;
-          const price = annual ? plan.annualPrice : plan.monthlyPrice;
-          const displayPrice = annual && plan.annualPrice ? Math.round(plan.annualPrice / 12) : plan.monthlyPrice;
+          const isFree = plan.price === 0 || (!plan.monthlyPrice && !plan.annualPrice && !plan.contactUs);
+          const price = isFree ? 0 : (annual ? plan.annualPrice : plan.monthlyPrice);
+          const displayPrice = isFree ? 0 : (annual && plan.annualPrice ? Math.round(plan.annualPrice / 12) : plan.monthlyPrice);
           const planKey = plan.priceIds ? (annual ? `guardian_${plan.tier}_annual` : `guardian_${plan.tier}_monthly`) : null;
 
           return (

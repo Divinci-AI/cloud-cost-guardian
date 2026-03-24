@@ -46,6 +46,9 @@ rulesRouter.get("/presets", (_req, res) => {
       { id: "cost-runaway", name: "Cost Runaway Protection", description: "Disconnect workers exceeding daily cost limit", category: "cost" },
       { id: "error-storm", name: "Error Storm Protection", description: "Scale down on sustained high error rate", category: "reliability" },
       { id: "exfiltration", name: "Data Exfiltration Detection", description: "Isolate services with unusual egress", category: "security" },
+      { id: "gpu-runaway", name: "GPU Instance Runaway", description: "Stop unexpected GPU instances (crypto mining, leaked keys)", category: "cost" },
+      { id: "lambda-loop", name: "Lambda Recursive Loop", description: "Throttle Lambda functions with runaway concurrency", category: "cost" },
+      { id: "aws-cost-runaway", name: "AWS Daily Cost Runaway", description: "Emergency stop when daily AWS spend spikes", category: "cost" },
     ],
   });
 });
@@ -75,6 +78,15 @@ rulesRouter.post("/presets/:presetId", (req, res) => {
       break;
     case "exfiltration":
       rule = PRESET_RULES.dataExfiltration(customValues?.egressGBPerHour);
+      break;
+    case "gpu-runaway":
+      rule = PRESET_RULES.gpuRunaway(customValues?.maxGPUInstances);
+      break;
+    case "lambda-loop":
+      rule = PRESET_RULES.lambdaLoop(customValues?.maxConcurrency);
+      break;
+    case "aws-cost-runaway":
+      rule = PRESET_RULES.awsCostRunaway(customValues?.dailyCostUSD);
       break;
     default:
       return res.status(404).json({ error: `Unknown preset: ${presetId}` });

@@ -1,0 +1,26 @@
+{
+  "name": "aws-billing-kill-switch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS Lambda function triggered by Budget alerts via SNS — stops runaway services",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "package": "npm run build && cd dist && zip -r ../function.zip .",
+    "deploy": "npm run package && aws lambda update-function-code --function-name aws-billing-kill-switch --zip-file fileb://function.zip"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ec2": "^3.700.0",
+    "@aws-sdk/client-ecs": "^3.700.0",
+    "@aws-sdk/client-eks": "^3.700.0",
+    "@aws-sdk/client-lambda": "^3.700.0",
+    "@aws-sdk/client-rds": "^3.700.0",
+    "@aws-sdk/client-sagemaker": "^3.700.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.140",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}

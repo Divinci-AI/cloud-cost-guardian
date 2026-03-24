@@ -14,12 +14,12 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET_GUARDIAN || "";
 
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
-// Guardian-specific price IDs (test mode)
+// Guardian Stripe price IDs — set via env vars for production, falls back to test mode IDs
 const PRICES: Record<string, { tier: GuardianTier; interval: string; priceId: string }> = {
-  guardian_pro_monthly: { tier: "pro", interval: "month", priceId: "price_1TE2hNIzNdoxvIKmERxnntmt" },
-  guardian_pro_annual: { tier: "pro", interval: "year", priceId: "price_1TE2hNIzNdoxvIKmfchhqNdF" },
-  guardian_team_monthly: { tier: "team", interval: "month", priceId: "price_1TE2hOIzNdoxvIKmSeL0KiC4" },
-  guardian_team_annual: { tier: "team", interval: "year", priceId: "price_1TE2hOIzNdoxvIKm9pprqge0" },
+  guardian_pro_monthly: { tier: "pro", interval: "month", priceId: process.env.STRIPE_PRICE_PRO_MONTHLY || "price_1TE2hNIzNdoxvIKmERxnntmt" },
+  guardian_pro_annual: { tier: "pro", interval: "year", priceId: process.env.STRIPE_PRICE_PRO_ANNUAL || "price_1TE2hNIzNdoxvIKmfchhqNdF" },
+  guardian_team_monthly: { tier: "team", interval: "month", priceId: process.env.STRIPE_PRICE_TEAM_MONTHLY || "price_1TE2hOIzNdoxvIKmSeL0KiC4" },
+  guardian_team_annual: { tier: "team", interval: "year", priceId: process.env.STRIPE_PRICE_TEAM_ANNUAL || "price_1TE2hOIzNdoxvIKm9pprqge0" },
 };
 
 const TIER_LIMITS: Record<GuardianTier, { cloudAccounts: number; checkIntervalMinutes: number; alertChannels: number }> = {
@@ -108,8 +108,26 @@ billingRouter.post("/checkout", async (req, res, next) => {
     const accountId = (req as any).guardianAccountId;
     const { planKey, successUrl, cancelUrl } = req.body;
 
+    if (!planKey || typeof planKey !== "string") {
+      return res.status(400).json({ error: "Missing or invalid planKey" });
+    }
+
     const plan = PRICES[planKey];
     if (!plan) return res.status(400).json({ error: `Unknown plan: ${planKey}. Options: ${Object.keys(PRICES).join(", ")}` });
+
+    // Validate redirect URLs if provided (must be HTTPS in production)
+    for (const [name, url] of Object.entries({ successUrl, cancelUrl })) {
+      if (url && typeof url === "string") {
+        try {
+          const parsed = new URL(url);
+          if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") {
+            return res.status(400).json({ error: `${name} must use HTTPS` });
+          }
+        } catch {
+          return res.status(400).json({ error: `Invalid ${name} URL` });
+        }
+      }
+    }
 
     const account = await GuardianAccountModel.findById(accountId);
     if (!account) return res.status(404).json({ error: "Account not found" });
@@ -150,9 +168,21 @@ billingRouter.post("/portal", async (req, res, next) => {
     const account = await GuardianAccountModel.findById(accountId);
     if (!account?.stripeCustomerId) return res.status(400).json({ error: "No billing account" });
 
+    let returnUrl = req.body.returnUrl || "https://guardian.divinci.ai/billing";
+    if (typeof returnUrl === "string" && returnUrl !== "https://guardian.divinci.ai/billing") {
+      try {
+        const parsed = new URL(returnUrl);
+        if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") {
+          return res.status(400).json({ error: "returnUrl must use HTTPS" });
+        }
+      } catch {
+        return res.status(400).json({ error: "Invalid returnUrl" });
+      }
+    }
+
     const session = await stripe.billingPortal.sessions.create({
       customer: account.stripeCustomerId,
-      return_url: req.body.returnUrl || "https://guardian.divinci.ai/billing",
+      return_url: returnUrl,
     });
 
     res.json({ portalUrl: session.url });

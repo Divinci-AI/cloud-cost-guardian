@@ -25,7 +25,7 @@ export function CloudAccountsList() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
         <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", margin: 0 }}>Cloud Accounts</h1>
-        <Link to="/accounts/connect/cloudflare" style={{ background: "#c25800", color: "#fff", padding: "8px 20px", borderRadius: "8px", textDecoration: "none", fontSize: "14px", fontWeight: "600" }}>
+        <Link to="/accounts/connect" style={{ background: "#c25800", color: "#fff", padding: "8px 20px", borderRadius: "8px", textDecoration: "none", fontSize: "14px", fontWeight: "600" }}>
           + Connect
         </Link>
       </div>

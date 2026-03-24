@@ -19,6 +19,7 @@
     "build:web": "cd packages/web && npm run build",
     "deploy:api": "cd packages/api && npm run deploy",
     "deploy:kill-switch": "cd packages/kill-switch-cf && npm run deploy",
+    "deploy:kill-switch-aws": "cd packages/kill-switch-aws && npm run deploy",
     "deploy:agent": "cd packages/agent && npm run deploy"
   }
 }

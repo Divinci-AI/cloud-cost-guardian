@@ -244,6 +244,120 @@ describe("Monitoring Engine", () => {
     );
   });
 
+  it("uses scale-down for GCP provider violations", async () => {
+    const mockProvider = {
+      id: "gcp",
+      name: "GCP",
+      checkUsage: vi.fn().mockResolvedValue({
+        provider: "gcp",
+        accountId: "proj-123",
+        checkedAt: Date.now(),
+        services: [],
+        totalEstimatedDailyCostUSD: 0,
+        violations: [{
+          serviceName: "api-service",
+          metricName: "Projected Monthly Cost",
+          currentValue: 1000,
+          threshold: 500,
+          unit: "USD",
+          severity: "warning",
+        }],
+      }),
+      executeKillSwitch: vi.fn().mockResolvedValue({ success: true, action: "scale-down", serviceName: "api-service", details: "Scaled down" }),
+      validateCredential: vi.fn(),
+      getDefaultThresholds: vi.fn(),
+    };
+
+    vi.mocked(CloudAccountModel.find).mockResolvedValue([
+      { _id: "acc1", provider: "gcp", credentialId: "cred1", thresholds: {}, protectedServices: [], autoDisconnect: true, autoDelete: false, guardianAccountId: "ga1", name: "GCP Prod" },
+    ] as any);
+
+    vi.mocked(getCredential).mockResolvedValue({ provider: "gcp", serviceAccountJson: "{}", projectId: "proj-123" });
+    vi.mocked(getProvider).mockReturnValue(mockProvider);
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValue({ alertChannels: [] } as any);
+    vi.mocked(CloudAccountModel.findByIdAndUpdate).mockResolvedValue(null);
+
+    await runCheckCycle();
+
+    expect(mockProvider.executeKillSwitch).toHaveBeenCalledWith(
+      expect.anything(),
+      "api-service",
+      "scale-down" // GCP uses scale-down
+    );
+  });
+
+  it("uses stop-instances for AWS provider violations", async () => {
+    const mockProvider = {
+      id: "aws",
+      name: "AWS",
+      checkUsage: vi.fn().mockResolvedValue({
+        provider: "aws",
+        accountId: "1234",
+        checkedAt: Date.now(),
+        services: [],
+        totalEstimatedDailyCostUSD: 0,
+        violations: [{
+          serviceName: "ec2:i-abc123",
+          metricName: "Total Running Instances",
+          currentValue: 50,
+          threshold: 20,
+          unit: "instances",
+          severity: "warning",
+        }],
+      }),
+      executeKillSwitch: vi.fn().mockResolvedValue({ success: true, action: "stop-instances", serviceName: "ec2:i-abc123", details: "Stopped" }),
+      validateCredential: vi.fn(),
+      getDefaultThresholds: vi.fn(),
+    };
+
+    vi.mocked(CloudAccountModel.find).mockResolvedValue([
+      { _id: "acc1", provider: "aws", credentialId: "cred1", thresholds: {}, protectedServices: [], autoDisconnect: true, autoDelete: false, guardianAccountId: "ga1", name: "AWS Prod" },
+    ] as any);
+
+    vi.mocked(getCredential).mockResolvedValue({ provider: "aws", awsAccessKeyId: "AKIA...", awsSecretAccessKey: "secret" });
+    vi.mocked(getProvider).mockReturnValue(mockProvider);
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValue({ alertChannels: [] } as any);
+    vi.mocked(CloudAccountModel.findByIdAndUpdate).mockResolvedValue(null);
+
+    await runCheckCycle();
+
+    expect(mockProvider.executeKillSwitch).toHaveBeenCalledWith(
+      expect.anything(),
+      "ec2:i-abc123",
+      "stop-instances" // AWS uses stop-instances
+    );
+  });
+
+  it("continues check cycle when PostgreSQL snapshot recording fails", async () => {
+    const mockProvider = {
+      id: "cloudflare",
+      name: "Cloudflare",
+      checkUsage: vi.fn().mockResolvedValue({
+        provider: "cloudflare", accountId: "test", checkedAt: Date.now(),
+        services: [{ serviceName: "worker", metrics: [], estimatedDailyCostUSD: 5 }],
+        totalEstimatedDailyCostUSD: 5, violations: [],
+      }),
+      executeKillSwitch: vi.fn(),
+      validateCredential: vi.fn(),
+      getDefaultThresholds: vi.fn(),
+    };
+
+    vi.mocked(CloudAccountModel.find).mockResolvedValue([
+      { _id: "acc1", provider: "cloudflare", credentialId: "cred1", thresholds: {}, protectedServices: [], autoDisconnect: false, autoDelete: false, guardianAccountId: "ga1", name: "Test" },
+    ] as any);
+
+    vi.mocked(getCredential).mockResolvedValue({ provider: "cloudflare", apiToken: "tok", accountId: "aid" });
+    vi.mocked(getProvider).mockReturnValue(mockProvider);
+    vi.mocked(CloudAccountModel.findByIdAndUpdate).mockResolvedValue(null);
+    vi.mocked(recordUsageSnapshot).mockRejectedValue(new Error("PG connection refused"));
+
+    const results = await runCheckCycle();
+
+    // Should still succeed despite PG error
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("ok");
+  });
+
   it("uses auto-delete for critical violations when configured", async () => {
     const mockProvider = {
       id: "cloudflare",

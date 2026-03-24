@@ -14,7 +14,15 @@ import { getCredential } from "../models/encrypted-credential/schema.js";
 import { getProvider } from "../providers/index.js";
 import { sendAlerts } from "./alerting.js";
 import { recordUsageSnapshot, recordAlert } from "../globals/index.js";
-import type { UsageResult, Violation } from "../providers/types.js";
+import type { UsageResult, Violation, KillAction, ProviderId } from "../providers/types.js";
+
+function getDefaultKillAction(provider: ProviderId): KillAction {
+  switch (provider) {
+    case "cloudflare": return "disconnect";
+    case "gcp":        return "scale-down";
+    case "aws":        return "stop-instances";
+  }
+}
 
 export interface CheckResult {
   cloudAccountId: string;
@@ -29,8 +37,10 @@ export interface CheckResult {
 /**
  * Run a single check cycle across all active accounts
  */
-export async function runCheckCycle(): Promise<CheckResult[]> {
-  const activeAccounts = await CloudAccountModel.find({ status: "active" });
+export async function runCheckCycle(guardianAccountId?: string): Promise<CheckResult[]> {
+  const filter: any = { status: "active" };
+  if (guardianAccountId) filter.guardianAccountId = guardianAccountId;
+  const activeAccounts = await CloudAccountModel.find(filter);
 
   if (activeAccounts.length === 0) {
     console.error("[guardian] No active cloud accounts to check");
@@ -94,7 +104,7 @@ async function checkSingleAccount(cloudAccount: any): Promise<CheckResult> {
           const action = await provider.executeKillSwitch(credential, violation.serviceName, "delete");
           result.actionsTaken.push(action.details);
         } else if (cloudAccount.autoDisconnect) {
-          const killAction = cloudAccount.provider === "gcp" ? "scale-down" as const : "disconnect" as const;
+          const killAction = getDefaultKillAction(cloudAccount.provider as ProviderId);
           const action = await provider.executeKillSwitch(credential, violation.serviceName, killAction);
           result.actionsTaken.push(action.details);
         }

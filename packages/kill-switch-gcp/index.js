@@ -34,8 +34,10 @@ const KILL_THRESHOLD = parseFloat(process.env.KILL_THRESHOLD || "0.8");
 // Services to NEVER disable, even when budget is exceeded
 // Supports both comma and semicolon separators (semicolon needed for gcloud --set-env-vars)
 const PROTECTED_SERVICES = (process.env.PROTECTED_SERVICES || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
+const PROTECTED_INSTANCES = (process.env.PROTECTED_INSTANCES || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
+const PROTECTED_FUNCTIONS = (process.env.PROTECTED_FUNCTIONS || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
 
-// If true, disable billing entirely (nuclear). If false, only scale down Cloud Run.
+// If true, disable billing entirely (nuclear). If false, only scale down services.
 const NUCLEAR_MODE = process.env.NUCLEAR_MODE === "true";
 
 // ── Main Handler ────────────────────────────────────────────────────────────
@@ -86,9 +88,15 @@ exports.killSwitch = async (pubsubMessage, context) => {
     const result = await disableBilling(PROJECT_NAME);
     actions.push(result);
   } else {
-    // Selective: scale down Cloud Run services
-    const results = await scaleDownCloudRunServices();
-    actions.push(...results);
+    // Selective: scale down all billable services
+    const cloudRunResults = await scaleDownCloudRunServices();
+    actions.push(...cloudRunResults);
+
+    const computeResults = await stopComputeInstances();
+    actions.push(...computeResults);
+
+    const functionResults = await scaleDownCloudFunctions();
+    actions.push(...functionResults);
   }
 
   // Page PagerDuty
@@ -156,6 +164,92 @@ async function scaleDownCloudRunServices() {
   } catch (err) {
     actions.push(`FAILED to list services: ${err.message}`);
     console.error("Error listing Cloud Run services:", err);
+  }
+
+  return actions;
+}
+
+// ── Compute Engine Instance Management ──────────────────────────────────────
+
+async function stopComputeInstances() {
+  const actions = [];
+  const { google } = require("googleapis");
+  const auth = new google.auth.GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
+  const compute = google.compute({ version: "v1", auth });
+
+  try {
+    const res = await compute.instances.aggregatedList({ project: PROJECT_ID });
+    const items = res.data.items || {};
+
+    for (const [zonePath, scopeData] of Object.entries(items)) {
+      for (const instance of scopeData.instances || []) {
+        if (instance.status !== "RUNNING") continue;
+
+        const instanceName = instance.name;
+        const zone = zonePath.split("/").pop();
+
+        if (PROTECTED_INSTANCES.includes(instanceName)) {
+          actions.push(`PROTECTED: ${instanceName} in ${zone} (skipped)`);
+          continue;
+        }
+
+        try {
+          await compute.instances.stop({ project: PROJECT_ID, zone, instance: instanceName });
+          actions.push(`STOPPED: ${instanceName} in ${zone}`);
+          console.log(`Stopped instance: ${instanceName} in ${zone}`);
+        } catch (err) {
+          actions.push(`FAILED to stop ${instanceName}: ${err.message}`);
+          console.error(`Error stopping ${instanceName}:`, err);
+        }
+      }
+    }
+  } catch (err) {
+    actions.push(`FAILED to list compute instances: ${err.message}`);
+    console.error("Error listing compute instances:", err);
+  }
+
+  return actions;
+}
+
+// ── Cloud Functions Management ──────────────────────────────────────────────
+
+async function scaleDownCloudFunctions() {
+  const actions = [];
+  const { google } = require("googleapis");
+  const auth = new google.auth.GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
+  const cloudfunctions = google.cloudfunctions({ version: "v2", auth });
+
+  try {
+    const res = await cloudfunctions.projects.locations.functions.list({
+      parent: `projects/${PROJECT_ID}/locations/${REGION}`,
+    });
+
+    for (const fn of res.data.functions || []) {
+      const functionName = fn.name.split("/").pop();
+
+      if (PROTECTED_FUNCTIONS.includes(functionName)) {
+        actions.push(`PROTECTED: Cloud Function ${functionName} (skipped)`);
+        continue;
+      }
+
+      try {
+        await cloudfunctions.projects.locations.functions.patch({
+          name: fn.name,
+          updateMask: "serviceConfig.maxInstanceCount",
+          requestBody: {
+            serviceConfig: { ...fn.serviceConfig, maxInstanceCount: 0 },
+          },
+        });
+        actions.push(`SCALED DOWN: Cloud Function ${functionName} (max instances → 0)`);
+        console.log(`Scaled down Cloud Function: ${functionName}`);
+      } catch (err) {
+        actions.push(`FAILED to scale down Cloud Function ${functionName}: ${err.message}`);
+        console.error(`Error scaling down ${functionName}:`, err);
+      }
+    }
+  } catch (err) {
+    actions.push(`FAILED to list Cloud Functions: ${err.message}`);
+    console.error("Error listing Cloud Functions:", err);
   }
 
   return actions;

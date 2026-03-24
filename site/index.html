@@ -73,6 +73,14 @@
                 radial-gradient(circle at 80% 30%, rgba(92, 226, 231, 0.04) 0%, transparent 40%);
             pointer-events: none;
         }
+        .hero::after {
+            content: '';
+            position: absolute; bottom: 0; left: 0; right: 0;
+            height: 220px;
+            background: linear-gradient(to bottom, transparent 0%, #0c1229 100%);
+            pointer-events: none;
+            z-index: 1;
+        }
         .hero-badge {
             display: inline-flex; align-items: center; gap: 8px;
             background: rgba(220, 50, 50, 0.15);
@@ -108,6 +116,57 @@
             margin-bottom: 40px;
             z-index: 1;
         }
+        .provider-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .provider-card {
+            padding: 28px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            transition: border-color 0.2s;
+        }
+        .provider-card:hover { border-color: rgba(92, 226, 231, 0.2); }
+        .provider-card .provider-header {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 14px;
+        }
+        .provider-card .provider-header img { width: 32px; height: 32px; }
+        .provider-card .provider-header h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px; font-weight: 600; color: #fff;
+            margin: 0;
+        }
+        .provider-card p { font-size: 14px; color: #8b8fa3; margin-bottom: 12px; }
+        .provider-card ul {
+            list-style: none; padding: 0; margin: 0;
+        }
+        .provider-card ul li {
+            font-size: 13px; color: #8b8fa3;
+            padding: 4px 0;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .provider-card ul li::before {
+            content: '\2713'; color: #5ce2e7; font-weight: 700; font-size: 12px;
+            display: inline-block;
+            transition: transform 0.3s ease, color 0.3s ease;
+        }
+        .provider-card:hover ul li::before {
+            animation: check-wave 0.5s ease forwards;
+            color: #fff;
+        }
+        .provider-card:hover ul li:nth-child(1)::before { animation-delay: 0s; }
+        .provider-card:hover ul li:nth-child(2)::before { animation-delay: 0.1s; }
+        .provider-card:hover ul li:nth-child(3)::before { animation-delay: 0.2s; }
+        .provider-card:hover ul li:nth-child(4)::before { animation-delay: 0.3s; }
+        @keyframes check-wave {
+            0% { transform: scale(1) translateY(0); color: #5ce2e7; }
+            40% { transform: scale(1.4) translateY(-4px); color: #fff; }
+            100% { transform: scale(1) translateY(0); color: #5ce2e7; }
+        }
+
         .hero-actions {
             display: flex; gap: 16px; flex-wrap: wrap;
             justify-content: center; z-index: 1;
@@ -180,30 +239,163 @@
 
         /* ── How It Works ────────────────────────────── */
         .flow {
-            display: flex; gap: 0; align-items: stretch;
-            flex-wrap: wrap; justify-content: center;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
         }
         .flow-step {
-            flex: 1; min-width: 200px; max-width: 260px;
-            padding: 32px 24px;
+            padding: 28px;
+            min-height: 220px;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
             position: relative;
+            overflow: hidden;
+            transition: border-color 0.2s;
         }
-        .flow-step:first-child { border-radius: 12px 0 0 12px; }
-        .flow-step:last-child { border-radius: 0 12px 12px 0; }
+        .flow-step:hover { border-color: rgba(92, 226, 231, 0.2); }
         .flow-step .step-num {
             font-family: 'Outfit', sans-serif;
             font-size: 48px; font-weight: 800;
             color: rgba(92, 226, 231, 0.1);
             position: absolute; top: 12px; right: 16px;
         }
+        .flow-step .step-bg {
+            position: absolute; bottom: -20px; right: -20px;
+            width: 200px; height: 200px;
+            opacity: 0.06; pointer-events: none;
+            transition: opacity 0.4s ease, transform 0.6s ease;
+        }
+        .flow-step:hover .step-bg {
+            opacity: 0.14;
+            transform: scale(1.08);
+        }
+        /* Looping hover animations for step backgrounds */
+        .flow-step .step-bg .anim-spin { transform-origin: 100px 100px; }
+        .flow-step:hover .step-bg .anim-spin {
+            animation: spin-loop 3s linear infinite;
+        }
+        @keyframes spin-loop {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .flow-step .step-bg .anim-pulse { opacity: 0; }
+        .flow-step:hover .step-bg .anim-pulse {
+            animation: pulse-loop 1.5s ease infinite;
+        }
+        @keyframes pulse-loop {
+            0%, 100% { opacity: 0; transform: scale(0.7); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        .flow-step .step-bg .anim-draw {
+            stroke-dasharray: 300;
+            stroke-dashoffset: 300;
+        }
+        .flow-step:hover .step-bg .anim-draw {
+            animation: draw-loop 2s ease infinite;
+        }
+        @keyframes draw-loop {
+            0% { stroke-dashoffset: 300; }
+            50% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: -300; }
+        }
+
+        .flow-step .step-bg .anim-float {}
+        .flow-step:hover .step-bg .anim-float {
+            animation: float-loop 1.8s ease-in-out infinite;
+        }
+        @keyframes float-loop {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .flow-step .step-bg .anim-split-l {}
+        .flow-step:hover .step-bg .anim-split-l {
+            animation: split-l-loop 2s ease-in-out infinite;
+        }
+        @keyframes split-l-loop {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            50% { transform: translateX(-12px) rotate(-10deg); }
+        }
+
+        .flow-step .step-bg .anim-split-r {}
+        .flow-step:hover .step-bg .anim-split-r {
+            animation: split-r-loop 2s ease-in-out infinite;
+        }
+        @keyframes split-r-loop {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            50% { transform: translateX(12px) rotate(10deg); }
+        }
+
+        /* ── Kill Switch Blast ──────────────────────────── */
+        /* ── Kill Switch Blast ──────────────────────────── */
+        .kill-blast-video-wrap {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 9998; pointer-events: none;
+            background: #000;
+            opacity: 0;
+            animation: blast-video-in 8.5s ease forwards;
+        }
+        .kill-blast-video-wrap video {
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+        @keyframes blast-video-in {
+            0% { opacity: 0; }
+            5% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        .kill-blast-flash {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 9997; pointer-events: none;
+            animation: blast-flash 0.6s ease-out forwards;
+        }
+        @keyframes blast-flash {
+            0% { background: rgba(255, 80, 80, 0.5); }
+            30% { background: rgba(255, 255, 255, 0.7); }
+            60% { background: rgba(0, 0, 0, 0.9); }
+            100% { background: transparent; }
+        }
+        .kill-blast-text {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10000; pointer-events: none;
+            font-family: 'Outfit', sans-serif;
+            font-size: clamp(36px, 8vw, 80px);
+            font-weight: 800; color: #ff6b6b;
+            text-transform: uppercase;
+            letter-spacing: 10px;
+            text-shadow: 0 0 40px rgba(255, 80, 80, 0.6), 0 0 80px rgba(255, 80, 80, 0.3);
+            opacity: 0;
+            animation: blast-text 2s ease-out 0.3s forwards;
+        }
+        @keyframes blast-text {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(3); }
+            15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            40% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+        }
+        .kill-blast-ring {
+            position: absolute;
+            border-radius: 50%;
+            border: 3px solid #ff6b6b;
+            z-index: 9999; pointer-events: none;
+            animation: blast-ring 1.2s ease-out forwards;
+        }
+        @keyframes blast-ring {
+            0% { width: 0; height: 0; opacity: 1; border-width: 4px; }
+            100% { width: 300vmax; height: 300vmax; opacity: 0; border-width: 1px; }
+        }
         .flow-step h3 {
             font-family: 'Outfit', sans-serif;
-            font-size: 18px; font-weight: 600;
+            font-size: 17px; font-weight: 600;
             color: #fff; margin-bottom: 8px;
+            position: relative; z-index: 1;
         }
-        .flow-step p { font-size: 14px; color: #8b8fa3; }
+        .flow-step p { font-size: 14px; color: #8b8fa3; position: relative; z-index: 1; }
 
         /* ── Features Grid ───────────────────────────── */
         .features-grid {
@@ -262,6 +454,20 @@
             position: relative;
             overflow: hidden;
         }
+        .video-bg-section::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0;
+            height: 260px;
+            background: linear-gradient(to bottom, #0c1229 0%, rgba(12, 18, 41, 0.6) 60%, transparent 100%);
+            z-index: 1; pointer-events: none;
+        }
+        .video-bg-section::after {
+            content: '';
+            position: absolute; bottom: 0; left: 0; right: 0;
+            height: 260px;
+            background: linear-gradient(to top, #0c1229 0%, rgba(12, 18, 41, 0.6) 60%, transparent 100%);
+            z-index: 1; pointer-events: none;
+        }
         .video-bg-section > video {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -270,7 +476,7 @@
         }
         .video-bg-section > section,
         .video-bg-section > .content-overlay {
-            position: relative; z-index: 1;
+            position: relative; z-index: 2;
         }
         .story-card .amount {
             font-family: 'Outfit', sans-serif;
@@ -304,8 +510,7 @@
         @media (max-width: 768px) {
             .navbar { padding: 0 16px; }
             .nav-links { gap: 12px; }
-            .flow { flex-direction: column; align-items: center; }
-            .flow-step { max-width: 100%; border-radius: 12px !important; }
+            .flow { grid-template-columns: 1fr; }
             .cost-banner { gap: 24px; }
             .hero { padding: 100px 20px 60px; }
         }
@@ -336,7 +541,7 @@
         </video>
         <div class="hero-badge">&#9888;&#65039; Born from a $91K bill</div>
         <div style="margin-bottom: 24px; position: relative; z-index: 1;">
-            <div style="position: relative; width: 160px; height: 160px; margin: 0 auto; cursor: pointer;" onclick="this.querySelector('video').currentTime=0;this.querySelector('video').play();">
+            <div id="kill-btn" style="position: relative; width: 160px; height: 160px; margin: 0 auto; cursor: pointer;" onclick="triggerKillSwitch(this);">
                 <img src="assets/kill-switch-btn.svg" alt="Kill Switch" style="width: 160px; height: 160px; position: absolute; top: 0; left: 0; z-index: 2; mix-blend-mode: screen; pointer-events: none;">
                 <video muted playsinline style="width: 160px; height: 160px; border-radius: 50%; object-fit: cover; opacity: 0.6;">
                     <source src="assets/button-video.webm" type="video/webm">
@@ -380,18 +585,134 @@
         <div class="flow">
             <div class="flow-step">
                 <div class="step-num">1</div>
+                <svg class="step-bg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="glow1" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#5ce2e7" stop-opacity="0.5"/>
+                            <stop offset="100%" stop-color="#5ce2e7" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+                    <circle cx="100" cy="100" r="85" fill="url(#glow1)"/>
+                    <circle cx="100" cy="100" r="72" stroke="#5ce2e7" stroke-width="1.5" stroke-dasharray="4 8" class="anim-spin"/>
+                    <circle cx="100" cy="100" r="50" stroke="#fff" stroke-width="0.8" opacity="0.3"/>
+                    <circle cx="100" cy="100" r="28" stroke="#5ce2e7" stroke-width="0.6" opacity="0.5"/>
+                    <!-- Sweeping blade -->
+                    <path d="M100 20 Q125 55 100 100 Q75 55 100 20Z" fill="#5ce2e7" opacity="0.2" class="anim-spin"/>
+                    <!-- Center dot -->
+                    <circle cx="100" cy="100" r="5" fill="#5ce2e7" opacity="0.9"/>
+                    <!-- Blips that appear on hover -->
+                    <circle cx="140" cy="58" r="5" fill="#5ce2e7" class="anim-pulse"/>
+                    <circle cx="65" cy="135" r="4" fill="#fff" class="anim-pulse" style="animation-delay: 0.2s"/>
+                    <circle cx="130" cy="140" r="3" fill="#5ce2e7" class="anim-pulse" style="animation-delay: 0.4s"/>
+                    <!-- Soft blobs -->
+                    <ellipse cx="45" cy="70" rx="18" ry="12" fill="#5ce2e7" opacity="0.06" transform="rotate(-25 45 70)"/>
+                    <ellipse cx="155" cy="130" rx="14" ry="20" fill="#fff" opacity="0.04"/>
+                </svg>
                 <h3>Monitor</h3>
                 <p>Every 6 hours, queries Cloudflare's GraphQL API for Durable Object requests, wall-time, and Worker request volume.</p>
             </div>
             <div class="flow-step">
                 <div class="step-num">2</div>
+                <svg class="step-bg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="grad2" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#ff6b6b" stop-opacity="0.3"/>
+                            <stop offset="100%" stop-color="#5ce2e7" stop-opacity="0.15"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Shield body -->
+                    <path d="M100 15 L170 60 L170 120 Q170 170 100 190 Q30 170 30 120 L30 60Z" fill="url(#grad2)"/>
+                    <path d="M100 28 L158 65 L158 118 Q158 160 100 178 Q42 160 42 118 L42 65Z" stroke="#5ce2e7" stroke-width="1.2" fill="none" opacity="0.6"/>
+                    <!-- Inner shield glow -->
+                    <path d="M100 45 L142 72 L142 115 Q142 145 100 160 Q58 145 58 115 L58 72Z" fill="#ff6b6b" opacity="0.05"/>
+                    <!-- EKG line that draws on hover -->
+                    <path d="M40 108 L65 108 L78 108 L88 78 L100 138 L112 88 L122 108 L135 108 L160 108" stroke="#ff6b6b" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8" class="anim-draw"/>
+                    <!-- Floating alert dot -->
+                    <circle cx="100" cy="155" r="4" fill="#ff6b6b" class="anim-float" opacity="0.6"/>
+                    <!-- Ambient shapes -->
+                    <ellipse cx="55" cy="45" rx="16" ry="10" fill="#5ce2e7" opacity="0.06" transform="rotate(-30 55 45)"/>
+                    <ellipse cx="152" cy="148" rx="12" ry="16" fill="#ff6b6b" opacity="0.06"/>
+                    <circle cx="100" cy="95" r="2" fill="#fff" class="anim-pulse" opacity="0"/>
+                </svg>
                 <h3>Detect</h3>
                 <p>Compares per-worker usage against your configured thresholds. Catches feedback loops, runaway DOs, and request spikes.</p>
             </div>
             <div class="flow-step">
                 <div class="step-num">3</div>
+                <svg class="step-bg" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="glow3" cx="50%" cy="48%" r="50%">
+                            <stop offset="0%" stop-color="#5ce2e7" stop-opacity="0.2"/>
+                            <stop offset="60%" stop-color="#ff6b6b" stop-opacity="0.08"/>
+                            <stop offset="100%" stop-color="transparent" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+                    <circle cx="100" cy="105" r="72" fill="url(#glow3)"/>
+                    <!-- Left arc — splits left on hover -->
+                    <path d="M62 52 A58 58 0 0 0 62 158" stroke="#5ce2e7" stroke-width="3" stroke-linecap="round" fill="none" class="anim-split-l"/>
+                    <!-- Right arc — splits right on hover -->
+                    <path d="M138 52 A58 58 0 0 1 138 158" stroke="#5ce2e7" stroke-width="3" stroke-linecap="round" fill="none" class="anim-split-r"/>
+                    <!-- Inner ring ghost -->
+                    <circle cx="100" cy="105" r="38" stroke="#fff" stroke-width="0.6" opacity="0.2"/>
+                    <!-- Power stem -->
+                    <line x1="100" y1="32" x2="100" y2="105" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0.5" class="anim-float"/>
+                    <!-- Floating shards that scatter on hover -->
+                    <rect x="42" y="28" width="20" height="6" rx="3" fill="#ff6b6b" opacity="0.3" transform="rotate(-40 52 31)" class="anim-split-l"/>
+                    <rect x="138" y="26" width="16" height="5" rx="2.5" fill="#5ce2e7" opacity="0.25" transform="rotate(35 146 28)" class="anim-split-r"/>
+                    <circle cx="40" cy="100" r="4" fill="#ff6b6b" opacity="0.15" class="anim-split-l"/>
+                    <circle cx="160" cy="100" r="3.5" fill="#5ce2e7" opacity="0.15" class="anim-split-r"/>
+                    <!-- Ground shadow -->
+                    <ellipse cx="100" cy="178" rx="24" ry="4" fill="#fff" opacity="0.04"/>
+                </svg>
                 <h3>Disconnect</h3>
                 <p>Removes routes and custom domains from offending workers. Code stays intact. Pages PagerDuty until someone acknowledges.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="providers">
+        <div class="section-label">Supported Providers</div>
+        <div class="section-title">Kill switches for every major cloud</div>
+        <div class="section-desc">Monitor spending and auto-kill runaway services across all three platforms.</div>
+        <div class="provider-cards">
+            <div class="provider-card">
+                <div class="provider-header">
+                    <img src="https://chat.assets.divinci.app/kill-switch/providers/cloudflare-icon.svg" alt="Cloudflare">
+                    <h3>Cloudflare</h3>
+                </div>
+                <p>Catch runaway Workers and Durable Objects before they rack up millions of requests.</p>
+                <ul>
+                    <li>Worker request volume spikes</li>
+                    <li>Durable Object wall-time hours</li>
+                    <li>DO subrequest loops</li>
+                    <li>Route removal &amp; domain disconnect</li>
+                </ul>
+            </div>
+            <div class="provider-card">
+                <div class="provider-header">
+                    <img src="https://chat.assets.divinci.app/kill-switch/providers/gcp-icon.svg" alt="Google Cloud">
+                    <h3>Google Cloud</h3>
+                </div>
+                <p>Stop runaway Cloud Run containers and GCE instances from spiraling your billing.</p>
+                <ul>
+                    <li>Cloud Run auto-scaling spikes</li>
+                    <li>Compute Engine instance hours</li>
+                    <li>Cloud Functions invocation surges</li>
+                    <li>Billing API threshold alerts</li>
+                </ul>
+            </div>
+            <div class="provider-card">
+                <div class="provider-header">
+                    <img src="https://chat.assets.divinci.app/kill-switch/providers/aws-icon.svg" alt="AWS">
+                    <h3>AWS</h3>
+                </div>
+                <p>Shut down Lambda feedback loops and EC2 sprawl before your bill hits five figures.</p>
+                <ul>
+                    <li>Lambda invocation runaway</li>
+                    <li>EC2 instance sprawl detection</li>
+                    <li>ECS/Fargate task explosion</li>
+                    <li>Cost Explorer threshold triggers</li>
+                </ul>
             </div>
         </div>
     </section>
@@ -510,5 +831,71 @@
             <a href="https://github.com/Divinci-AI/cloudflare-billing-kill-switch/blob/main/LICENSE">MIT License</a>
         </p>
     </footer>
+    <script>
+    function triggerKillSwitch(btn) {
+        // Play the button video
+        var vid = btn.querySelector('video');
+        vid.currentTime = 0;
+        vid.play();
+
+        // Don't fire if already blasting
+        if (document.querySelector('.kill-blast-video-wrap')) return;
+
+        var rect = btn.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height / 2;
+
+        // Initial flash
+        var flash = document.createElement('div');
+        flash.className = 'kill-blast-flash';
+        document.body.appendChild(flash);
+
+        // Shockwave rings from button center
+        for (var i = 0; i < 3; i++) {
+            var ring = document.createElement('div');
+            ring.className = 'kill-blast-ring';
+            ring.style.position = 'fixed';
+            ring.style.left = cx + 'px';
+            ring.style.top = cy + 'px';
+            ring.style.transform = 'translate(-50%, -50%)';
+            ring.style.animationDelay = (i * 0.15) + 's';
+            ring.style.borderColor = i === 0 ? '#ff6b6b' : i === 1 ? '#ff4444' : '#5ce2e7';
+            document.body.appendChild(ring);
+            setTimeout(function(r) { r.remove(); }, 1500, ring);
+        }
+
+        // Full-screen video overlay
+        var videoWrap = document.createElement('div');
+        videoWrap.className = 'kill-blast-video-wrap';
+        var blastVid = document.createElement('video');
+        blastVid.muted = true;
+        blastVid.playsInline = true;
+        blastVid.autoplay = true;
+        var srcWebm = document.createElement('source');
+        srcWebm.src = 'https://chat.assets.divinci.app/kill-switch/kill-blast-video.webm';
+        srcWebm.type = 'video/webm';
+        var srcMp4 = document.createElement('source');
+        srcMp4.src = 'https://chat.assets.divinci.app/kill-switch/kill-blast-video.mp4';
+        srcMp4.type = 'video/mp4';
+        blastVid.appendChild(srcWebm);
+        blastVid.appendChild(srcMp4);
+        videoWrap.appendChild(blastVid);
+        document.body.appendChild(videoWrap);
+        blastVid.play();
+
+        // "KILLED" text stamp
+        var text = document.createElement('div');
+        text.className = 'kill-blast-text';
+        text.textContent = 'KILLED';
+        document.body.appendChild(text);
+
+        // Clean up after video plays
+        setTimeout(function() {
+            flash.remove();
+            videoWrap.remove();
+            text.remove();
+        }, 9000);
+    }
+    </script>
 </body>
 </html>

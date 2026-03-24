@@ -251,12 +251,56 @@ describe("Rule Engine", () => {
       expect(rule.cooldownMinutes).toBe(60);
     });
 
+    it("GPU Runaway preset stops instances on any GPU", () => {
+      const rule = PRESET_RULES.gpuRunaway();
+      expect(rule.conditions[0].metric).toBe("ec2GPUInstanceCount");
+      expect(rule.conditions[0].value).toBe(0);
+      expect(rule.conditions[1].metric).toBe("computeGPUCount");
+      expect(rule.actions[0].type).toBe("stop-instances");
+      expect(rule.forensicsEnabled).toBe(true);
+    });
+
+    it("GPU Runaway preset accepts custom threshold", () => {
+      const rule = PRESET_RULES.gpuRunaway(4);
+      expect(rule.conditions[0].value).toBe(4);
+      expect(rule.conditions[1].value).toBe(4);
+    });
+
+    it("Lambda Loop preset throttles on high concurrency", () => {
+      const rule = PRESET_RULES.lambdaLoop();
+      expect(rule.conditions[0].metric).toBe("lambdaConcurrentExecutions");
+      expect(rule.conditions[0].value).toBe(500);
+      expect(rule.actions[0].type).toBe("throttle-lambda");
+    });
+
+    it("Lambda Loop preset accepts custom concurrency", () => {
+      const rule = PRESET_RULES.lambdaLoop(100);
+      expect(rule.conditions[0].value).toBe(100);
+    });
+
+    it("AWS Cost Runaway preset stops instances and throttles lambdas", () => {
+      const rule = PRESET_RULES.awsCostRunaway();
+      expect(rule.conditions[0].metric).toBe("awsDailyCostUSD");
+      expect(rule.conditions[0].value).toBe(100);
+      expect(rule.actions[0].type).toBe("stop-instances");
+      expect(rule.actions[1].type).toBe("throttle-lambda");
+      expect(rule.actions[2].type).toBe("snapshot");
+    });
+
+    it("AWS Cost Runaway preset accepts custom daily limit", () => {
+      const rule = PRESET_RULES.awsCostRunaway(500);
+      expect(rule.conditions[0].value).toBe(500);
+    });
+
     it("All presets have forensics enabled", () => {
       expect(PRESET_RULES.ddosProtection().forensicsEnabled).toBe(true);
       expect(PRESET_RULES.bruteForceProtection().forensicsEnabled).toBe(true);
       expect(PRESET_RULES.costRunaway().forensicsEnabled).toBe(true);
       expect(PRESET_RULES.errorStorm().forensicsEnabled).toBe(true);
       expect(PRESET_RULES.dataExfiltration().forensicsEnabled).toBe(true);
+      expect(PRESET_RULES.gpuRunaway().forensicsEnabled).toBe(true);
+      expect(PRESET_RULES.lambdaLoop().forensicsEnabled).toBe(true);
+      expect(PRESET_RULES.awsCostRunaway().forensicsEnabled).toBe(true);
     });
 
     it("All presets include a snapshot action", () => {
@@ -266,6 +310,9 @@ describe("Rule Engine", () => {
       expect(hasSnapshot(PRESET_RULES.costRunaway())).toBe(true);
       expect(hasSnapshot(PRESET_RULES.errorStorm())).toBe(true);
       expect(hasSnapshot(PRESET_RULES.dataExfiltration())).toBe(true);
+      expect(hasSnapshot(PRESET_RULES.gpuRunaway())).toBe(true);
+      expect(hasSnapshot(PRESET_RULES.lambdaLoop())).toBe(true);
+      expect(hasSnapshot(PRESET_RULES.awsCostRunaway())).toBe(true);
     });
   });
 });
