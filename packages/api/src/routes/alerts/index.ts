@@ -26,8 +26,12 @@ alertRouter.get("/channels", async (req, res, next) => {
         type: c.type,
         name: c.name,
         enabled: c.enabled,
-        // Don't expose full config (contains secrets)
-        hasConfig: !!c.config.routingKey || !!c.config.webhookUrl || !!c.config.email,
+        config: c.config,
+        // Masked values for display (full values needed for PUT round-trip)
+        configPreview: c.config.email
+          || (c.config.webhookUrl ? c.config.webhookUrl.substring(0, 40) + "..." : null)
+          || (c.config.routingKey ? "****" + c.config.routingKey.slice(-4) : null)
+          || null,
       })),
     });
   } catch (e) {

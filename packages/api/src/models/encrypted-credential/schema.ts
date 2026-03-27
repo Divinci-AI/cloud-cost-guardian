@@ -76,7 +76,7 @@ export type EncryptedCredentialDocument = EncryptedCredentialProps & Document;
 
 const encryptedCredentialSchema = new Schema<EncryptedCredentialDocument>({
   guardianAccountId: { type: String, required: true, index: true },
-  provider: { type: String, required: true, enum: ["cloudflare", "gcp", "aws"] },
+  provider: { type: String, required: true, enum: ["cloudflare", "gcp", "aws", "mongodb-atlas", "cloud-sql-postgres", "redis"] },
   encrypted: { type: String, required: true },
   iv: { type: String, required: true },
   authTag: { type: String, required: true },
@@ -133,6 +133,44 @@ export async function getCredential(credentialId: string): Promise<DecryptedCred
   });
 
   return JSON.parse(plaintext) as DecryptedCredential;
+}
+
+/**
+ * Store any credential object encrypted at rest (generic version for database credentials etc).
+ */
+export async function storeGenericCredential(
+  guardianAccountId: string,
+  provider: string,
+  credential: Record<string, any>,
+  previewField?: string,
+): Promise<string> {
+  const plaintext = JSON.stringify(credential);
+  const preview = previewField && credential[previewField]
+    ? String(credential[previewField]).slice(-4)
+    : "****";
+  const encryptedData = encrypt(plaintext);
+  const doc = await EncryptedCredentialModel.create({
+    guardianAccountId,
+    provider,
+    ...encryptedData,
+    keyPreview: preview,
+  });
+  return doc._id.toString();
+}
+
+/**
+ * Retrieve and decrypt a credential (generic — returns raw object).
+ */
+export async function getGenericCredential(credentialId: string): Promise<Record<string, any> | null> {
+  const doc = await EncryptedCredentialModel.findById(credentialId);
+  if (!doc) return null;
+  const plaintext = decrypt({
+    encrypted: doc.encrypted,
+    iv: doc.iv,
+    authTag: doc.authTag,
+    salt: doc.salt,
+  });
+  return JSON.parse(plaintext);
 }
 
 /**

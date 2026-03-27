@@ -20,6 +20,7 @@ export interface GuardianAccountProps {
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   alertChannels: AlertChannel[];
+  onboardingCompleted: boolean;
   settings: {
     checkIntervalMinutes: number;
     timezone?: string;
@@ -45,6 +46,7 @@ const guardianAccountSchema = new Schema<GuardianAccountDocument>({
   stripeCustomerId: { type: String },
   stripeSubscriptionId: { type: String },
   alertChannels: { type: [alertChannelSchema], default: [] },
+  onboardingCompleted: { type: Boolean, default: false },
   settings: {
     checkIntervalMinutes: { type: Number, default: 360 }, // 6h for free tier
     timezone: { type: String },

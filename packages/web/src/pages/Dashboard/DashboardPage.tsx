@@ -488,6 +488,50 @@ export function DashboardPage() {
         </>
       ) : (
         /* ─── No Data State ──────────────────────────────────────────── */
+        accounts.length === 0 ? (
+        <div style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          borderRadius: "12px",
+          padding: "48px 32px",
+          textAlign: "center",
+          marginBottom: "28px",
+        }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>&#9889;</div>
+          <h2 style={{ fontFamily: "Outfit, sans-serif", color: "#fff", marginBottom: "8px", fontSize: "22px" }}>
+            Connect your first cloud account
+          </h2>
+          <p style={{ color: "#6b7280", marginBottom: "28px", maxWidth: "440px", margin: "0 auto 28px", fontSize: "15px", lineHeight: "1.6" }}>
+            Kill Switch monitors your cloud spending and auto-kills runaway services before the bill arrives.
+          </p>
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap", marginBottom: "28px" }}>
+            {[
+              { id: "cloudflare", name: "Cloudflare", color: "#f6821f" },
+              { id: "gcp", name: "Google Cloud", color: "#4285f4" },
+              { id: "aws", name: "AWS", color: "#ff9900" },
+            ].map(p => (
+              <Link key={p.id} to={`/accounts/connect/${p.id}`} style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                padding: "14px 22px", borderRadius: "10px",
+                background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                textDecoration: "none", transition: "border-color 0.2s, background 0.2s",
+              }}
+              onMouseEnter={e => { (e.currentTarget.style.borderColor as any) = `${p.color}55`; e.currentTarget.style.background = `${p.color}0a`; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+              >
+                <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: p.color }} />
+                <span style={{ color: "#fff", fontWeight: "600", fontSize: "14px" }}>{p.name}</span>
+              </Link>
+            ))}
+          </div>
+          <Link
+            to="/accounts/connect"
+            style={{ background: "linear-gradient(135deg, #c25800, #e06800)", color: "#fff", padding: "12px 28px", borderRadius: "8px", textDecoration: "none", fontWeight: "700", fontSize: "15px", display: "inline-block" }}
+          >
+            Connect Cloud Account
+          </Link>
+        </div>
+        ) : (
         <div style={{
           background: "rgba(255,255,255,0.03)",
           border: "1px solid rgba(255,255,255,0.06)",
@@ -502,25 +546,16 @@ export function DashboardPage() {
           </h2>
           <p style={{ color: "#6b7280", marginBottom: "20px" }}>
             Cost data will appear here after your first monitoring check.
-            {accounts.length === 0 && " Connect a cloud account to get started."}
           </p>
-          {accounts.length > 0 ? (
-            <button
-              onClick={runManualCheck}
-              disabled={checking}
-              style={{ background: "#c25800", color: "#fff", border: "none", padding: "10px 24px", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "600" }}
-            >
-              {checking ? "Running..." : "Run First Check"}
-            </button>
-          ) : (
-            <Link
-              to="/accounts/connect/cloudflare"
-              style={{ background: "#c25800", color: "#fff", padding: "10px 24px", borderRadius: "8px", textDecoration: "none", fontWeight: "600", fontSize: "14px" }}
-            >
-              Connect Cloud Account
-            </Link>
-          )}
+          <button
+            onClick={runManualCheck}
+            disabled={checking}
+            style={{ background: "#c25800", color: "#fff", border: "none", padding: "10px 24px", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "600" }}
+          >
+            {checking ? "Running..." : "Run First Check"}
+          </button>
         </div>
+        )
       )}
 
       {/* ─── Account Status Cards ────────────────────────────────────── */}

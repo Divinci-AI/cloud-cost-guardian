@@ -54,7 +54,20 @@ export const api = {
       body: JSON.stringify(credential),
     }),
 
-  // Accounts
+  // Account (current user)
+  getMe: () => guardianFetch<any>("/accounts/me"),
+  updateMe: (data: Record<string, any>) =>
+    guardianFetch<any>("/accounts/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  completeOnboarding: () =>
+    guardianFetch<any>("/accounts/me", {
+      method: "PATCH",
+      body: JSON.stringify({ onboardingCompleted: true }),
+    }),
+
+  // Accounts (legacy)
   getAccount: (id: string) => guardianFetch<any>(`/accounts/${id}`),
 
   // Cloud Accounts
@@ -107,6 +120,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ returnUrl }),
     }),
+
+  // Team
+  listTeamMembers: () => guardianFetch<any>("/team/members"),
+  inviteTeamMember: (email: string, role: string = "member") =>
+    guardianFetch<any>("/team/invite", {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    }),
+  acceptInvitation: (token: string) =>
+    guardianFetch<any>("/team/invite/accept", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  updateTeamMember: (memberId: string, role: string) =>
+    guardianFetch<any>(`/team/members/${memberId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+  removeTeamMember: (memberId: string) =>
+    guardianFetch<any>(`/team/members/${memberId}`, { method: "DELETE" }),
+  revokeInvitation: (invitationId: string) =>
+    guardianFetch<any>(`/team/invitations/${invitationId}`, { method: "DELETE" }),
 
   // Rules
   listRules: () => guardianFetch<any>("/rules"),

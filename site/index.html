@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kill Switch | Stop Runaway Cloud Bills</title>
-    <meta name="description" content="Auto-kill runaway cloud services before they generate surprise bills. Cloudflare, GCP, AWS. Born from a $91K bill. Open source.">
-    <meta property="og:title" content="Kill Switch — Cloud Billing Protection">
-    <meta property="og:description" content="Auto-kill runaway cloud services before they generate surprise bills. Born from a $91K bill.">
+    <meta name="description" content="Auto-kill runaway cloud services before they generate surprise bills. Monitor Cloudflare, GCP, and AWS spending. Free tier available. Born from a $91K bill.">
+    <meta property="og:title" content="Kill Switch — Stop Runaway Cloud Bills">
+    <meta property="og:description" content="Cloud cost monitoring with automatic kill switches. Protect Cloudflare, GCP, and AWS from runaway bills. Free tier available.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://killswitch.divinci.ai">
     <meta name="twitter:card" content="summary_large_image">
@@ -490,6 +490,67 @@
             font-size: 12px; color: #6b7280;
         }
 
+        /* ── Pricing ─────────────────────────────────── */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+        .pricing-card {
+            padding: 32px 28px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            transition: border-color 0.2s, transform 0.2s;
+            display: flex; flex-direction: column;
+        }
+        .pricing-card:hover { border-color: rgba(92, 226, 231, 0.2); transform: translateY(-2px); }
+        .pricing-card.featured {
+            border-color: rgba(194, 88, 0, 0.4);
+            background: rgba(194, 88, 0, 0.06);
+        }
+        .pricing-card .plan-name {
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px; font-weight: 600; color: #fff;
+            margin-bottom: 4px;
+        }
+        .pricing-card .plan-desc {
+            font-size: 13px; color: #6b7280; margin-bottom: 20px;
+        }
+        .pricing-card .plan-price {
+            font-family: 'Outfit', sans-serif;
+            font-size: 40px; font-weight: 800; color: #fff;
+            margin-bottom: 4px;
+        }
+        .pricing-card .plan-price .per { font-size: 16px; font-weight: 400; color: #6b7280; }
+        .pricing-card .plan-price.free { color: #5ce2e7; }
+        .pricing-card .plan-features {
+            list-style: none; padding: 0; margin: 20px 0 28px; flex: 1;
+        }
+        .pricing-card .plan-features li {
+            font-size: 13px; color: #c4c5ca; padding: 5px 0;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .pricing-card .plan-features li::before {
+            content: '\2713'; color: #5ce2e7; font-weight: 700; font-size: 12px;
+        }
+        .pricing-card .btn-plan {
+            display: block; text-align: center;
+            padding: 12px; border-radius: 8px;
+            font-weight: 600; font-size: 14px;
+            text-decoration: none; transition: background 0.2s, transform 0.2s;
+        }
+        .pricing-card .btn-plan.primary {
+            background: linear-gradient(135deg, #c25800, #e06800);
+            color: #fff;
+        }
+        .pricing-card .btn-plan.primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(194, 88, 0, 0.3); }
+        .pricing-card .btn-plan.secondary {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff; border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .pricing-card .btn-plan.secondary:hover { background: rgba(255, 255, 255, 0.15); }
+
         /* ── CTA ─────────────────────────────────────── */
         .cta {
             text-align: center;
@@ -509,10 +570,24 @@
 
         @media (max-width: 768px) {
             .navbar { padding: 0 16px; }
-            .nav-links { gap: 12px; }
+            .nav-links { gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+            .nav-links a { font-size: 12px !important; }
+            .btn-github { display: none !important; }
             .flow { grid-template-columns: 1fr; }
             .cost-banner { gap: 24px; }
             .hero { padding: 100px 20px 60px; }
+            .pricing-grid { grid-template-columns: 1fr; }
+            .pricing-card .plan-price { font-size: 32px; }
+            .provider-cards { grid-template-columns: 1fr; }
+            .features-grid { grid-template-columns: 1fr; }
+            .stories { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 480px) {
+            .navbar { height: auto; padding: 12px 16px; flex-direction: column; gap: 8px; }
+            .nav-links { gap: 8px; justify-content: center; }
+            .hero h1 { font-size: 28px; }
+            .hero-sub { font-size: 15px; }
+            .hero-actions { flex-direction: column; align-items: center; }
         }
     </style>
 </head>
@@ -525,12 +600,13 @@
         <div class="nav-links">
             <a href="#how-it-works">How It Works</a>
             <a href="#features">Features</a>
-            <a href="https://guardian-api-150038457816.us-central1.run.app/docs" target="_blank">API Docs</a>
-            <a href="https://guardian-api-150038457816.us-central1.run.app/billing/plans" target="_blank" style="color: #5ce2e7;">Pricing</a>
+            <a href="#pricing">Pricing</a>
+            <a href="/docs">API Docs</a>
             <a href="https://github.com/Divinci-AI/kill-switch" class="btn-github">
                 <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
                 GitHub
             </a>
+            <a href="https://guardian.divinci.ai" style="background: linear-gradient(135deg, #c25800, #e06800); color: #fff !important; padding: 7px 18px; border-radius: 6px; font-weight: 600; font-size: 13px;">Sign In</a>
         </div>
     </nav>
 
@@ -559,7 +635,7 @@
             the bill arrives. Cloudflare, GCP, and AWS.
         </p>
         <div class="hero-actions">
-            <a href="https://github.com/Divinci-AI/cloudflare-billing-kill-switch" class="btn-primary">Get Started</a>
+            <a href="https://guardian.divinci.ai?screen_hint=signup" class="btn-primary">Get Started Free</a>
             <a href="#how-it-works" class="btn-secondary">See How It Works</a>
         </div>
         <div class="cost-banner">
@@ -759,21 +835,34 @@
 
     <section>
         <div class="section-label">Quick Start</div>
-        <div class="section-title">Deploy in 60 seconds</div>
-        <div class="section-desc">Three commands and you're protected.</div>
-        <div class="code-block">
-            <span class="comment"># Clone and deploy</span><br>
-            <span class="cmd">git clone</span> https://github.com/Divinci-AI/cloudflare-billing-kill-switch<br>
-            <span class="cmd">cd</span> cloudflare-billing-kill-switch<br>
-            <span class="cmd">npm install</span> <span class="flag">&&</span> <span class="cmd">wrangler deploy</span><br>
-            <br>
-            <span class="comment"># Set your secrets</span><br>
-            <span class="cmd">wrangler secret put</span> <span class="flag">CLOUDFLARE_ACCOUNT_ID</span><br>
-            <span class="cmd">wrangler secret put</span> <span class="flag">CLOUDFLARE_API_TOKEN</span><br>
-            <span class="cmd">wrangler secret put</span> <span class="flag">PAGERDUTY_ROUTING_KEY</span><br>
-            <br>
-            <span class="comment"># Test it</span><br>
-            <span class="cmd">curl</span> https://your-worker.workers.dev/<span class="flag">test-alert</span>
+        <div class="section-title">Two ways to get started</div>
+        <div class="section-desc">Use our managed platform or self-host the open-source version.</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+            <div style="background: rgba(194, 88, 0, 0.06); border: 1px solid rgba(194, 88, 0, 0.2); border-radius: 12px; padding: 28px;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 8px;">Managed Platform</h3>
+                <p style="font-size: 14px; color: #8b8fa3; margin-bottom: 16px;">Sign up, connect your cloud credentials, set your thresholds. Done.</p>
+                <ol style="list-style: none; padding: 0; margin: 0 0 20px;">
+                    <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">1.</span> Create a free account</li>
+                    <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">2.</span> Connect Cloudflare, GCP, or AWS</li>
+                    <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">3.</span> Set cost thresholds and alert channels</li>
+                </ol>
+                <a href="https://guardian.divinci.ai?screen_hint=signup" class="btn-primary" style="display: inline-block; font-size: 14px; padding: 10px 24px;">Get Started Free</a>
+            </div>
+            <div class="code-block" style="margin: 0;">
+                <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 12px;">Self-Hosted (Open Source)</div>
+                <span class="comment"># Clone and deploy</span><br>
+                <span class="cmd">git clone</span> https://github.com/Divinci-AI/kill-switch<br>
+                <span class="cmd">cd</span> kill-switch<br>
+                <span class="cmd">npm install</span> <span class="flag">&&</span> <span class="cmd">wrangler deploy</span><br>
+                <br>
+                <span class="comment"># Set your secrets</span><br>
+                <span class="cmd">wrangler secret put</span> <span class="flag">CLOUDFLARE_ACCOUNT_ID</span><br>
+                <span class="cmd">wrangler secret put</span> <span class="flag">CLOUDFLARE_API_TOKEN</span><br>
+                <span class="cmd">wrangler secret put</span> <span class="flag">PAGERDUTY_ROUTING_KEY</span><br>
+                <br>
+                <span class="comment"># Test it</span><br>
+                <span class="cmd">curl</span> https://your-worker.workers.dev/<span class="flag">test-alert</span>
+            </div>
         </div>
     </section>
 
@@ -809,15 +898,78 @@
         </section>
     </div>
 
+    <section id="pricing">
+        <div class="section-label">Pricing</div>
+        <div class="section-title">Start free. Scale when you need to.</div>
+        <div class="section-desc">No credit card required. Protect your first cloud account in under 5 minutes.</div>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <div class="plan-name">Free</div>
+                <div class="plan-desc">For solo developers</div>
+                <div class="plan-price free">$0</div>
+                <ul class="plan-features">
+                    <li>1 cloud account</li>
+                    <li>6-hour check interval</li>
+                    <li>1 alert channel</li>
+                    <li>Basic cost monitoring</li>
+                    <li>Community support</li>
+                </ul>
+                <a href="https://guardian.divinci.ai?screen_hint=signup" class="btn-plan secondary">Get Started Free</a>
+            </div>
+            <div class="pricing-card featured">
+                <div class="plan-name">Pro</div>
+                <div class="plan-desc">For teams shipping fast</div>
+                <div class="plan-price">$29<span class="per">/mo</span></div>
+                <ul class="plan-features">
+                    <li>3 cloud accounts</li>
+                    <li>5-minute check interval</li>
+                    <li>All alert channels</li>
+                    <li>Anomaly detection</li>
+                    <li>FinOps cost analytics</li>
+                    <li>Rule presets &amp; custom rules</li>
+                </ul>
+                <a href="https://guardian.divinci.ai/billing?plan=pro" class="btn-plan primary">Upgrade to Pro</a>
+            </div>
+            <div class="pricing-card">
+                <div class="plan-name">Team</div>
+                <div class="plan-desc">For growing organizations</div>
+                <div class="plan-price">$99<span class="per">/mo</span></div>
+                <ul class="plan-features">
+                    <li>10 cloud accounts</li>
+                    <li>5-minute check interval</li>
+                    <li>Team roles &amp; audit log</li>
+                    <li>API access</li>
+                    <li>Priority support</li>
+                    <li>Everything in Pro</li>
+                </ul>
+                <a href="https://guardian.divinci.ai/billing?plan=team" class="btn-plan secondary">Upgrade to Team</a>
+            </div>
+            <div class="pricing-card">
+                <div class="plan-name">Enterprise</div>
+                <div class="plan-desc">For large-scale operations</div>
+                <div class="plan-price" style="font-size: 28px; padding-top: 8px;">Custom</div>
+                <ul class="plan-features">
+                    <li>100+ cloud accounts</li>
+                    <li>1-minute check interval</li>
+                    <li>SSO &amp; SAML</li>
+                    <li>Dedicated support &amp; SLA</li>
+                    <li>Custom integrations</li>
+                    <li>Everything in Team</li>
+                </ul>
+                <a href="mailto:support@divinci.ai" class="btn-plan secondary">Contact Sales</a>
+            </div>
+        </div>
+    </section>
+
     <div class="cta">
-        <div class="section-label">Open Source</div>
+        <div class="section-label">Open Source &amp; SaaS</div>
         <div class="section-title">Stop your next surprise bill</div>
         <p class="section-desc" style="margin: 0 auto 32px; text-align: center;">
-            MIT licensed. Single file. Zero dependencies. Free tier compatible.<br>
-            Deploys in 60 seconds.
+            Self-host for free or use our managed platform.<br>
+            Either way, you're protected in under 5 minutes.
         </p>
         <div class="hero-actions">
-            <a href="https://guardian-api-150038457816.us-central1.run.app/docs" class="btn-primary">Get Started — Free</a>
+            <a href="https://guardian.divinci.ai?screen_hint=signup" class="btn-primary">Get Started Free</a>
             <a href="https://github.com/Divinci-AI/kill-switch" class="btn-secondary">View on GitHub</a>
         </div>
     </div>
@@ -826,9 +978,11 @@
         <p>
             Built by <a href="https://divinci.ai">Divinci AI</a>
             <span class="divider">|</span>
-            <a href="https://github.com/Divinci-AI/cloudflare-billing-kill-switch">GitHub</a>
+            <a href="https://guardian.divinci.ai">Dashboard</a>
             <span class="divider">|</span>
-            <a href="https://github.com/Divinci-AI/cloudflare-billing-kill-switch/blob/main/LICENSE">MIT License</a>
+            <a href="https://github.com/Divinci-AI/kill-switch">GitHub</a>
+            <span class="divider">|</span>
+            <a href="https://github.com/Divinci-AI/kill-switch/blob/main/LICENSE">MIT License</a>
         </p>
     </footer>
     <script>

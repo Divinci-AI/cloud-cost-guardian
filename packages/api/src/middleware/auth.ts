@@ -16,6 +16,7 @@ const JWKS = createRemoteJWKSet(new URL(`https://${AUTH0_DOMAIN}/.well-known/jwk
 export interface AuthenticatedRequest extends Request {
   userId?: string;
   guardianAccountId?: string;
+  teamRole?: "owner" | "admin" | "member" | "viewer";
   auth?: {
     sub: string;
     email?: string;
@@ -28,8 +29,13 @@ export interface AuthenticatedRequest extends Request {
  * Extracts userId from the `sub` claim.
  */
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
-  // Development bypass: ONLY active when GUARDIAN_DEV_AUTH_BYPASS=true AND NOT in production
-  if (process.env.GUARDIAN_DEV_AUTH_BYPASS === "true" && process.env.NODE_ENV !== "production") {
+  // Development bypass: ONLY active in test environment with explicit opt-in
+  // NEVER active in production — guarded by both NODE_ENV and ENVIRONMENT checks
+  if (
+    process.env.GUARDIAN_DEV_AUTH_BYPASS === "true" &&
+    process.env.NODE_ENV === "test" &&
+    process.env.ENVIRONMENT === "local"
+  ) {
     const devAccountId = req.headers["x-guardian-account-id"] as string;
     const devUserId = req.headers["x-guardian-user-id"] as string;
     if (devAccountId || devUserId) {
@@ -85,21 +91,36 @@ export async function resolveGuardianAccount(req: AuthenticatedRequest, res: Res
     // Lazy import to avoid circular deps
     const { GuardianAccountModel } = await import("../models/guardian-account/schema.js");
 
+    // First check if user owns an account
     let account = await GuardianAccountModel.findOne({ ownerUserId: req.userId });
 
-    if (!account) {
-      // Auto-create account on first authenticated request
-      account = await GuardianAccountModel.create({
-        ownerUserId: req.userId,
-        name: req.auth?.email || `User ${req.userId.substring(0, 8)}`,
-        tier: "free",
-        alertChannels: [],
-        settings: { checkIntervalMinutes: 360, dailyReportEnabled: false },
-      });
-      console.error(`[guardian] Auto-created account for ${req.userId}`);
+    if (account) {
+      req.guardianAccountId = account._id.toString();
+      req.teamRole = "owner";
+      return next();
     }
 
+    // Check if user is a team member of another account
+    const { TeamMemberModel } = await import("../models/team/schema.js");
+    const membership = await TeamMemberModel.findOne({ userId: req.userId });
+    if (membership) {
+      req.guardianAccountId = membership.guardianAccountId;
+      req.teamRole = membership.role;
+      return next();
+    }
+
+    // No account and no team membership — auto-create a new account
+    account = await GuardianAccountModel.create({
+      ownerUserId: req.userId,
+      name: req.auth?.email || `User ${req.userId.substring(0, 8)}`,
+      tier: "free",
+      alertChannels: [],
+      settings: { checkIntervalMinutes: 360, dailyReportEnabled: false },
+    });
+    console.error(`[guardian] Auto-created account for ${req.userId}`);
+
     req.guardianAccountId = account._id.toString();
+    req.teamRole = "owner";
     next();
   } catch (error: any) {
     console.error("[guardian] Failed to resolve Guardian account:", error.message);

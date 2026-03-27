@@ -16,6 +16,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         redirect_uri: window.location.origin,
         audience: AUTH0_AUDIENCE,
       }}
+      onRedirectCallback={(appState) => {
+        // After Auth0 login, navigate to the page the user was originally trying to reach
+        const returnTo = appState?.returnTo || "/";
+        window.history.replaceState({}, "", returnTo);
+      }}
     >
       <App />
     </Auth0Provider>

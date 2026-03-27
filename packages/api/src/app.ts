@@ -15,6 +15,7 @@ import { alertRouter } from "./routes/alerts/index.js";
 import { rulesRouter } from "./routes/rules/index.js";
 import { databaseRouter } from "./routes/database/index.js";
 import { billingRouter } from "./routes/billing/index.js";
+import { teamRouter } from "./routes/team/index.js";
 import { GuardianAccountModel } from "./models/guardian-account/schema.js";
 import { requireAuth, resolveGuardianAccount } from "./middleware/auth.js";
 import { runCheckCycle } from "./services/monitoring-engine.js";
@@ -24,10 +25,13 @@ import { getUsageHistory, getAlertHistory, getAnalyticsOverview } from "./global
 export function createApp() {
   const app = express();
 
-  // CORS — restrict to known origins in production
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:3000"];
+  // CORS — always use explicit allowlist (never open wildcard)
+  const defaultOrigins = process.env.NODE_ENV === "test"
+    ? ["http://localhost:3000"]
+    : ["http://localhost:3000", "http://localhost:5173"];
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || defaultOrigins;
   app.use(cors({
-    origin: process.env.NODE_ENV === "production" ? allowedOrigins : true,
+    origin: allowedOrigins,
     credentials: true,
   }));
 
@@ -37,6 +41,7 @@ export function createApp() {
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("X-XSS-Protection", "1; mode=block");
     res.setHeader("Referrer-Policy", "same-origin");
+    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.auth0.com https://*.stripe.com; frame-src https://*.stripe.com; object-src 'none'; base-uri 'self'");
     if (process.env.NODE_ENV === "production") {
       res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     }
@@ -47,13 +52,16 @@ export function createApp() {
 
   // Rate limiting
   if (process.env.NODE_ENV !== "test") {
+    // Per-user key generator: uses authenticated userId if available, falls back to IP
+    const perUserKey = (req: any) => req.userId || req.ip;
     // General: 100 requests per 15 minutes per IP
     app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false }));
-    // Strict: credential validation and kill switch (10 per 15 min)
-    app.use("/providers", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));
-    app.use("/database/kill", rateLimit({ windowMs: 15 * 60 * 1000, max: 10 }));
-    app.use("/billing/checkout", rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }));
-    app.use("/alerts/test", rateLimit({ windowMs: 15 * 60 * 1000, max: 5 }));
+    // Strict per-user limits on sensitive endpoints
+    app.use("/providers", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: perUserKey }));
+    app.use("/database/kill", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: perUserKey }));
+    app.use("/billing/checkout", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey }));
+    app.use("/alerts/test", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey }));
+    app.use("/team/invite", rateLimit({ windowMs: 15 * 60 * 1000, max: 20, keyGenerator: perUserKey }));
   }
 
   // Skip morgan in test
@@ -120,6 +128,7 @@ export function createApp() {
   app.use("/rules", ...authStack);
   app.use("/database", ...authStack);
   app.use("/billing", ...authStack);
+  app.use("/team", ...authStack);
 
   // Authenticated routes
   app.use("/cloud-accounts", cloudAccountRouter);
@@ -127,6 +136,7 @@ export function createApp() {
   app.use("/rules", rulesRouter);
   app.use("/database", databaseRouter);
   app.use("/billing", billingRouter);
+  app.use("/team", teamRouter);
 
   // Manual check (requires auth — runs only the authenticated user's accounts)
   app.post("/check", requireAuth, resolveGuardianAccount, async (req, res, next) => {
@@ -160,6 +170,28 @@ export function createApp() {
     } catch (e) { next(e); }
   });
 
+  app.patch("/accounts/me", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
+    try {
+      const allowedFields: Record<string, boolean> = { name: true, onboardingCompleted: true, "settings.timezone": true, "settings.dailyReportEnabled": true };
+      const updates: Record<string, any> = {};
+      for (const [key, value] of Object.entries(req.body)) {
+        if (key === "settings" && typeof value === "object" && value !== null) {
+          for (const [sk, sv] of Object.entries(value as Record<string, any>)) {
+            const fullKey = `settings.${sk}`;
+            if (allowedFields[fullKey]) updates[fullKey] = sv;
+          }
+        } else if (allowedFields[key]) {
+          updates[key] = value;
+        }
+      }
+      if (Object.keys(updates).length === 0) return res.status(400).json({ error: "No valid fields to update" });
+      const account = await GuardianAccountModel.findByIdAndUpdate(req.guardianAccountId, { $set: updates }, { new: true }).lean();
+      if (!account) return res.status(404).json({ error: "Account not found" });
+      const { stripeCustomerId: _s, ...safe } = account as any;
+      res.json(safe);
+    } catch (e) { next(e); }
+  });
+
   // Analytics overview (aggregate FinOps data across all accounts)
   app.get("/analytics/overview", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
     try {
@@ -169,9 +201,13 @@ export function createApp() {
     } catch (e) { next(e); }
   });
 
-  // Usage history
-  app.get("/cloud-accounts/:id/usage", async (req, res, next) => {
+  // Usage history (requires auth + ownership check)
+  app.get("/cloud-accounts/:id/usage", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
     try {
+      // Lazy import to avoid circular deps
+      const { CloudAccountModel } = await import("./models/cloud-account/schema.js");
+      const account = await CloudAccountModel.findOne({ _id: req.params.id, guardianAccountId: req.guardianAccountId });
+      if (!account) return res.status(404).json({ error: "Cloud account not found" });
       const days = parseInt(req.query.days as string) || 7;
       const history = await getUsageHistory(req.params.id, days);
       res.json({ usage: history, days });
