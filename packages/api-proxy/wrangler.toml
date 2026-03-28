@@ -1,0 +1,14 @@
+name = "kill-switch-api-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# Route: api.kill-switch.net/* → Cloud Run with Host header rewrite
+# This worker exists because CF Free plan doesn't support Origin Rules.
+routes = [
+  { pattern = "api.kill-switch.net/*", zone_name = "kill-switch.net" }
+]
+
+[[secrets_store_secrets]]
+binding = "CF_ORIGIN_SECRET"
+store_id = "0b7ac993cf26413ea6e2f1b5ede20b25"
+secret_name = "CF_ORIGIN_SECRET"
