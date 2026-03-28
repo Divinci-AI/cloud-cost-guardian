@@ -59,11 +59,12 @@ export function createApp() {
   if (process.env.NODE_ENV === "production") {
     const cfSecret = process.env.CF_ORIGIN_SECRET;
     if (cfSecret) {
+      const cfSecretBuf = Buffer.from(cfSecret);
       app.use((req, res, next) => {
         if (req.path === "/" && req.method === "GET") return next();
         const provided = (req.headers["x-origin-secret"] as string) || "";
         if (provided.length !== cfSecret.length ||
-            !timingSafeEqual(Buffer.from(provided), Buffer.from(cfSecret))) {
+            !timingSafeEqual(Buffer.from(provided), cfSecretBuf)) {
           console.error(`[guardian] Blocked direct access from ${req.ip} to ${req.path}`);
           return res.status(403).json({ error: "Forbidden" });
         }

@@ -13,26 +13,22 @@ interface Env {
   CF_ORIGIN_SECRET: { get(): Promise<string> };
 }
 
-const CLOUD_RUN_ORIGIN = "https://guardian-api-150038457816.us-central1.run.app";
+const CLOUD_RUN_HOST = "guardian-api-150038457816.us-central1.run.app";
+const CLOUD_RUN_ORIGIN = `https://${CLOUD_RUN_HOST}`;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-
-    // Build the Cloud Run URL preserving path + query
     const targetUrl = `${CLOUD_RUN_ORIGIN}${url.pathname}${url.search}`;
 
-    // Clone headers and rewrite Host
     const headers = new Headers(request.headers);
-    headers.set("Host", "guardian-api-150038457816.us-central1.run.app");
+    headers.set("Host", CLOUD_RUN_HOST);
 
-    // Inject origin secret for Cloud Run verification
     if (env.CF_ORIGIN_SECRET) {
       const secret = await env.CF_ORIGIN_SECRET.get();
       if (secret) headers.set("x-origin-secret", secret);
     }
 
-    // Forward the request
     const response = await fetch(targetUrl, {
       method: request.method,
       headers,
@@ -42,7 +38,6 @@ export default {
       redirect: "follow",
     });
 
-    // Return response with CORS headers for the web app
     const respHeaders = new Headers(response.headers);
     const origin = request.headers.get("Origin");
     const allowedOrigins = [
