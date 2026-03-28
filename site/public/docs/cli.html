@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLI Reference | Kill Switch</title>
+    <meta name="description" content="Kill Switch CLI — monitor cloud spending, kill runaway services from the terminal.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: rgb(12, 18, 41); color: #c4c5ca; }
+        a { color: #5ce2e7; text-decoration: none; }
+        a:hover { color: #fff; }
+        .navbar {
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 2em; height: 58px;
+            background: rgba(51, 51, 51, 0.55); backdrop-filter: blur(12px);
+            border-top: 4px solid #0e102dab;
+        }
+        .nav-brand { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .nav-brand .icon { font-size: 24px; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: #fff; font-weight: 500; font-size: 14px; }
+        .nav-links a.active { color: #5ce2e7; }
+        .btn-github { background: #24292e; color: #fff !important; padding: 7px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; border: 1px solid #444; }
+        .btn-github:hover { background: #444; }
+        .content { max-width: 860px; margin: 0 auto; padding: 90px 2em 4em; }
+        h1 { font-family: 'Outfit', sans-serif; font-size: 2.2em; font-weight: 800; color: #fff; margin: 0 0 0.3em; }
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.5em; font-weight: 700; color: #fff; margin: 2em 0 0.6em; padding-top: 1em; border-top: 1px solid rgba(255,255,255,0.06); }
+        h3 { font-family: 'Outfit', sans-serif; font-size: 1.15em; font-weight: 600; color: #ddd; margin: 1.5em 0 0.4em; }
+        p { line-height: 1.7; margin: 0 0 1em; }
+        ul, ol { margin: 0 0 1.2em 1.5em; line-height: 1.8; }
+        li { margin-bottom: 0.3em; }
+        code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; color: #5ce2e7; }
+        pre { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 1.2em; overflow-x: auto; margin: 0 0 1.5em; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; color: #c4c5ca; }
+        pre code { background: none; padding: 0; color: inherit; }
+        table { width: 100%; border-collapse: collapse; margin: 0 0 1.5em; font-size: 14px; }
+        th { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.04); color: #fff; font-weight: 600; }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        td code { font-size: 12px; }
+        .callout { background: rgba(92,226,231,0.06); border-left: 3px solid #5ce2e7; padding: 1em 1.2em; border-radius: 0 6px 6px 0; margin: 0 0 1.5em; }
+        .callout-warn { background: rgba(255,152,0,0.06); border-left-color: #ff9800; }
+        .cmd-group { margin: 1.5em 0; }
+        .cmd-group h4 { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #5ce2e7; margin: 0 0 0.3em; }
+        .cmd-group p { font-size: 14px; margin: 0 0 0.8em; color: #8a8d9b; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand" style="text-decoration:none;">
+            <span class="icon">&#9889;</span>
+            <span>Kill Switch</span>
+        </a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/docs">API Docs</a>
+            <a href="/docs/cli.html" class="active">CLI</a>
+            <a href="/docs/integration.html">Integration</a>
+            <a href="https://github.com/AiExpanse/kill-switch" class="btn-github">
+                <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub
+            </a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <h1>CLI Reference</h1>
+        <p><code>@kill-switch/cli</code> &mdash; monitor cloud spending, kill runaway services from the terminal. Designed for both developers and AI agents.</p>
+
+        <h2>Install</h2>
+<pre><code># From npm (coming soon)
+npm install -g @kill-switch/cli
+
+# From source
+git clone https://github.com/AiExpanse/kill-switch.git
+cd kill-switch/packages/cli
+npm install && npm run build
+npm link  # makes `kill-switch` available globally</code></pre>
+
+        <h2>Quick Start</h2>
+<pre><code># 1. Authenticate
+kill-switch auth login --api-key ks_live_your_key_here
+
+# 2. Apply cost protection
+kill-switch shield cost-runaway
+
+# 3. Run a monitoring check
+kill-switch check
+
+# 4. View results
+kill-switch accounts list</code></pre>
+
+        <h2>Authentication</h2>
+        <p>The CLI uses personal API keys (prefixed with <code>ks_</code>). Create one from the web dashboard at <a href="https://app.kill-switch.net">app.kill-switch.net</a>, or via the API.</p>
+
+        <h3>Auth Resolution Order</h3>
+        <ol>
+            <li><code>KILL_SWITCH_API_KEY</code> environment variable (best for CI/CD and AI agents)</li>
+            <li><code>--api-key</code> flag on any command</li>
+            <li><code>~/.kill-switch/config.json</code> file (set by <code>kill-switch auth login</code>)</li>
+        </ol>
+
+        <div class="cmd-group">
+            <h4>kill-switch auth login --api-key KEY</h4>
+            <p>Authenticate and save the key to ~/.kill-switch/config.json (0600 permissions).</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch auth status</h4>
+            <p>Show current auth status, account name, and tier.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch auth logout</h4>
+            <p>Clear stored credentials.</p>
+        </div>
+
+        <h2>Shield (Quick Protect)</h2>
+        <p>The fastest way to add protection. One command applies a preset rule.</p>
+
+<pre><code># Apply cost runaway protection
+kill-switch shield cost-runaway
+
+# List all available shields
+kill-switch shield --list
+
+# Apply with JSON output (for automation)
+kill-switch shield gpu-runaway --json</code></pre>
+
+        <h3>Available Shields</h3>
+        <table>
+            <tr><th>Preset</th><th>Name</th><th>Category</th></tr>
+            <tr><td><code>cost-runaway</code></td><td>Cost Runaway Protection</td><td>Cost</td></tr>
+            <tr><td><code>gpu-runaway</code></td><td>GPU Instance Runaway</td><td>Cost</td></tr>
+            <tr><td><code>lambda-loop</code></td><td>Lambda Recursive Loop</td><td>Cost</td></tr>
+            <tr><td><code>aws-cost-runaway</code></td><td>AWS Daily Cost Runaway</td><td>Cost</td></tr>
+            <tr><td><code>ddos</code></td><td>DDoS Protection</td><td>Security</td></tr>
+            <tr><td><code>brute-force</code></td><td>Brute Force Protection</td><td>Security</td></tr>
+            <tr><td><code>exfiltration</code></td><td>Data Exfiltration Detection</td><td>Security</td></tr>
+            <tr><td><code>error-storm</code></td><td>Error Storm Protection</td><td>Reliability</td></tr>
+        </table>
+
+        <h2>Cloud Accounts</h2>
+
+        <div class="cmd-group">
+            <h4>kill-switch accounts list</h4>
+            <p>List all connected cloud accounts with provider, name, and status.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch accounts get &lt;id&gt;</h4>
+            <p>Show detailed account info including thresholds and last check results.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch accounts add &lt;provider&gt; --name "My Account"</h4>
+            <p>Connect a cloud provider. Supported: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>.</p>
+        </div>
+
+<pre><code># Connect Cloudflare
+kill-switch accounts add cloudflare \
+  --name "Production" \
+  --token "your-cf-api-token" \
+  --account-id "your-account-id"
+
+# Connect GCP
+kill-switch accounts add gcp \
+  --name "GCP Production" \
+  --project-id "my-project" \
+  --service-account '{"type":"service_account",...}'</code></pre>
+
+        <div class="cmd-group">
+            <h4>kill-switch accounts delete &lt;id&gt;</h4>
+            <p>Disconnect and delete a cloud account and its stored credentials.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch accounts check &lt;id&gt;</h4>
+            <p>Run a manual monitoring check on a specific account.</p>
+        </div>
+
+        <h2>Monitoring</h2>
+
+        <div class="cmd-group">
+            <h4>kill-switch check</h4>
+            <p>Run monitoring checks on all connected accounts. Shows violations and actions taken.</p>
+        </div>
+
+<pre><code>$ kill-switch check
+Checked 2 account(s)
+
+cloudflare: Production CF
+  All clear
+
+gcp: GCP Staging
+  Metric          Value    Threshold
+  ------          -----    ---------
+  monthlySpend    $523     $500
+  Action: scale-down</code></pre>
+
+        <h2>Rules</h2>
+
+        <div class="cmd-group">
+            <h4>kill-switch rules list</h4>
+            <p>List all active kill switch rules.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch rules presets</h4>
+            <p>List available preset rule templates.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch rules create &lt;name&gt; --trigger &lt;type&gt;</h4>
+            <p>Create a custom rule. Trigger types: <code>cost</code>, <code>security</code>, <code>api</code>.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch rules toggle &lt;id&gt;</h4>
+            <p>Enable or disable a rule.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch rules delete &lt;id&gt;</h4>
+            <p>Delete a rule permanently.</p>
+        </div>
+
+        <h2>Database Kill Switch</h2>
+        <p>Multi-step database kill sequences: snapshot &rarr; verify &rarr; isolate &rarr; nuke. Each step is an explicit command &mdash; no interactive prompts.</p>
+
+<pre><code># Initiate a kill sequence
+kill-switch kill init \
+  --credential-id "cred_abc123" \
+  --trigger "credential compromise detected"
+
+# Check status
+kill-switch kill status dbkill-xyz789
+
+# Advance to next step
+kill-switch kill advance dbkill-xyz789 --credential-id "cred_abc123"
+
+# Final step (nuke) requires human approval
+kill-switch kill advance dbkill-xyz789 \
+  --credential-id "cred_abc123" \
+  --human-approval
+
+# Abort if needed
+kill-switch kill abort dbkill-xyz789</code></pre>
+
+        <h2>Alerts</h2>
+
+        <div class="cmd-group">
+            <h4>kill-switch alerts list</h4>
+            <p>List configured alert channels (PagerDuty, Discord, Slack, email, webhook).</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch alerts test</h4>
+            <p>Send a test alert to all configured channels.</p>
+        </div>
+
+        <h2>Analytics</h2>
+
+        <div class="cmd-group">
+            <h4>kill-switch analytics --days 30</h4>
+            <p>FinOps analytics overview: daily costs, savings from kill-switch actions, violation trends.</p>
+        </div>
+
+        <h2>Configuration</h2>
+
+        <div class="cmd-group">
+            <h4>kill-switch config init</h4>
+            <p>Create <code>~/.kill-switch/config.json</code> with defaults.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch config list</h4>
+            <p>Show all config values (API key is masked).</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch config set &lt;key&gt; &lt;value&gt;</h4>
+            <p>Set a config value. Keys: <code>apiKey</code>, <code>apiUrl</code>.</p>
+        </div>
+
+        <h2>Global Options</h2>
+        <table>
+            <tr><th>Flag</th><th>Description</th></tr>
+            <tr><td><code>--json</code></td><td>Output raw JSON to stdout (for automation, piping, AI agents)</td></tr>
+            <tr><td><code>--api-key &lt;key&gt;</code></td><td>Override API key for this command</td></tr>
+            <tr><td><code>--api-url &lt;url&gt;</code></td><td>Override API URL (default: https://api.kill-switch.net)</td></tr>
+            <tr><td><code>-V, --version</code></td><td>Show version number</td></tr>
+            <tr><td><code>-h, --help</code></td><td>Show help</td></tr>
+        </table>
+
+        <h2>AI Agent Usage</h2>
+        <p>The CLI is designed to be used by AI agents (Claude Code, etc.) without interactive prompts.</p>
+
+        <div class="callout">
+            <strong>Agent-safe by design:</strong> Every parameter is passable as a flag. No interactive prompts unless explicitly requested. All output is parseable with <code>--json</code>. Exit codes are deterministic (0=success, 1=error, 2=auth error).
+        </div>
+
+<pre><code># Set API key via env var (no config file needed)
+export KILL_SWITCH_API_KEY=ks_live_abc123
+
+# All commands work non-interactively with --json
+kill-switch accounts list --json
+kill-switch shield cost-runaway --json
+kill-switch check --json
+
+# Parse JSON output in scripts
+kill-switch check --json | jq '.results[].violations | length'</code></pre>
+
+        <h3>Claude Code Integration</h3>
+<pre><code># In a Claude Code session:
+KILL_SWITCH_API_KEY=ks_live_abc123 kill-switch shield cost-runaway --json
+KILL_SWITCH_API_KEY=ks_live_abc123 kill-switch shield gpu-runaway --json
+KILL_SWITCH_API_KEY=ks_live_abc123 kill-switch check --json</code></pre>
+
+        <h2>Environment Variables</h2>
+        <table>
+            <tr><th>Variable</th><th>Description</th></tr>
+            <tr><td><code>KILL_SWITCH_API_KEY</code></td><td>API key (highest priority, overrides config file)</td></tr>
+            <tr><td><code>KILL_SWITCH_API_URL</code></td><td>API URL override (default: https://api.kill-switch.net)</td></tr>
+        </table>
+
+        <h2>Exit Codes</h2>
+        <table>
+            <tr><th>Code</th><th>Meaning</th></tr>
+            <tr><td><code>0</code></td><td>Success</td></tr>
+            <tr><td><code>1</code></td><td>Client error (bad arguments, API error)</td></tr>
+            <tr><td><code>2</code></td><td>Authentication error (invalid/missing API key)</td></tr>
+        </table>
+
+        <h2>See Also</h2>
+        <ul>
+            <li><a href="/docs">API Reference</a> (OpenAPI 3.1)</li>
+            <li><a href="/docs/integration.html">Integration Guide</a> (Edge Agent, Spend Guard, Alerting)</li>
+            <li><a href="https://github.com/AiExpanse/kill-switch">GitHub Repository</a></li>
+        </ul>
+    </div>
+</body>
+</html>
