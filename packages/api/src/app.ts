@@ -9,6 +9,7 @@ import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
+import { timingSafeEqual } from "crypto";
 import { getAllProviders, getProvider } from "./providers/index.js";
 import { cloudAccountRouter } from "./routes/cloud-accounts/index.js";
 import { alertRouter } from "./routes/alerts/index.js";
@@ -60,7 +61,9 @@ export function createApp() {
     if (cfSecret) {
       app.use((req, res, next) => {
         if (req.path === "/" && req.method === "GET") return next();
-        if (req.headers["x-origin-secret"] !== cfSecret) {
+        const provided = (req.headers["x-origin-secret"] as string) || "";
+        if (provided.length !== cfSecret.length ||
+            !timingSafeEqual(Buffer.from(provided), Buffer.from(cfSecret))) {
           console.error(`[guardian] Blocked direct access from ${req.ip} to ${req.path}`);
           return res.status(403).json({ error: "Forbidden" });
         }
@@ -244,7 +247,10 @@ export function createApp() {
 
       const validKey = process.env.GUARDIAN_AGENT_API_KEY;
       if (!validKey) return res.status(503).json({ error: "Agent API key not configured" });
-      if (apiKey !== validKey) return res.status(403).json({ error: "Invalid API key" });
+      if (apiKey.length !== validKey.length ||
+          !timingSafeEqual(Buffer.from(apiKey), Buffer.from(validKey))) {
+        return res.status(403).json({ error: "Invalid API key" });
+      }
 
       res.json({ received: true, timestamp: Date.now() });
     } catch (e) { next(e); }

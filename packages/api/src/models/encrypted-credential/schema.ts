@@ -161,8 +161,10 @@ export async function storeGenericCredential(
 /**
  * Retrieve and decrypt a credential (generic — returns raw object).
  */
-export async function getGenericCredential(credentialId: string): Promise<Record<string, any> | null> {
-  const doc = await EncryptedCredentialModel.findById(credentialId);
+export async function getGenericCredential(credentialId: string, guardianAccountId?: string): Promise<Record<string, any> | null> {
+  const query: Record<string, string> = { _id: credentialId };
+  if (guardianAccountId) query.guardianAccountId = guardianAccountId;
+  const doc = await EncryptedCredentialModel.findOne(query);
   if (!doc) return null;
   const plaintext = decrypt({
     encrypted: doc.encrypted,
@@ -174,9 +176,11 @@ export async function getGenericCredential(credentialId: string): Promise<Record
 }
 
 /**
- * Delete a credential permanently.
+ * Delete a credential permanently. Scoped to account when guardianAccountId provided.
  */
-export async function deleteCredential(credentialId: string): Promise<boolean> {
-  const result = await EncryptedCredentialModel.findByIdAndDelete(credentialId);
+export async function deleteCredential(credentialId: string, guardianAccountId?: string): Promise<boolean> {
+  const query: Record<string, string> = { _id: credentialId };
+  if (guardianAccountId) query.guardianAccountId = guardianAccountId;
+  const result = await EncryptedCredentialModel.findOneAndDelete(query);
   return result !== null;
 }

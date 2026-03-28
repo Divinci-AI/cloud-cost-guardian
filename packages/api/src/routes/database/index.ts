@@ -68,7 +68,7 @@ databaseRouter.post("/credentials", async (req: any, res, next) => {
  */
 databaseRouter.delete("/credentials/:id", async (req: any, res, next) => {
   try {
-    const deleted = await deleteCredential(req.params.id);
+    const deleted = await deleteCredential(req.params.id, req.guardianAccountId);
     if (!deleted) return res.status(404).json({ error: "Credential not found" });
     res.json({ deleted: true });
   } catch (e) { next(e); }
@@ -97,7 +97,7 @@ databaseRouter.post("/kill", async (req: any, res, next) => {
       return res.status(400).json({ error: "Missing credentialId. Store credentials first via POST /database/credentials" });
     }
 
-    const decrypted = await getGenericCredential(credentialId);
+    const decrypted = await getGenericCredential(credentialId, guardianAccountId);
     if (!decrypted) return res.status(404).json({ error: "Credential not found" });
     credential = decrypted as DatabaseCredential;
 
@@ -133,7 +133,7 @@ databaseRouter.post("/kill/:id/advance", async (req: any, res, next) => {
       return res.status(400).json({ error: "Missing credentialId. Store credentials first via POST /database/credentials" });
     }
 
-    const decrypted = await getGenericCredential(credentialId);
+    const decrypted = await getGenericCredential(credentialId, guardianAccountId);
     if (!decrypted) return res.status(404).json({ error: "Credential not found" });
     const credential = decrypted as DatabaseCredential;
 
