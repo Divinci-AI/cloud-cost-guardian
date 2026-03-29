@@ -29,6 +29,20 @@ const providers = [
     color: "#673ab7",
     available: true,
   },
+  {
+    id: "redis",
+    name: "Redis",
+    description: "Monitor Redis Cloud, AWS ElastiCache, and self-hosted Redis instances.",
+    color: "#dc382d",
+    available: true,
+  },
+  {
+    id: "mongodb",
+    name: "MongoDB",
+    description: "Monitor MongoDB Atlas clusters and self-hosted MongoDB instances.",
+    color: "#00684a",
+    available: true,
+  },
 ];
 
 export function ConnectProvider() {

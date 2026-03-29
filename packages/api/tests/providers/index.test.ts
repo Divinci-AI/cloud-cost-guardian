@@ -38,15 +38,17 @@ describe("Provider Registry", () => {
   });
 
   describe("getAllProviders", () => {
-    it("returns all four providers", () => {
+    it("returns all six providers", () => {
       const providers = getAllProviders();
-      expect(providers).toHaveLength(4);
+      expect(providers).toHaveLength(6);
 
       const ids = providers.map(p => p.id);
       expect(ids).toContain("cloudflare");
       expect(ids).toContain("gcp");
       expect(ids).toContain("aws");
       expect(ids).toContain("runpod");
+      expect(ids).toContain("redis");
+      expect(ids).toContain("mongodb");
     });
 
     it("all providers implement the CloudProvider interface", () => {

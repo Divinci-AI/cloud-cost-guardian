@@ -10,6 +10,8 @@ import { ConnectCloudflare } from "./pages/CloudAccounts/ConnectCloudflare";
 import { ConnectGCP } from "./pages/CloudAccounts/ConnectGCP";
 import { ConnectAWS } from "./pages/CloudAccounts/ConnectAWS";
 import { ConnectRunPod } from "./pages/CloudAccounts/ConnectRunPod";
+import { ConnectRedis } from "./pages/CloudAccounts/ConnectRedis";
+import { ConnectMongoDB } from "./pages/CloudAccounts/ConnectMongoDB";
 import { ConnectProvider } from "./pages/CloudAccounts/ConnectProvider";
 import { AlertsHistory } from "./pages/Alerts/AlertsHistory";
 import { BillingPage } from "./pages/Billing/BillingPage";
@@ -82,6 +84,7 @@ function AuthenticatedApp() {
             <Link to="/activity" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Activity</Link>
             <Link to="/billing" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Billing</Link>
             <Link to="/settings" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Settings</Link>
+            <a href="https://kill-switch.net/docs/" target="_blank" rel="noopener noreferrer" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Docs</a>
             <UserButton afterSignOutUrl="/" />
           </div>
         </nav>
@@ -96,6 +99,8 @@ function AuthenticatedApp() {
             <Route path="/accounts/connect/gcp" element={<ConnectGCP />} />
             <Route path="/accounts/connect/aws" element={<ConnectAWS />} />
             <Route path="/accounts/connect/runpod" element={<ConnectRunPod />} />
+            <Route path="/accounts/connect/redis" element={<ConnectRedis />} />
+            <Route path="/accounts/connect/mongodb" element={<ConnectMongoDB />} />
             <Route path="/alerts" element={<AlertsHistory />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/billing" element={<BillingPage />} />
