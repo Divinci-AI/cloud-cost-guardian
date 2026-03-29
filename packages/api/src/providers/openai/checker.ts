@@ -38,7 +38,8 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 
 function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
   const pricing = MODEL_PRICING[model] || MODEL_PRICING["gpt-4o-mini"];
-  return (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
+  const cost = (Number(inputTokens) * pricing.input + Number(outputTokens) * pricing.output) / 1_000_000;
+  return isFinite(cost) ? cost : 0;
 }
 
 function evaluateViolations(services: ServiceUsage[], thresholds: ThresholdConfig, totalDailyCost: number): Violation[] {

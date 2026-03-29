@@ -86,7 +86,7 @@ export const snowflakeProvider: CloudProvider = {
       serviceName: "snowflake:compute",
       metrics: [
         { name: "Credits Today", value: Math.round(credits * 100) / 100, unit: "credits", thresholdKey: "snowflakeCreditsPerDay" },
-        { name: "Queries Today", value: queries, unit: "queries", thresholdKey: "snowflakeWarehouseCount" },
+        { name: "Queries Today", value: queries, unit: "queries", thresholdKey: "" },
       ],
       estimatedDailyCostUSD: totalCost,
     }];
@@ -101,6 +101,9 @@ export const snowflakeProvider: CloudProvider = {
 
   async executeKillSwitch(credential, serviceName, action) {
     const wh = credential.snowflakeWarehouseName || "COMPUTE_WH";
+    if (!/^[A-Za-z0-9_]+$/.test(wh)) {
+      return { success: false, action, serviceName, details: "Invalid warehouse name — must be alphanumeric" };
+    }
     if (action === "scale-down") {
       try {
         await snowflakeSQL(credential, `ALTER WAREHOUSE ${wh} SET WAREHOUSE_SIZE = 'X-SMALL'`);
