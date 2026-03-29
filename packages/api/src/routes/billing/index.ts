@@ -146,8 +146,8 @@ billingRouter.post("/checkout", async (req, res, next) => {
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: plan.priceId, quantity: 1 }],
-      success_url: successUrl || "https://guardian.divinci.ai/billing?success=true",
-      cancel_url: cancelUrl || "https://guardian.divinci.ai/billing?canceled=true",
+      success_url: successUrl || "https://app.kill-switch.net/billing?success=true",
+      cancel_url: cancelUrl || "https://app.kill-switch.net/billing?canceled=true",
       metadata: { guardianAccountId: accountId, tier: plan.tier },
     });
 
@@ -168,8 +168,8 @@ billingRouter.post("/portal", async (req, res, next) => {
     const account = await GuardianAccountModel.findById(accountId);
     if (!account?.stripeCustomerId) return res.status(400).json({ error: "No billing account" });
 
-    let returnUrl = req.body.returnUrl || "https://guardian.divinci.ai/billing";
-    if (typeof returnUrl === "string" && returnUrl !== "https://guardian.divinci.ai/billing") {
+    let returnUrl = req.body.returnUrl || "https://app.kill-switch.net/billing";
+    if (typeof returnUrl === "string" && returnUrl !== "https://app.kill-switch.net/billing") {
       try {
         const parsed = new URL(returnUrl);
         if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") {

@@ -4,6 +4,28 @@
 
 Born from a **$91,316 Cloudflare Durable Objects bill**. Cloudflare has no spending cap. Neither does GCP. Neither does AWS. This is your safety net.
 
+**Website:** [kill-switch.net](https://kill-switch.net) | **Dashboard:** [app.kill-switch.net](https://app.kill-switch.net) | **CLI:** `npm i -g @kill-switch/cli`
+
+## Quick Start
+
+```bash
+# Install the CLI
+npm install -g @kill-switch/cli
+
+# Authenticate (opens browser to create API key)
+ks auth setup
+
+# Connect your cloud provider
+ks onboard --provider cloudflare \
+  --account-id YOUR_ACCOUNT_ID \
+  --token YOUR_API_TOKEN \
+  --name "Production" \
+  --shields cost-runaway,ddos
+
+# Run a monitoring check
+ks check
+```
+
 ## Supported Cloud Providers
 
 | Provider | Services Monitored | Kill Actions |
@@ -16,28 +38,29 @@ Born from a **$91,316 Cloudflare Durable Objects bill**. Cloudflare has no spend
 
 | Package | Description | Deployment |
 |---------|-------------|------------|
-| [`packages/api`](packages/api) | Guardian API — Express server with monitoring engine, rule engine, billing | GCP Cloud Run |
-| [`packages/web`](packages/web) | Dashboard — React SPA with Auth0 | Cloudflare Pages |
+| [`packages/cli`](packages/cli) | CLI (`ks` / `kill-switch`) — onboard, monitor, kill from the terminal | npm: `@kill-switch/cli` |
+| [`packages/api`](packages/api) | Kill Switch API — monitoring engine, rule engine, billing | GCP Cloud Run |
+| [`packages/web`](packages/web) | Dashboard — React SPA with Clerk auth | Cloudflare Workers |
 | [`packages/kill-switch-cf`](packages/kill-switch-cf) | Cloudflare Kill Switch — self-hosted cron Worker | Cloudflare Workers |
 | [`packages/kill-switch-gcp`](packages/kill-switch-gcp) | GCP Kill Switch — Cloud Function triggered by budget alerts | GCP Cloud Functions |
 | [`packages/kill-switch-aws`](packages/kill-switch-aws) | AWS Kill Switch — Lambda triggered by Budget alerts via SNS | AWS Lambda |
-| [`packages/agent`](packages/agent) | Edge Agent — deploys to customer's CF account, reports to Guardian API | Customer's Cloudflare |
-| [`site`](site) | Landing page with VEO3 videos | Static / CF Pages |
+| [`packages/agent`](packages/agent) | Edge Agent — deploys to customer's CF account, reports to API | Customer's Cloudflare |
+| [`site`](site) | Marketing landing page | Cloudflare Workers |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Kill Switch                          │
-├─────────────────────────────────────────────────────────────────┤
+┌──────────────────────────────────────────────────────────────────┐
+│                        Kill Switch                               │
+├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  Dashboard (React)  ──→  Guardian API (Cloud Run)               │
-│                          ├── Monitoring Engine (5-min cron)      │
-│                          ├── Rule Engine (programmable)          │
-│                          ├── Alerting (PD/Discord/Slack)         │
-│                          ├── Database Kill Switch                │
-│                          ├── Forensic Snapshots                  │
-│                          └── Stripe Billing                      │
+│  CLI (ks)  ──→  Kill Switch API (Cloud Run)                     │
+│  Dashboard ──→  ├── Monitoring Engine (5-min cron)              │
+│                 ├── Rule Engine (programmable)                   │
+│                 ├── Alerting (PD/Discord/Slack/Email)            │
+│                 ├── API Key Management                          │
+│                 ├── Forensic Snapshots                          │
+│                 └── Stripe Billing                               │
 │                                                                  │
 │  Model A: Managed        Model B: Edge Agent                    │
 │  (we hold credentials)   (customer holds credentials)           │
@@ -49,52 +72,41 @@ Born from a **$91,316 Cloudflare Durable Objects bill**. Cloudflare has no spend
 │  ├── GCP Cloud Function (budget alerts, multi-service shutdown) │
 │  └── AWS Lambda (budget alerts via SNS, EC2/Lambda/ECS kill)    │
 │                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## Rule Presets (Shields)
 
 ```bash
-# Clone
-git clone https://github.com/AiExpanse/kill-switch.git
-cd kill-switch
-
-# Run the API locally
-cd packages/api
-npm install
-npm run dev
-
-# Run the dashboard locally
-cd packages/web
-npm install
-npm run dev
-
-# Deploy the self-hosted kill switches
-cd packages/kill-switch-cf && npm install && npx wrangler deploy  # Cloudflare
-cd packages/kill-switch-gcp && npm install && gcloud functions deploy  # GCP
-cd packages/kill-switch-aws && npm install && npm run deploy  # AWS Lambda
+ks shield cost-runaway      # Kill services exceeding daily cost limit
+ks shield ddos              # Kill services getting excessive requests
+ks shield gpu-runaway       # Stop unexpected GPU instances
+ks shield lambda-loop       # Throttle recursive Lambda invocations
+ks shield aws-cost-runaway  # Emergency stop on AWS daily spend spike
+ks shield brute-force       # Rotate creds on mass auth failures
+ks shield exfiltration      # Isolate on unusual egress
+ks shield error-storm       # Scale down on sustained high error rate
 ```
-
-## Rule Presets
-
-| Preset | Trigger | Action |
-|--------|---------|--------|
-| DDoS Protection | >50K requests/min | Block traffic + snapshot |
-| Brute Force Protection | >100 auth failures/min | Rotate credentials + snapshot |
-| Cost Runaway | >$100/day | Disconnect services + snapshot |
-| Error Storm | >50% error rate | Scale down (60s grace + approval) |
-| Data Exfiltration | >10 GB/hr egress | Isolate + snapshot |
-| GPU Instance Runaway | Any unexpected GPU | Stop instances + snapshot |
-| Lambda Recursive Loop | >500 concurrent | Throttle Lambda + snapshot |
-| AWS Daily Cost Runaway | >$100/day AWS | Stop EC2 + throttle Lambda |
 
 ## Tests
 
 ```bash
 cd packages/api
-npm test
-# 139+ tests across 9 files
+npm test                    # 350 unit + e2e tests
+SMOKE=1 npm test -- tests/smoke/live-api.test.ts  # 12 live API tests
 ```
+
+## AI Agent Usage
+
+The CLI is designed for AI coding agents (Claude Code, Cursor, Windsurf) to set up monitoring on behalf of users:
+
+```bash
+export KILL_SWITCH_API_KEY=ks_live_your_key
+ks onboard --provider cloudflare --account-id ID --token TOKEN --json
+ks check --json
+```
+
+See [CLI docs](https://kill-switch.net/docs/cli.html) for the full reference.
 
 ## License
 

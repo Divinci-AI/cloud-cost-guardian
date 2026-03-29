@@ -149,7 +149,7 @@ export const openApiSpec = {
   },
   components: {
     securitySchemes: {
-      bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "Auth0 JWT token" },
+      bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "Clerk JWT token or ks_live_ API key" },
     },
     schemas: {
       Credential: {

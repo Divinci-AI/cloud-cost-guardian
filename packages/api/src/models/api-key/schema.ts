@@ -1,7 +1,7 @@
 /**
  * Personal API Key Model
  *
- * Allows CLI and programmatic access without Auth0 JWT tokens.
+ * Allows CLI and programmatic access without Clerk JWT tokens.
  * Keys are hashed with SHA-256 before storage — the plaintext
  * is returned only once at creation time.
  */
