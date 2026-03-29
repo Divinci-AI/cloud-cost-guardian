@@ -88,6 +88,13 @@ Required permissions:
 - **RunPod** — GPU Pods (on-demand & spot), Serverless Endpoints, Network Volumes
 - **Redis** — Redis Cloud, AWS ElastiCache, Self-hosted (memory, connections, ops/sec, cost)
 - **MongoDB** — MongoDB Atlas, Self-hosted (storage, connections, ops/sec, cost)
+- **OpenAI** — Token usage, request counts, daily cost monitoring
+- **Anthropic** — Claude API token usage and cost tracking
+- **xAI (Grok)** — Grok API token usage and cost tracking
+- **Replicate** — GPU prediction costs, model usage monitoring
+- **Snowflake** — Warehouse credits, query costs, data scanning
+- **Vercel** — Function invocations, bandwidth, build minutes
+- **Datadog** — Host count, log ingestion, custom metrics costs
 
 ## Organizations & Permissions
 - Multi-org support: users can create/join multiple orgs (team/enterprise tier)

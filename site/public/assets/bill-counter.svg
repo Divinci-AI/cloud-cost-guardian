@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 280" fill="none">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;800&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap');
+
+    .card { fill: #0f1629; stroke: #1e2d66; stroke-width: 1; rx: 16; }
+    .card-inner { fill: #0a0f1f; stroke: #1a2350; stroke-width: 1; rx: 12; }
+    .header-text { font-family: 'Outfit', sans-serif; font-size: 12px; fill: #6b7280; }
+    .date-text { font-family: 'Inter', sans-serif; font-size: 11px; fill: #8b8fa3; }
+    .total-label { font-family: 'Outfit', sans-serif; font-size: 13px; fill: #ff6b6b; font-weight: 600; letter-spacing: 1px; }
+    .dollar { font-family: 'JetBrains Mono', monospace; font-size: 48px; fill: #ff6b6b; font-weight: 700; }
+
+    /* Counting animation */
+    @keyframes countUp {
+      0% { opacity: 1; }
+      100% { opacity: 1; }
+    }
+
+    /* Digit roll animation */
+    @keyframes digit0 { 0% { transform: translateY(0); } 15% { transform: translateY(0); } 100% { transform: translateY(0); } }
+
+    /* Pulse glow on the amount */
+    @keyframes pulseGlow {
+      0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 107, 107, 0.3)); }
+      50% { filter: drop-shadow(0 0 16px rgba(255, 107, 107, 0.6)); }
+    }
+    .amount-group { animation: pulseGlow 3s ease-in-out infinite; }
+
+    /* Bar chart animation */
+    @keyframes growBar {
+      0% { transform: scaleY(0); }
+      100% { transform: scaleY(1); }
+    }
+    .bar { transform-origin: bottom; animation: growBar 1.5s ease-out forwards; }
+    .bar:nth-child(1) { animation-delay: 0.1s; }
+    .bar:nth-child(2) { animation-delay: 0.2s; }
+    .bar:nth-child(3) { animation-delay: 0.3s; }
+    .bar:nth-child(4) { animation-delay: 0.4s; }
+    .bar:nth-child(5) { animation-delay: 0.5s; }
+    .bar:nth-child(6) { animation-delay: 0.6s; }
+    .bar:nth-child(7) { animation-delay: 0.7s; }
+    .bar:nth-child(8) { animation-delay: 0.8s; }
+    .bar:nth-child(9) { animation-delay: 0.9s; }
+    .bar:nth-child(10) { animation-delay: 1.0s; }
+    .bar:nth-child(11) { animation-delay: 1.1s; }
+    .bar:nth-child(12) { animation-delay: 1.2s; }
+
+    /* Scan line effect */
+    @keyframes scanLine {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(500%); }
+    }
+    .scan-line {
+      animation: scanLine 4s ease-in-out infinite;
+      animation-delay: 2s;
+    }
+
+    /* Product row highlight */
+    @keyframes highlightRow {
+      0%, 70% { fill: transparent; }
+      80% { fill: rgba(255, 107, 107, 0.08); }
+      100% { fill: rgba(255, 107, 107, 0.04); }
+    }
+    .row-highlight { animation: highlightRow 4s ease-out forwards; animation-delay: 2s; }
+
+    .product-text { font-family: 'Inter', sans-serif; font-size: 10px; fill: #c4c5ca; }
+    .product-cost { font-family: 'JetBrains Mono', monospace; font-size: 11px; fill: #ff6b6b; font-weight: 700; }
+    .product-usage { font-family: 'JetBrains Mono', monospace; font-size: 9px; fill: #6b7280; }
+    .bar-label { font-family: 'Inter', sans-serif; font-size: 7px; fill: #4b5563; }
+    .axis-label { font-family: 'Inter', sans-serif; font-size: 8px; fill: #4b5563; }
+  </style>
+
+  <!-- Outer card -->
+  <rect class="card" x="0" y="0" width="480" height="280"/>
+
+  <!-- Header -->
+  <text class="date-text" x="20" y="24">Feb 21 - Mar 21, 2026 (total cost)</text>
+  <text class="total-label" x="20" y="42">TOTAL COST</text>
+
+  <!-- Amount with glow -->
+  <g class="amount-group">
+    <text class="dollar" x="20" y="88">$91,316.54</text>
+  </g>
+
+  <!-- Thin separator -->
+  <line x1="20" y1="100" x2="460" y2="100" stroke="#1e2d66" stroke-width="1"/>
+
+  <!-- Mini bar chart -->
+  <g transform="translate(20, 108)">
+    <text class="axis-label" x="0" y="0">Daily cost (USD)</text>
+    <text class="axis-label" x="0" y="12">$4,500</text>
+    <text class="axis-label" x="0" y="62">$3,000</text>
+    <text class="axis-label" x="0" y="102">$0</text>
+
+    <!-- Grid lines -->
+    <line x1="40" y1="8" x2="440" y2="8" stroke="#1a2350" stroke-width="0.5" stroke-dasharray="4,4"/>
+    <line x1="40" y1="58" x2="440" y2="58" stroke="#1a2350" stroke-width="0.5" stroke-dasharray="4,4"/>
+
+    <!-- Bars (representing ~$3000-3500/day) -->
+    <g transform="translate(45, 10)">
+      <rect class="bar" x="0" y="22" width="28" height="80" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="0" y="16" width="28" height="6" rx="1" fill="#a78bfa" opacity="0.7"/>
+
+      <rect class="bar" x="33" y="20" width="28" height="82" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="33" y="14" width="28" height="6" rx="1" fill="#a78bfa" opacity="0.7"/>
+
+      <rect class="bar" x="66" y="24" width="28" height="78" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="66" y="18" width="28" height="6" rx="1" fill="#e879a0" opacity="0.7"/>
+
+      <rect class="bar" x="99" y="22" width="28" height="80" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="132" y="24" width="28" height="78" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="165" y="22" width="28" height="80" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="198" y="20" width="28" height="82" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="231" y="22" width="28" height="80" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="264" y="24" width="28" height="78" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="297" y="22" width="28" height="80" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="330" y="20" width="28" height="82" rx="2" fill="#6b8cce" opacity="0.8"/>
+      <rect class="bar" x="363" y="22" width="28" height="80" rx="2" fill="#6b8cce" opacity="0.8"/>
+    </g>
+
+    <!-- Scan line effect -->
+    <rect class="scan-line" x="40" y="10" width="40" height="95" rx="4" fill="url(#scanGradient)" opacity="0.15"/>
+  </g>
+
+  <!-- Product breakdown -->
+  <g transform="translate(20, 230)">
+    <line x1="0" y1="-8" x2="440" y2="-8" stroke="#1e2d66" stroke-width="1"/>
+
+    <rect class="row-highlight" x="-4" y="-2" width="448" height="22" rx="4"/>
+    <circle cx="6" cy="8" r="4" fill="#6b8cce"/>
+    <text class="product-text" x="16" y="12">Durable Objects Compute Duration</text>
+    <text class="product-usage" x="260" y="12">7.07B Byte-sec</text>
+    <text class="product-cost" x="390" y="12">$88,425.00</text>
+
+    <rect class="row-highlight" x="-4" y="20" width="448" height="22" rx="4" style="animation-delay: 2.5s"/>
+    <circle cx="6" cy="30" r="4" fill="#e879a0"/>
+    <text class="product-text" x="16" y="34">Durable Objects Storage Rows Written</text>
+    <text class="product-usage" x="260" y="34">1.91B Count</text>
+    <text class="product-cost" x="390" y="34">$1,864.00</text>
+  </g>
+
+  <!-- Gradients -->
+  <defs>
+    <linearGradient id="scanGradient" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#5ce2e7" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#5ce2e7" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#5ce2e7" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+</svg>

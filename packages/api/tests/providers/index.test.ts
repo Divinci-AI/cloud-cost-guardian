@@ -38,9 +38,9 @@ describe("Provider Registry", () => {
   });
 
   describe("getAllProviders", () => {
-    it("returns all six providers", () => {
+    it("returns all thirteen providers", () => {
       const providers = getAllProviders();
-      expect(providers).toHaveLength(6);
+      expect(providers).toHaveLength(13);
 
       const ids = providers.map(p => p.id);
       expect(ids).toContain("cloudflare");
@@ -49,6 +49,13 @@ describe("Provider Registry", () => {
       expect(ids).toContain("runpod");
       expect(ids).toContain("redis");
       expect(ids).toContain("mongodb");
+      expect(ids).toContain("openai");
+      expect(ids).toContain("anthropic");
+      expect(ids).toContain("xai");
+      expect(ids).toContain("replicate");
+      expect(ids).toContain("snowflake");
+      expect(ids).toContain("vercel");
+      expect(ids).toContain("datadog");
     });
 
     it("all providers implement the CloudProvider interface", () => {

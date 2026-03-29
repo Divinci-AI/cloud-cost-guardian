@@ -135,15 +135,22 @@ ks onboard \
   --service-account "$(cat service-account-key.json)" \
   --shields cost-runaway
 
+# Connect RunPod
+ks onboard \
+  --provider runpod \
+  --runpod-api-key "YOUR_RUNPOD_API_KEY" \
+  --shields cost-runaway,gpu-runaway
+
 # Show how to get credentials for a provider
 ks onboard --help-provider cloudflare
 ks onboard --help-provider aws
-ks onboard --help-provider gcp</code></pre>
+ks onboard --help-provider gcp
+ks onboard --help-provider runpod</code></pre>
 
         <h3>Onboard Options</h3>
         <table>
             <tr><th>Flag</th><th>Description</th></tr>
-            <tr><td><code>--provider</code></td><td>Cloud provider: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code></td></tr>
+            <tr><td><code>--provider</code></td><td>Cloud provider: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, <code>runpod</code></td></tr>
             <tr><td><code>--name</code></td><td>Account name (e.g., "Production")</td></tr>
             <tr><td><code>--token</code></td><td>API token (Cloudflare &mdash; must be an API Token, not Global Key)</td></tr>
             <tr><td><code>--account-id</code></td><td>Account ID (Cloudflare &mdash; from URL bar)</td></tr>
@@ -152,6 +159,7 @@ ks onboard --help-provider gcp</code></pre>
             <tr><td><code>--access-key</code></td><td>Access Key ID (AWS)</td></tr>
             <tr><td><code>--secret-key</code></td><td>Secret Access Key (AWS)</td></tr>
             <tr><td><code>--region</code></td><td>Region (AWS, default: us-east-1)</td></tr>
+            <tr><td><code>--runpod-api-key</code></td><td>API Key (RunPod)</td></tr>
             <tr><td><code>--shields</code></td><td>Comma-separated presets (default: cost-runaway)</td></tr>
             <tr><td><code>--alert-email</code></td><td>Email for alerts</td></tr>
             <tr><td><code>--alert-discord</code></td><td>Discord webhook URL</td></tr>
@@ -221,7 +229,7 @@ kill-switch shield gpu-runaway --json</code></pre>
         </div>
         <div class="cmd-group">
             <h4>kill-switch accounts add &lt;provider&gt; --name "My Account"</h4>
-            <p>Connect a cloud provider. Supported: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>.</p>
+            <p>Connect a cloud provider. Supported: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, <code>runpod</code>.</p>
         </div>
 
 <pre><code># Connect Cloudflare

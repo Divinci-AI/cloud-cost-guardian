@@ -5,7 +5,8 @@
  * behind a common interface. Supports both cost and security kill switches.
  */
 
-export type ProviderId = "cloudflare" | "gcp" | "aws" | "runpod" | "redis" | "mongodb";
+export type ProviderId = "cloudflare" | "gcp" | "aws" | "runpod" | "redis" | "mongodb"
+  | "openai" | "anthropic" | "xai" | "replicate" | "snowflake" | "vercel" | "datadog";
 
 export type RedisSubType = "redis-cloud" | "elasticache" | "self-hosted";
 export type MongoDBSubType = "atlas" | "self-hosted";
@@ -168,6 +169,39 @@ export interface ThresholdConfig {
   mongodbCollectionCount?: number;         // Max collections (sprawl detection)
   mongodbDailyCostUSD?: number;            // Max daily MongoDB spend
 
+  // ─── OpenAI Thresholds ───────────────────────────────────────────────────────
+  openaiTokensPerDay?: number;             // Max tokens (input + output) per day
+  openaiRequestsPerDay?: number;           // Max API requests per day
+  openaiDailyCostUSD?: number;             // Max daily OpenAI spend
+
+  // ─── Anthropic Thresholds ───────────────────────────────────────────────────
+  anthropicTokensPerDay?: number;          // Max tokens per day
+  anthropicDailyCostUSD?: number;          // Max daily Anthropic spend
+
+  // ─── xAI Thresholds ────────────────────────────────────────────────────────
+  xaiTokensPerDay?: number;               // Max tokens per day
+  xaiDailyCostUSD?: number;               // Max daily xAI spend
+
+  // ─── Replicate Thresholds ──────────────────────────────────────────────────
+  replicatePredictionsPerDay?: number;     // Max predictions per day
+  replicateGpuHoursPerDay?: number;        // Max GPU hours per day
+  replicateDailyCostUSD?: number;          // Max daily Replicate spend
+
+  // ─── Snowflake Thresholds ──────────────────────────────────────────────────
+  snowflakeCreditsPerDay?: number;         // Max Snowflake credits per day
+  snowflakeWarehouseCount?: number;        // Max active warehouses
+  snowflakeDailyCostUSD?: number;          // Max daily Snowflake spend
+
+  // ─── Vercel Thresholds ─────────────────────────────────────────────────────
+  vercelFunctionInvocationsPerDay?: number;// Max serverless function invocations
+  vercelBandwidthGBPerDay?: number;        // Max bandwidth GB per day
+  vercelDailyCostUSD?: number;             // Max daily Vercel spend
+
+  // ─── Datadog Thresholds ────────────────────────────────────────────────────
+  datadogHostCount?: number;               // Max monitored hosts
+  datadogLogIngestGBPerDay?: number;       // Max log ingestion GB per day
+  datadogDailyCostUSD?: number;            // Max daily Datadog spend
+
   // ─── Shared Thresholds ──────────────────────────────────────────────────────
   monthlySpendLimitUSD?: number;
   requestsPerMinute?: number;       // DDoS detection
@@ -210,6 +244,29 @@ export interface DecryptedCredential {
   atlasClusterName?: string;
   mongodbUri?: string;            // mongodb+srv://... (self-hosted)
   mongodbDatabaseName?: string;
+  // OpenAI
+  openaiApiKey?: string;
+  openaiOrgId?: string;
+  // Anthropic
+  anthropicApiKey?: string;
+  anthropicWorkspaceId?: string;
+  // xAI (Grok)
+  xaiApiKey?: string;
+  // Replicate
+  replicateApiToken?: string;
+  // Snowflake
+  snowflakeAccountName?: string;  // e.g., xy12345.us-east-1
+  snowflakeUsername?: string;
+  snowflakePassword?: string;
+  snowflakeWarehouseName?: string;
+  snowflakeRole?: string;
+  // Vercel
+  vercelApiToken?: string;
+  vercelTeamId?: string;
+  // Datadog
+  datadogApiKey?: string;
+  datadogApplicationKey?: string;
+  datadogSite?: "us" | "eu";
 }
 
 // ─── Forensic Snapshot ──────────────────────────────────────────────────────

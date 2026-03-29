@@ -43,6 +43,55 @@ const providers = [
     color: "#00684a",
     available: true,
   },
+  {
+    id: "openai",
+    name: "OpenAI",
+    description: "Monitor GPT API token usage, request counts, and daily spend.",
+    color: "#10a37f",
+    available: true,
+  },
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    description: "Monitor Claude API token usage and daily spend.",
+    color: "#d4a574",
+    available: true,
+  },
+  {
+    id: "xai",
+    name: "xAI (Grok)",
+    description: "Monitor Grok API token usage and daily spend.",
+    color: "#1d9bf0",
+    available: true,
+  },
+  {
+    id: "replicate",
+    name: "Replicate",
+    description: "Monitor GPU prediction costs, model usage, and daily spend.",
+    color: "#0081fb",
+    available: true,
+  },
+  {
+    id: "snowflake",
+    name: "Snowflake",
+    description: "Monitor warehouse credits, query costs, and data scanning.",
+    color: "#29b5e8",
+    available: true,
+  },
+  {
+    id: "vercel",
+    name: "Vercel",
+    description: "Monitor function invocations, bandwidth, and build minutes.",
+    color: "#171717",
+    available: true,
+  },
+  {
+    id: "datadog",
+    name: "Datadog",
+    description: "Monitor host count, log ingestion, and custom metrics costs.",
+    color: "#632ca6",
+    available: true,
+  },
 ];
 
 export function ConnectProvider() {

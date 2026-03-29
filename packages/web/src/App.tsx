@@ -12,6 +12,13 @@ import { ConnectAWS } from "./pages/CloudAccounts/ConnectAWS";
 import { ConnectRunPod } from "./pages/CloudAccounts/ConnectRunPod";
 import { ConnectRedis } from "./pages/CloudAccounts/ConnectRedis";
 import { ConnectMongoDB } from "./pages/CloudAccounts/ConnectMongoDB";
+import { ConnectOpenAI } from "./pages/CloudAccounts/ConnectOpenAI";
+import { ConnectAnthropic } from "./pages/CloudAccounts/ConnectAnthropic";
+import { ConnectXAI } from "./pages/CloudAccounts/ConnectXAI";
+import { ConnectReplicate } from "./pages/CloudAccounts/ConnectReplicate";
+import { ConnectSnowflake } from "./pages/CloudAccounts/ConnectSnowflake";
+import { ConnectVercel } from "./pages/CloudAccounts/ConnectVercel";
+import { ConnectDatadog } from "./pages/CloudAccounts/ConnectDatadog";
 import { ConnectProvider } from "./pages/CloudAccounts/ConnectProvider";
 import { AlertsHistory } from "./pages/Alerts/AlertsHistory";
 import { BillingPage } from "./pages/Billing/BillingPage";
@@ -101,6 +108,13 @@ function AuthenticatedApp() {
             <Route path="/accounts/connect/runpod" element={<ConnectRunPod />} />
             <Route path="/accounts/connect/redis" element={<ConnectRedis />} />
             <Route path="/accounts/connect/mongodb" element={<ConnectMongoDB />} />
+            <Route path="/accounts/connect/openai" element={<ConnectOpenAI />} />
+            <Route path="/accounts/connect/anthropic" element={<ConnectAnthropic />} />
+            <Route path="/accounts/connect/xai" element={<ConnectXAI />} />
+            <Route path="/accounts/connect/replicate" element={<ConnectReplicate />} />
+            <Route path="/accounts/connect/snowflake" element={<ConnectSnowflake />} />
+            <Route path="/accounts/connect/vercel" element={<ConnectVercel />} />
+            <Route path="/accounts/connect/datadog" element={<ConnectDatadog />} />
             <Route path="/alerts" element={<AlertsHistory />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/billing" element={<BillingPage />} />

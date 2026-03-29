@@ -26,10 +26,53 @@
         .nav-links a.active { color: #5ce2e7; }
         .btn-github { background: #24292e; color: #fff !important; padding: 7px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; border: 1px solid #444; }
         .btn-github:hover { background: #444; }
-        .content { max-width: 860px; margin: 0 auto; padding: 90px 2em 4em; }
+
+        /* Layout: sidebar + content */
+        .page-layout {
+            display: flex;
+            max-width: 1160px;
+            margin: 0 auto;
+            padding-top: 58px;
+        }
+        .toc {
+            position: sticky;
+            top: 74px;
+            align-self: flex-start;
+            width: 220px;
+            min-width: 220px;
+            padding: 24px 0 24px 2em;
+            max-height: calc(100vh - 74px);
+            overflow-y: auto;
+        }
+        .toc-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: #6b7280;
+            margin-bottom: 12px;
+        }
+        .toc ul { list-style: none; margin: 0; padding: 0; }
+        .toc li { margin-bottom: 2px; }
+        .toc a {
+            display: block;
+            padding: 5px 12px;
+            font-size: 13px;
+            color: #8b8d95;
+            border-radius: 6px;
+            border-left: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .toc a:hover { color: #fff; background: rgba(255,255,255,0.04); }
+        .toc a.active { color: #5ce2e7; border-left-color: #5ce2e7; background: rgba(92,226,231,0.06); }
+        .toc .toc-sub { padding-left: 14px; }
+        .toc .toc-sub a { font-size: 12px; padding: 3px 12px; }
+
+        .content { flex: 1; min-width: 0; padding: 32px 2em 4em; }
         h1 { font-family: 'Outfit', sans-serif; font-size: 2.2em; font-weight: 800; color: #fff; margin: 0 0 0.4em; }
-        h2 { font-family: 'Outfit', sans-serif; font-size: 1.5em; font-weight: 700; color: #fff; margin: 2em 0 0.6em; padding-top: 1em; border-top: 1px solid rgba(255,255,255,0.06); }
-        h3 { font-family: 'Outfit', sans-serif; font-size: 1.15em; font-weight: 600; color: #ddd; margin: 1.5em 0 0.4em; }
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.5em; font-weight: 700; color: #fff; margin: 2em 0 0.6em; padding-top: 1em; border-top: 1px solid rgba(255,255,255,0.06); scroll-margin-top: 80px; }
+        h3 { font-family: 'Outfit', sans-serif; font-size: 1.15em; font-weight: 600; color: #ddd; margin: 1.5em 0 0.4em; scroll-margin-top: 80px; }
         p { line-height: 1.7; margin: 0 0 1em; }
         ul, ol { margin: 0 0 1.2em 1.5em; line-height: 1.8; }
         code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; color: #5ce2e7; }
@@ -44,6 +87,24 @@
         td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
         .callout { background: rgba(92,226,231,0.06); border-left: 3px solid #5ce2e7; padding: 1em 1.2em; border-radius: 0 6px 6px 0; margin: 0 0 1.5em; }
         .callout-warn { background: rgba(255,152,0,0.06); border-left-color: #ff9800; }
+
+        /* Anchor links on headings */
+        h2[id], h3[id] { position: relative; }
+        h2[id] .anchor, h3[id] .anchor {
+            color: #3a3d4a;
+            text-decoration: none;
+            margin-left: 8px;
+            font-weight: 400;
+            transition: color 0.15s;
+        }
+        h2[id]:hover .anchor, h3[id]:hover .anchor { color: #5ce2e7; }
+        h2[id] .anchor::after, h3[id] .anchor::after { content: "#"; }
+
+        /* Hide TOC on small screens */
+        @media (max-width: 900px) {
+            .toc { display: none; }
+            .content { padding: 32px 1.5em 4em; }
+        }
     </style>
 </head>
 <body>
@@ -64,7 +125,36 @@
         </div>
     </nav>
 
-    <div class="content">
+    <div class="page-layout">
+        <aside class="toc">
+            <div class="toc-title">On this page</div>
+            <ul>
+                <li><a href="#integration-paths">Integration Paths</a></li>
+                <li><a href="#rest-api">REST API</a></li>
+                <li><a href="#edge-agent">Edge Agent</a></li>
+                <li><a href="#spend-guard">Spend Guard</a></li>
+                <li><a href="#alerting">Alerting</a></li>
+                <li><a href="#providers">Supported Providers</a>
+                    <ul class="toc-sub">
+                        <li><a href="#provider-cloudflare">Cloudflare</a></li>
+                        <li><a href="#provider-gcp">GCP</a></li>
+                        <li><a href="#provider-aws">AWS</a></li>
+                        <li><a href="#provider-runpod">RunPod</a></li>
+                    </ul>
+                </li>
+                <li><a href="#runpod-guide">RunPod Setup Guide</a>
+                    <ul class="toc-sub">
+                        <li><a href="#runpod-credentials">Credentials</a></li>
+                        <li><a href="#runpod-monitoring">What's Monitored</a></li>
+                        <li><a href="#runpod-kill-actions">Kill Actions</a></li>
+                        <li><a href="#runpod-thresholds">Default Thresholds</a></li>
+                    </ul>
+                </li>
+                <li><a href="#help">Need Help?</a></li>
+            </ul>
+        </aside>
+
+        <div class="content">
         <h1>Integration Guide</h1>
         <p>Set up Kill Switch financial protection for your project. Three integration paths, use whichever fits your architecture.</p>
 
@@ -74,7 +164,7 @@
             <span class="badge badge-cli">CLI (wrangler)</span>
         </div>
 
-        <h2>Integration Paths</h2>
+        <h2 id="integration-paths">Integration Paths<a href="#integration-paths" class="anchor"></a></h2>
 
         <table>
             <tr><th>Method</th><th>Best For</th><th>Setup Time</th></tr>
@@ -83,7 +173,7 @@
             <tr><td><strong>Spend Guard</strong></td><td>In-app budget limits for GPU/AI services (RunPod, Gemini, etc.)</td><td>~15 min</td></tr>
         </table>
 
-        <h2>1. REST API</h2>
+        <h2 id="rest-api">1. REST API<a href="#rest-api" class="anchor"></a></h2>
         <p>The Kill Switch API at <code>https://api.kill-switch.net</code> provides full programmatic control over monitoring, rules, and kill switches.</p>
 
         <h3>Quick Start</h3>
@@ -112,7 +202,7 @@ curl -X POST https://api.kill-switch.net/rules/agent/trigger \
         <h3>Key Endpoints</h3>
         <table>
             <tr><th>Endpoint</th><th>Auth</th><th>Purpose</th></tr>
-            <tr><td><code>GET /providers</code></td><td>None</td><td>List Cloudflare, GCP, AWS with default thresholds</td></tr>
+            <tr><td><code>GET /providers</code></td><td>None</td><td>List Cloudflare, GCP, AWS, RunPod with default thresholds</td></tr>
             <tr><td><code>GET /rules/presets</code></td><td>None</td><td>DDoS, cost-runaway, GPU-runaway, Lambda-loop, etc.</td></tr>
             <tr><td><code>POST /cloud-accounts</code></td><td>JWT</td><td>Connect a cloud provider for monitoring</td></tr>
             <tr><td><code>POST /check</code></td><td>JWT</td><td>Run monitoring check on all accounts</td></tr>
@@ -124,7 +214,7 @@ curl -X POST https://api.kill-switch.net/rules/agent/trigger \
 
         <p>Full API reference: <a href="/docs">API Docs (OpenAPI)</a></p>
 
-        <h2>2. Edge Agent (Cloudflare Workers)</h2>
+        <h2 id="edge-agent">2. Edge Agent (Cloudflare Workers)<a href="#edge-agent" class="anchor"></a></h2>
         <p>The edge agent is a lightweight Cloudflare Worker that runs in <strong>your</strong> account. Your API tokens never leave your infrastructure.</p>
 
         <div class="callout">
@@ -162,7 +252,7 @@ crons = ["*/5 * * * *"]  # Check every 5 minutes</code></pre>
             <tr><td>Worker requests/day</td><td>10,000,000</td><td>Auto-disconnect routes</td></tr>
         </table>
 
-        <h2>3. Spend Guard (In-App Budget Limits)</h2>
+        <h2 id="spend-guard">3. Spend Guard (In-App Budget Limits)<a href="#spend-guard" class="anchor"></a></h2>
         <p>For services the edge agent can't see (RunPod GPU, Google Gemini, external APIs), add the Spend Guard directly to your app. It uses D1 to track per-job costs and enforces daily budgets.</p>
 
         <h3>How It Works</h3>
@@ -206,7 +296,7 @@ await recordSpend("runpod", userId, jobId);</code></pre>
             <tr><td>TTS daily requests</td><td>500/day</td><td>TTS abuse</td></tr>
         </table>
 
-        <h2>4. Alerting</h2>
+        <h2 id="alerting">4. Alerting<a href="#alerting" class="anchor"></a></h2>
         <p>Alerts fire automatically when spend approaches limits.</p>
 
         <table>
@@ -229,24 +319,111 @@ binding = "PAGERDUTY_ROUTING_KEY"
 store_id = "0b7ac993cf26413ea6e2f1b5ede20b25"
 secret_name = "PAGERDUTY_ROUTING_KEY"</code></pre>
 
-        <div class="callout callout-warn">
-            <strong>No CLI or SDK yet.</strong> Kill Switch currently provides a REST API and deployable workers. A TypeScript SDK and CLI are on the roadmap. For now, use <code>curl</code> or any HTTP client to interact with the API, and <code>wrangler deploy</code> for the edge agent.
+        <div class="callout">
+            <strong>CLI available:</strong> Install with <code>npm install -g @kill-switch/cli</code> and run <code>ks onboard</code> to connect any provider interactively. See the <a href="/docs/cli.html">CLI docs</a> for details.
         </div>
 
-        <h2>5. Supported Providers</h2>
+        <h2 id="providers">5. Supported Providers<a href="#providers" class="anchor"></a></h2>
         <table>
             <tr><th>Provider</th><th>Resources Monitored</th><th>Kill Actions</th></tr>
-            <tr><td><strong>Cloudflare</strong></td><td>Workers, Durable Objects, R2, D1, Queues, Stream, Zones</td><td>Disconnect routes, disable workers.dev, delete worker</td></tr>
-            <tr><td><strong>GCP</strong></td><td>Compute Engine, GKE, BigQuery, Cloud Functions, GCS</td><td>Stop instances, scale down, disable billing</td></tr>
-            <tr><td><strong>AWS</strong></td><td>EC2, Lambda, RDS, ECS, EKS, SageMaker, S3</td><td>Stop instances, throttle concurrency, disable functions</td></tr>
+            <tr id="provider-cloudflare"><td><strong>Cloudflare</strong></td><td>Workers, Durable Objects, R2, D1, Queues, Stream, Zones</td><td>Disconnect routes, disable workers.dev, delete worker</td></tr>
+            <tr id="provider-gcp"><td><strong>GCP</strong></td><td>Compute Engine, GKE, BigQuery, Cloud Functions, GCS</td><td>Stop instances, scale down, disable billing</td></tr>
+            <tr id="provider-aws"><td><strong>AWS</strong></td><td>EC2, Lambda, RDS, ECS, EKS, SageMaker, S3</td><td>Stop instances, throttle concurrency, disable functions</td></tr>
+            <tr id="provider-runpod"><td><strong>RunPod</strong></td><td>GPU Pods (on-demand &amp; spot), Serverless Endpoints, Network Volumes</td><td>Stop pod, terminate pod, scale down endpoints</td></tr>
         </table>
 
-        <h2>Need Help?</h2>
+        <h2 id="runpod-guide">6. RunPod Setup Guide<a href="#runpod-guide" class="anchor"></a></h2>
+        <p>RunPod is a GPU cloud platform popular for ML training and inference. Kill Switch monitors your GPU pods, serverless endpoints, and network volumes &mdash; and can automatically shut down runaway resources before the bill arrives.</p>
+
+        <h3 id="runpod-credentials">Credentials<a href="#runpod-credentials" class="anchor"></a></h3>
+        <p>RunPod uses a single API key for authentication &mdash; simpler than AWS or GCP.</p>
+        <ol>
+            <li>Go to <a href="https://www.runpod.io/console/user/settings" target="_blank" rel="noopener">runpod.io/console/user/settings</a></li>
+            <li>Scroll to <strong>API Keys</strong> and click <strong>Create API Key</strong></li>
+            <li>Copy the key &mdash; it will only be shown once</li>
+        </ol>
+
+        <p>Connect via CLI or dashboard:</p>
+<pre><code># CLI (one command)
+ks onboard --provider runpod \
+  --runpod-api-key "YOUR_API_KEY" \
+  --name "ML Training" \
+  --shields cost-runaway,gpu-runaway
+
+# Or connect at https://app.kill-switch.net/accounts/connect/runpod</code></pre>
+
+        <div class="callout">
+            <strong>Permissions:</strong> The API key needs read access for monitoring. If you want auto-kill actions (stop/terminate pods, scale down endpoints), it also needs write access. RunPod API keys have full access by default.
+        </div>
+
+        <h3 id="runpod-monitoring">What's Monitored<a href="#runpod-monitoring" class="anchor"></a></h3>
+        <table>
+            <tr><th>Resource</th><th>Metrics Tracked</th><th>Cost Estimation</th></tr>
+            <tr><td><strong>GPU Pods (on-demand)</strong></td><td>Running count, GPU type, uptime</td><td>Per-GPU hourly rate &times; 24h (A100: $1.64/hr, H100: $3.29/hr, RTX 4090: $0.69/hr)</td></tr>
+            <tr><td><strong>GPU Pods (spot)</strong></td><td>Running count, preemption risk</td><td>~70% discount from on-demand rates</td></tr>
+            <tr><td><strong>Serverless Endpoints</strong></td><td>Active workers, min/max scaling</td><td>Standby worker hourly cost</td></tr>
+            <tr><td><strong>Network Volumes</strong></td><td>Storage size (GB)</td><td>$0.07/GB/month</td></tr>
+        </table>
+
+        <p>Kill Switch uses RunPod's <code>costPerHr</code> field from the API when available. For pods where this isn't reported, it falls back to built-in GPU pricing estimates.</p>
+
+        <h3 id="runpod-kill-actions">Kill Actions<a href="#runpod-kill-actions" class="anchor"></a></h3>
+        <table>
+            <tr><th>Action</th><th>Applies To</th><th>Reversible</th><th>What Happens</th></tr>
+            <tr><td><code>stop-pod</code></td><td>GPU Pods</td><td>Yes</td><td>Stops the pod. Container disk and network volume data are <strong>preserved</strong>. Restart anytime.</td></tr>
+            <tr><td><code>terminate-pod</code></td><td>GPU Pods</td><td>No</td><td>Terminates the pod. Container disk is <strong>destroyed</strong>. Network volume data survives. Use as a last resort.</td></tr>
+            <tr><td><code>scale-down</code></td><td>Serverless Endpoints</td><td>Yes</td><td>Sets <code>workersMin</code> and <code>workersMax</code> to 0. No new requests are processed. Scale back up in the dashboard.</td></tr>
+        </table>
+
+        <div class="callout callout-warn">
+            <strong>stop-pod vs terminate-pod:</strong> The default kill action for RunPod is <code>stop-pod</code>, which preserves your data. <code>terminate-pod</code> is only used when auto-delete is explicitly enabled or when a violation reaches critical severity (2x threshold). Your network volumes are always safe &mdash; they are never deleted by kill actions.
+        </div>
+
+        <h3 id="runpod-thresholds">Default Thresholds<a href="#runpod-thresholds" class="anchor"></a></h3>
+        <p>These are applied automatically when you connect a RunPod account. Adjust them in the <a href="https://app.kill-switch.net">dashboard</a> or via the API.</p>
+        <table>
+            <tr><th>Threshold</th><th>Default</th><th>What It Protects Against</th></tr>
+            <tr><td>GPU Pod count</td><td>4 pods</td><td>Forgotten or leaked pods left running</td></tr>
+            <tr><td>Spot Pod count</td><td>8 pods</td><td>Spot pod sprawl (higher limit since they're cheaper)</td></tr>
+            <tr><td>Serverless Workers</td><td>10 workers</td><td>Endpoint autoscaling runaway</td></tr>
+            <tr><td>Network Volume storage</td><td>500 GB</td><td>Unbounded data accumulation</td></tr>
+            <tr><td>Daily cost</td><td>$50/day</td><td>Overall spend cap</td></tr>
+            <tr><td>Monthly spend limit</td><td>$1,500/month</td><td>Billing shock prevention</td></tr>
+        </table>
+
+        <p>Violations at 1x threshold trigger a <strong>warning</strong>. At 2x threshold, severity escalates to <strong>critical</strong> and auto-kill actions execute (if enabled).</p>
+
+        <h2 id="help">Need Help?<a href="#help" class="anchor"></a></h2>
         <ul>
             <li><a href="/docs">Full API Reference</a> (OpenAPI 3.1)</li>
+            <li><a href="/docs/cli.html">CLI Documentation</a></li>
             <li><a href="https://github.com/AiExpanse/kill-switch">GitHub Repository</a></li>
             <li><a href="https://github.com/AiExpanse/kill-switch/blob/main/INTEGRATION.md">INTEGRATION.md</a> (detailed Claude Code setup guide)</li>
         </ul>
     </div>
+    </div>
+
+    <script>
+        // Highlight active TOC link on scroll
+        const tocLinks = document.querySelectorAll('.toc a[href^="#"]');
+        const sections = [];
+        tocLinks.forEach(link => {
+            const id = link.getAttribute('href').slice(1);
+            const el = document.getElementById(id);
+            if (el) sections.push({ id, el, link });
+        });
+
+        function updateTOC() {
+            let current = sections[0];
+            for (const s of sections) {
+                if (s.el.getBoundingClientRect().top <= 120) current = s;
+            }
+            tocLinks.forEach(l => l.classList.remove('active'));
+            if (current) current.link.classList.add('active');
+        }
+
+        window.addEventListener('scroll', updateTOC, { passive: true });
+        updateTOC();
+    </script>
 </body>
 </html>

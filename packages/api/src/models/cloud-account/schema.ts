@@ -24,7 +24,7 @@ export type CloudAccountDocument = CloudAccountProps & Document;
 
 const cloudAccountSchema = new Schema<CloudAccountDocument>({
   guardianAccountId: { type: String, required: true, index: true },
-  provider: { type: String, required: true, enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb"] },
+  provider: { type: String, required: true, enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog"] },
   name: { type: String, required: true },
   providerAccountId: { type: String, required: true },
   credentialId: { type: String, required: true },
