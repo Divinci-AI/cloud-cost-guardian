@@ -4,7 +4,8 @@
   "description": "Kill Switch CLI — monitor cloud spending, kill runaway services from the terminal",
   "type": "module",
   "bin": {
-    "kill-switch": "./dist/index.js"
+    "kill-switch": "./dist/index.js",
+    "ks": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",

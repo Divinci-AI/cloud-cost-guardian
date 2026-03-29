@@ -77,20 +77,89 @@ npm install -g @kill-switch/cli
 git clone https://github.com/AiExpanse/kill-switch.git
 cd kill-switch/packages/cli
 npm install && npm run build
-npm link  # makes `kill-switch` available globally</code></pre>
+npm link  # makes `kill-switch` and `ks` available globally</code></pre>
+
+        <div class="callout">
+            <strong>Short alias:</strong> Every <code>kill-switch</code> command can also be run as <code>ks</code>. For example: <code>ks onboard</code>, <code>ks check</code>, <code>ks accounts list</code>.
+        </div>
 
         <h2>Quick Start</h2>
 <pre><code># 1. Authenticate
-kill-switch auth login --api-key ks_live_your_key_here
+ks auth login --api-key ks_live_your_key_here
 
-# 2. Apply cost protection
-kill-switch shield cost-runaway
+# 2. One-command setup (connects provider + applies shields + sets up alerts)
+ks onboard --provider cloudflare \
+  --account-id YOUR_ACCOUNT_ID \
+  --token YOUR_API_TOKEN \
+  --name "Production" \
+  --shields cost-runaway,ddos \
+  --alert-email you@example.com
 
 # 3. Run a monitoring check
-kill-switch check
+ks check
 
 # 4. View results
-kill-switch accounts list</code></pre>
+ks accounts list</code></pre>
+
+        <h2>Onboard (One-Command Setup)</h2>
+        <p>The fastest way to get protected. Connects a cloud provider, applies shield presets, and configures alerts &mdash; all in a single command. Designed for both humans and AI agents.</p>
+
+        <div class="callout">
+            <strong>AI agent friendly:</strong> Every parameter is passable as a flag. Run <code>ks onboard --help-provider cloudflare</code> to get exact instructions for obtaining credentials.
+        </div>
+
+<pre><code># Interactive onboarding (prompts for each value)
+ks onboard
+
+# Non-interactive: connect Cloudflare (for AI agents like Claude Code)
+ks onboard \
+  --provider cloudflare \
+  --account-id 14a6fa23390363382f378b5bd4a0f849 \
+  --token your-cf-api-token \
+  --name "Production" \
+  --shields cost-runaway,ddos \
+  --alert-email you@example.com
+
+# Connect AWS
+ks onboard \
+  --provider aws \
+  --access-key AKIA... \
+  --secret-key wJalr... \
+  --region us-east-1 \
+  --shields aws-cost-runaway,gpu-runaway
+
+# Connect GCP
+ks onboard \
+  --provider gcp \
+  --project-id my-project-123 \
+  --service-account "$(cat service-account-key.json)" \
+  --shields cost-runaway
+
+# Show how to get credentials for a provider
+ks onboard --help-provider cloudflare
+ks onboard --help-provider aws
+ks onboard --help-provider gcp</code></pre>
+
+        <h3>Onboard Options</h3>
+        <table>
+            <tr><th>Flag</th><th>Description</th></tr>
+            <tr><td><code>--provider</code></td><td>Cloud provider: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code></td></tr>
+            <tr><td><code>--name</code></td><td>Account name (e.g., "Production")</td></tr>
+            <tr><td><code>--token</code></td><td>API token (Cloudflare &mdash; must be an API Token, not Global Key)</td></tr>
+            <tr><td><code>--account-id</code></td><td>Account ID (Cloudflare &mdash; from URL bar)</td></tr>
+            <tr><td><code>--project-id</code></td><td>Project ID (GCP)</td></tr>
+            <tr><td><code>--service-account</code></td><td>Service Account JSON (GCP)</td></tr>
+            <tr><td><code>--access-key</code></td><td>Access Key ID (AWS)</td></tr>
+            <tr><td><code>--secret-key</code></td><td>Secret Access Key (AWS)</td></tr>
+            <tr><td><code>--region</code></td><td>Region (AWS, default: us-east-1)</td></tr>
+            <tr><td><code>--shields</code></td><td>Comma-separated presets (default: cost-runaway)</td></tr>
+            <tr><td><code>--alert-email</code></td><td>Email for alerts</td></tr>
+            <tr><td><code>--alert-discord</code></td><td>Discord webhook URL</td></tr>
+            <tr><td><code>--alert-slack</code></td><td>Slack webhook URL</td></tr>
+            <tr><td><code>--skip-shields</code></td><td>Skip applying protection rules</td></tr>
+            <tr><td><code>--skip-alerts</code></td><td>Skip alert setup</td></tr>
+            <tr><td><code>--help-provider</code></td><td>Show how to get credentials for a provider</td></tr>
+        </table>
 
         <h2>Authentication</h2>
         <p>The CLI uses personal API keys (prefixed with <code>ks_</code>). Create one from the web dashboard at <a href="https://app.kill-switch.net">app.kill-switch.net</a>, or via the API.</p>
@@ -284,28 +353,53 @@ kill-switch kill abort dbkill-xyz789</code></pre>
         </table>
 
         <h2>AI Agent Usage</h2>
-        <p>The CLI is designed to be used by AI agents (Claude Code, etc.) without interactive prompts.</p>
+        <p>The CLI is designed to be used by AI coding agents (Claude Code, Cursor, Windsurf, etc.) to set up cloud cost protection on behalf of users &mdash; no manual steps required.</p>
 
         <div class="callout">
-            <strong>Agent-safe by design:</strong> Every parameter is passable as a flag. No interactive prompts unless explicitly requested. All output is parseable with <code>--json</code>. Exit codes are deterministic (0=success, 1=error, 2=auth error).
+            <strong>Agent-safe by design:</strong> Every parameter is passable as a flag. No interactive prompts when flags are provided. All output is parseable with <code>--json</code>. Exit codes are deterministic (0=success, 1=error, 2=auth error). Use <code>--help-provider</code> to discover how to obtain credentials.
         </div>
 
-<pre><code># Set API key via env var (no config file needed)
-export KILL_SWITCH_API_KEY=ks_live_abc123
+        <h3>Full Agent Workflow</h3>
+        <p>An AI agent can set up Kill Switch monitoring in 3 steps:</p>
 
-# All commands work non-interactively with --json
-kill-switch accounts list --json
-kill-switch shield cost-runaway --json
-kill-switch check --json
+<pre><code># Step 1: Authenticate (user provides their API key, or set env var)
+export KILL_SWITCH_API_KEY=ks_live_your_key
 
-# Parse JSON output in scripts
-kill-switch check --json | jq '.results[].violations | length'</code></pre>
+# Step 2: Discover how to get credentials for the user's provider
+ks onboard --help-provider cloudflare --json
+# Agent reads the instructions and helps user create the right token
 
-        <h3>Claude Code Integration</h3>
-<pre><code># In a Claude Code session:
-KILL_SWITCH_API_KEY=ks_live_abc123 kill-switch shield cost-runaway --json
-KILL_SWITCH_API_KEY=ks_live_abc123 kill-switch shield gpu-runaway --json
-KILL_SWITCH_API_KEY=ks_live_abc123 kill-switch check --json</code></pre>
+# Step 3: Connect the provider with one command
+ks onboard \
+  --provider cloudflare \
+  --account-id USER_CF_ACCOUNT_ID \
+  --token USER_CF_API_TOKEN \
+  --name "Production" \
+  --shields cost-runaway,ddos,error-storm \
+  --alert-email user@example.com \
+  --json</code></pre>
+
+        <h3>Claude Code / CLAUDE.md Integration</h3>
+        <p>Add this to your project's <code>CLAUDE.md</code> to let Claude Code manage Kill Switch for you:</p>
+
+<pre><code># In your project's CLAUDE.md:
+## Kill Switch (Cloud Cost Protection)
+- CLI: `ks` (alias for `kill-switch`)
+- Auth: KILL_SWITCH_API_KEY env var or `ks auth login --api-key KEY`
+- Setup: `ks onboard --provider cloudflare --account-id ID --token TOKEN`
+- Check: `ks check --json`
+- Credential help: `ks onboard --help-provider cloudflare`</code></pre>
+
+        <h3>Non-Interactive Commands for Agents</h3>
+<pre><code># All commands work with --json for machine-readable output
+ks accounts list --json
+ks shield cost-runaway --json
+ks check --json
+ks rules list --json
+ks analytics --json
+
+# Parse JSON output
+ks check --json | jq '.results[].violations | length'</code></pre>
 
         <h2>Environment Variables</h2>
         <table>
