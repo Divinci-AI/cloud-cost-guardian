@@ -143,6 +143,18 @@ export const api = {
   revokeInvitation: (invitationId: string) =>
     guardianFetch<any>(`/team/invitations/${invitationId}`, { method: "DELETE" }),
 
+  // API Keys
+  listApiKeys: () => guardianFetch<any>("/auth/api-keys"),
+  createApiKey: (name: string) =>
+    guardianFetch<any>("/auth/api-keys", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  deleteApiKey: (id: string) =>
+    guardianFetch<any>(`/auth/api-keys/${id}`, { method: "DELETE" }),
+  rollApiKey: (id: string) =>
+    guardianFetch<any>(`/auth/api-keys/${id}/roll`, { method: "POST" }),
+
   // Rules
   listRules: () => guardianFetch<any>("/rules"),
   listPresets: () => guardianFetch<any>("/rules/presets"),

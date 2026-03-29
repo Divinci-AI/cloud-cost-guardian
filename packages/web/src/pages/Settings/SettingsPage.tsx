@@ -40,6 +40,12 @@ export function SettingsPage() {
   const [timezone, setTimezone] = useState("");
   const [dailyReport, setDailyReport] = useState(false);
 
+  // API Keys
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [showCreateKey, setShowCreateKey] = useState(false);
+
   // Alert channel form
   const [channels, setChannels] = useState<AlertChannel[]>([]);
   const [newChannelType, setNewChannelType] = useState<"email" | "discord" | "slack" | "pagerduty" | "webhook">("email");
@@ -78,6 +84,9 @@ export function SettingsPage() {
       api.listAlertChannels().then(data => {
         setChannels(data.channels || []);
       }),
+      api.listApiKeys().then(data => {
+        setApiKeys(data.keys || []);
+      }).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -254,6 +263,129 @@ export function SettingsPage() {
         <button onClick={handleSaveSettings} disabled={saving} style={{ ...btnStyle, marginTop: "20px", background: "#c25800", border: "none" }}>
           {saving ? "Saving..." : "Save Settings"}
         </button>
+      </div>
+
+      {/* ── API Keys ──────────────────────────────────── */}
+      <div style={sectionStyle}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          <div>
+            <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "18px", fontWeight: "600", color: "#fff", margin: 0 }}>API Keys</h2>
+            <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>For the CLI (<code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 5px", borderRadius: "3px", fontSize: "11px" }}>ks</code>) and API access</p>
+          </div>
+          <button onClick={() => { setShowCreateKey(!showCreateKey); setCreatedKey(null); }} style={{ ...btnStyle, background: showCreateKey ? "rgba(255,107,107,0.1)" : "rgba(255,255,255,0.08)" }}>
+            {showCreateKey ? "Cancel" : "Create API Key"}
+          </button>
+        </div>
+
+        {/* Created key display (shown once, never again) */}
+        {createdKey && (
+          <div style={{
+            padding: "16px", background: "rgba(92,226,231,0.08)", border: "1px solid rgba(92,226,231,0.2)",
+            borderRadius: "8px", marginBottom: "16px",
+          }}>
+            <div style={{ fontSize: "13px", color: "#5ce2e7", fontWeight: "600", marginBottom: "8px" }}>
+              Your API key (copy it now — it won't be shown again):
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <code style={{
+                flex: 1, padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: "6px",
+                fontSize: "13px", fontFamily: "JetBrains Mono, monospace", color: "#fff",
+                wordBreak: "break-all", userSelect: "all",
+              }}>
+                {createdKey}
+              </code>
+              <button
+                onClick={() => { navigator.clipboard.writeText(createdKey); flash("Copied to clipboard"); }}
+                style={{ ...btnStyle, flexShrink: 0, fontSize: "13px", padding: "10px 16px" }}
+              >
+                Copy
+              </button>
+            </div>
+            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>
+              Use with: <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 5px", borderRadius: "3px", fontSize: "11px" }}>ks auth login --api-key {createdKey.substring(0, 16)}...</code>
+            </div>
+          </div>
+        )}
+
+        {/* Create key form */}
+        {showCreateKey && !createdKey && (
+          <div style={{ padding: "20px", background: "rgba(255,255,255,0.02)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)", marginBottom: "16px" }}>
+            <div style={{ display: "flex", gap: "12px", alignItems: "end" }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Key Name</label>
+                <input style={inputStyle} placeholder="e.g., CLI, Claude Code, CI/CD" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} />
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const result = await api.createApiKey(newKeyName || "CLI Key");
+                    setCreatedKey(result.key);
+                    setNewKeyName("");
+                    const refreshed = await api.listApiKeys();
+                    setApiKeys(refreshed.keys || []);
+                  } catch (e: any) {
+                    flash(e.message, "error");
+                  }
+                }}
+                style={{ ...btnStyle, background: "#c25800", border: "none", height: "41px", flexShrink: 0 }}
+              >
+                Create Key
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Existing keys */}
+        {apiKeys.length === 0 && !showCreateKey && (
+          <p style={{ color: "#6b7280", fontSize: "14px" }}>No API keys yet. Create one to use the CLI or integrate with your tools.</p>
+        )}
+        {apiKeys.map((k, i) => (
+          <div key={k._id || i} style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "12px 16px", background: "rgba(255,255,255,0.02)", borderRadius: "8px",
+            marginBottom: "8px", border: "1px solid rgba(255,255,255,0.06)",
+          }}>
+            <div>
+              <span style={{ color: "#fff", fontSize: "14px", fontWeight: "500" }}>{k.name}</span>
+              <span style={{ color: "#6b7280", fontSize: "12px", marginLeft: "8px", fontFamily: "JetBrains Mono, monospace" }}>{k.keyPrefix}...</span>
+              {k.lastUsedAt && <span style={{ color: "#4b5563", fontSize: "11px", marginLeft: "8px" }}>Last used {new Date(k.lastUsedAt).toLocaleDateString()}</span>}
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={async () => {
+                  try {
+                    const result = await api.rollApiKey(k._id);
+                    setCreatedKey(result.key);
+                    const refreshed = await api.listApiKeys();
+                    setApiKeys(refreshed.keys || []);
+                    flash("Key rotated — save the new key");
+                  } catch (e: any) {
+                    flash(e.message, "error");
+                  }
+                }}
+                style={{ background: "none", border: "none", color: "#5ce2e7", cursor: "pointer", fontSize: "13px", padding: "4px 8px" }}
+                title="Roll (rotate) key"
+              >
+                Roll
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await api.deleteApiKey(k._id);
+                    setApiKeys(apiKeys.filter((_, j) => j !== i));
+                    flash("API key revoked");
+                  } catch (e: any) {
+                    flash(e.message, "error");
+                  }
+                }}
+                style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "13px", padding: "4px 8px" }}
+                title="Revoke key"
+              >
+                Revoke
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* ── Alert Channels ─────────────────────────────── */}

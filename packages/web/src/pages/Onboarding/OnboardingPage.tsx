@@ -228,6 +228,11 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
           <button onClick={() => setStep("provider")} style={btnPrimary}>
             Let's Go
           </button>
+          <div style={{ marginTop: "24px" }}>
+            <button onClick={handleFinish} style={{ background: "none", border: "none", color: "#6b7280", fontSize: "13px", cursor: "pointer", textDecoration: "underline" }}>
+              Skip to Dashboard
+            </button>
+          </div>
         </div>
       )}
 

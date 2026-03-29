@@ -48,7 +48,7 @@ function getAuthHeaders(): Record<string, string> {
   );
 }
 
-async function apiRequest(method: string, path: string, body?: unknown) {
+async function apiRequest(method: string, path: string, body?: unknown): Promise<any> {
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
