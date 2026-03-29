@@ -1,26 +1,17 @@
 import { Command } from "commander";
+import { KillSwitchClient } from "@kill-switch/sdk";
 import { saveConfig, deleteConfig, resolveApiKey, resolveApiUrl } from "../config.js";
-import { apiRequest } from "../api-client.js";
-import { outputJson, formatObject, outputError } from "../output.js";
-import { createInterface } from "readline";
+import { outputJson, formatObject, outputError, handleError, spinner, success } from "../output.js";
+import { ask } from "../prompts.js";
 import { execFile } from "child_process";
-
-function ask(question: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
+import type { ClientFactory } from "../types.js";
 
 function openBrowser(url: string): void {
   const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
   execFile(cmd, [url], () => {});
 }
 
-export function registerAuthCommands(program: Command) {
+export function registerAuthCommands(program: Command, createClient: ClientFactory) {
   const auth = program.command("auth").description("Manage authentication");
 
   auth
@@ -32,7 +23,8 @@ export function registerAuthCommands(program: Command) {
 
       if (existing) {
         try {
-          const result = await apiRequest("/accounts/me");
+          const client = createClient();
+          const result = await client.account.me();
           if (!json) {
             console.log(`Already authenticated as ${result.name || result._id}.`);
             const proceed = await ask("Create a new API key anyway? (y/N): ");
@@ -62,19 +54,23 @@ export function registerAuthCommands(program: Command) {
       }
 
       try {
-        const result = await apiRequest("/accounts/me", { apiKey: key });
+        // Validate with a fresh client using the provided key
+        const client = new KillSwitchClient({
+          apiKey: key,
+          baseUrl: resolveApiUrl(),
+        });
+        const result = await client.account.me();
         saveConfig({ apiKey: key, apiUrl: resolveApiUrl() });
 
         if (json) {
           outputJson({ authenticated: true, account: result.name || result._id });
         } else {
-          console.log(`\n\u2713 Authenticated as ${result.name || result._id}`);
+          success(`Authenticated as ${result.name || result._id}`);
           console.log("API key saved to ~/.kill-switch/config.json\n");
           console.log("Next: ks onboard --provider cloudflare --help-provider cloudflare");
         }
-      } catch (err: any) {
-        outputError(`Authentication failed: ${err.message}`, json);
-        process.exit(2);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -99,20 +95,25 @@ export function registerAuthCommands(program: Command) {
         process.exit(1);
       }
 
-      // Validate the key by calling the API
+      const s = json ? null : spinner("Validating API key...").start();
       try {
-        const result = await apiRequest("/accounts/me", { apiKey: key });
+        const client = new KillSwitchClient({
+          apiKey: key,
+          baseUrl: resolveApiUrl(),
+        });
+        const result = await client.account.me();
+        s?.stop();
         saveConfig({ apiKey: key, apiUrl: resolveApiUrl() });
 
         if (json) {
           outputJson({ authenticated: true, account: result.name || result._id });
         } else {
-          console.log(`Authenticated as ${result.name || result._id}`);
+          success(`Authenticated as ${result.name || result._id}`);
           console.log("API key saved to ~/.kill-switch/config.json");
         }
-      } catch (err: any) {
-        outputError(`Authentication failed: ${err.message}`, json);
-        process.exit(2);
+      } catch (err) {
+        s?.stop();
+        handleError(err, json);
       }
     });
 
@@ -146,7 +147,8 @@ export function registerAuthCommands(program: Command) {
       }
 
       try {
-        const result = await apiRequest("/accounts/me");
+        const client = createClient();
+        const result = await client.account.me();
         if (json) {
           outputJson({ authenticated: true, ...result });
         } else {

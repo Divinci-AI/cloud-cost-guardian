@@ -1,8 +1,8 @@
 import { Command } from "commander";
-import { apiRequest } from "../api-client.js";
-import { outputJson, formatTable, outputError } from "../output.js";
+import { outputJson, formatTable, handleError, spinner, success } from "../output.js";
+import type { ClientFactory } from "../types.js";
 
-export function registerAlertCommands(program: Command) {
+export function registerAlertCommands(program: Command, createClient: ClientFactory) {
   const alerts = program.command("alerts").description("Manage alert channels");
 
   alerts
@@ -12,20 +12,19 @@ export function registerAlertCommands(program: Command) {
     .action(async () => {
       const json = program.opts().json;
       try {
-        const data = await apiRequest("/alerts/channels");
-        const channels = data.channels || data;
+        const client = createClient();
+        const channels = await client.alerts.channels();
         if (json) {
           outputJson(channels);
         } else {
-          formatTable(Array.isArray(channels) ? channels : [], [
+          formatTable(channels, [
             { key: "type", header: "Type" },
             { key: "name", header: "Name" },
             { key: "enabled", header: "Enabled" },
           ]);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -34,16 +33,19 @@ export function registerAlertCommands(program: Command) {
     .description("Send a test alert to all channels")
     .action(async () => {
       const json = program.opts().json;
+      const s = json ? null : spinner("Sending test alert...").start();
       try {
-        const data = await apiRequest("/alerts/test", { method: "POST" });
+        const client = createClient();
+        const data = await client.alerts.test();
+        s?.stop();
         if (json) {
           outputJson(data);
         } else {
-          console.log("Test alert sent to all configured channels.");
+          success(`Test alert sent to ${data.channelsSent} channel(s).`);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        s?.stop();
+        handleError(err, json);
       }
     });
 }

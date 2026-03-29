@@ -1,0 +1,36 @@
+{
+  "name": "@kill-switch/sdk",
+  "version": "0.1.0",
+  "description": "Kill Switch SDK — programmatic access to the Kill Switch API",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^3.2.4",
+    "@types/node": "^22.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": ["dist", "README.md"],
+  "keywords": ["cloud", "kill-switch", "cost-monitoring", "cloudflare", "aws", "gcp", "runpod", "finops", "sdk", "api-client"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AiExpanse/kill-switch",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://kill-switch.net",
+  "license": "MIT"
+}

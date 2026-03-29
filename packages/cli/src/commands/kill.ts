@@ -1,8 +1,9 @@
 import { Command } from "commander";
-import { apiRequest } from "../api-client.js";
-import { outputJson, formatTable, formatObject, outputError } from "../output.js";
+import { outputJson, formatTable, formatObject, handleError, spinner, success, warn, colors as c } from "../output.js";
+import { confirm } from "../prompts.js";
+import type { ClientFactory } from "../types.js";
 
-export function registerKillCommands(program: Command) {
+export function registerKillCommands(program: Command, createClient: ClientFactory) {
   const kill = program.command("kill").description("Database kill switch sequences");
 
   kill
@@ -11,23 +12,34 @@ export function registerKillCommands(program: Command) {
     .requiredOption("--credential-id <id>", "Stored credential ID")
     .requiredOption("--trigger <reason>", "Kill trigger reason")
     .action(async (opts) => {
-      const json = program.opts().json;
+      const { json, yes } = program.opts();
       try {
-        const data = await apiRequest("/database/kill", {
-          method: "POST",
-          body: { credentialId: opts.credentialId, trigger: opts.trigger },
+        const ok = await confirm(
+          `${c.red("WARNING:")} This will start a database kill sequence. Continue?`,
+          { yes, json },
+        );
+        if (!ok) {
+          console.log("Aborted.");
+          return;
+        }
+
+        const s = json ? null : spinner("Initiating kill sequence...").start();
+        const client = createClient();
+        const data = await client.database.initiate({
+          credentialId: opts.credentialId,
+          trigger: opts.trigger,
         });
+        s?.stop();
         if (json) {
           outputJson(data);
         } else {
-          console.log(`Kill sequence initiated: ${data.sequenceId}`);
-          console.log(`Status: ${data.status}`);
-          console.log(`Steps: ${data.steps?.map((s: any) => s.action).join(" -> ")}`);
-          console.log(`\nAdvance: kill-switch kill advance ${data.sequenceId} --credential-id ${opts.credentialId}`);
+          warn(`Kill sequence initiated: ${c.bold(data.id)}`);
+          console.log(`  Status: ${data.status}`);
+          console.log(`  Steps: ${data.steps?.map((s) => s.action).join(" → ")}`);
+          console.log(`\n  Advance: ${c.dim(`ks kill advance ${data.id} --credential-id ${opts.credentialId}`)}`);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -37,8 +49,9 @@ export function registerKillCommands(program: Command) {
     .action(async (id) => {
       const json = program.opts().json;
       try {
+        const client = createClient();
         if (id) {
-          const data = await apiRequest(`/database/kill/${id}`);
+          const data = await client.database.get(id);
           if (json) {
             outputJson(data);
           } else {
@@ -53,21 +66,19 @@ export function registerKillCommands(program: Command) {
             }
           }
         } else {
-          const data = await apiRequest("/database/kill");
-          const sequences = data.sequences || data;
+          const sequences = await client.database.list();
           if (json) {
             outputJson(sequences);
           } else {
-            formatTable(Array.isArray(sequences) ? sequences : [], [
+            formatTable(sequences, [
               { key: "id", header: "Sequence ID" },
               { key: "status", header: "Status" },
               { key: "currentStep", header: "Step" },
             ]);
           }
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -77,27 +88,35 @@ export function registerKillCommands(program: Command) {
     .requiredOption("--credential-id <credId>", "Stored credential ID")
     .option("--human-approval", "Confirm human approval (required for nuke step)")
     .action(async (id, opts) => {
-      const json = program.opts().json;
+      const { json, yes } = program.opts();
       try {
-        const data = await apiRequest(`/database/kill/${id}/advance`, {
-          method: "POST",
-          body: {
-            credentialId: opts.credentialId,
-            humanApproval: opts.humanApproval || false,
-          },
+        const ok = await confirm(
+          `Execute the next step in kill sequence ${id}?`,
+          { yes, json },
+        );
+        if (!ok) {
+          console.log("Aborted.");
+          return;
+        }
+
+        const s = json ? null : spinner("Executing step...").start();
+        const client = createClient();
+        const data = await client.database.advance(id, {
+          credentialId: opts.credentialId,
+          humanApproval: opts.humanApproval || false,
         });
+        s?.stop();
         if (json) {
           outputJson(data);
         } else {
-          console.log(`Step executed: ${data.steps?.[data.currentStep - 1]?.action || "?"}`);
-          console.log(`Status: ${data.status}`);
+          success(`Step executed: ${data.steps?.[data.currentStep! - 1]?.action || "?"}`);
+          console.log(`  Status: ${data.status}`);
           if (data.status !== "completed") {
-            console.log(`Next: kill-switch kill advance ${id} --credential-id ${opts.credentialId}`);
+            console.log(`  Next: ${c.dim(`ks kill advance ${id} --credential-id ${opts.credentialId}`)}`);
           }
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -105,17 +124,22 @@ export function registerKillCommands(program: Command) {
     .command("abort <id>")
     .description("Abort a kill sequence")
     .action(async (id) => {
-      const json = program.opts().json;
+      const { json, yes } = program.opts();
       try {
-        const data = await apiRequest(`/database/kill/${id}/abort`, { method: "POST" });
-        if (json) {
-          outputJson(data);
-        } else {
-          console.log(`Kill sequence ${id} aborted.`);
+        const ok = await confirm(`Abort kill sequence ${id}?`, { yes, json });
+        if (!ok) {
+          console.log("Aborted.");
+          return;
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+        const client = createClient();
+        await client.database.abort(id);
+        if (json) {
+          outputJson({ aborted: true, id });
+        } else {
+          success(`Kill sequence ${id} aborted.`);
+        }
+      } catch (err) {
+        handleError(err, json);
       }
     });
 }

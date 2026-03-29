@@ -6,8 +6,8 @@
  */
 
 import { Command } from "commander";
-import { outputJson, outputError } from "../output.js";
-import { createInterface } from "readline";
+import { outputJson, outputError, handleError, spinner, success, fail } from "../output.js";
+import { ask } from "../prompts.js";
 import type { ClientFactory } from "../types.js";
 
 const PROVIDER_HELP: Record<string, { name: string; fields: string; howToGet: string }> = {
@@ -116,16 +116,6 @@ const AVAILABLE_SHIELDS = [
   "cost-runaway", "ddos", "brute-force", "error-storm",
   "exfiltration", "gpu-runaway", "lambda-loop", "aws-cost-runaway",
 ];
-
-function ask(question: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
 
 export function registerOnboardCommands(program: Command, createClient: ClientFactory) {
   program
@@ -310,13 +300,14 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
         }
 
         // 1. Connect cloud account
-        if (!json) console.log(`\nConnecting ${PROVIDER_HELP[provider].name}...`);
+        const s = json ? null : spinner(`Connecting ${PROVIDER_HELP[provider].name}...`).start();
         const account = await client.accounts.create({
           provider: provider as any,
           name,
           credential: credential as any,
         });
-        if (!json) console.log(`\u2713 Connected: ${account.name || account.id}`);
+        s?.stop();
+        if (!json) success(`Connected: ${account.name || account.id}`);
 
         // 2. Apply shields
         if (!opts.skipShields) {
@@ -328,9 +319,9 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           for (const shield of shieldList) {
             try {
               await client.rules.applyPreset(shield);
-              if (!json) console.log(`  \u2713 ${shield}`);
+              if (!json) success(`  ${shield}`);
             } catch (err: any) {
-              if (!json) console.log(`  \u2717 ${shield}: ${err.message}`);
+              if (!json) fail(`  ${shield}: ${err.message}`);
             }
           }
         }
@@ -359,9 +350,9 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
             if (!json) console.log("Setting up alerts...");
             try {
               await client.alerts.updateChannels(channels);
-              if (!json) console.log(`  \u2713 ${channels.length} alert channel(s) configured`);
+              if (!json) success(`  ${channels.length} alert channel(s) configured`);
             } catch (err: any) {
-              if (!json) console.log(`  \u2717 Alerts: ${err.message}`);
+              if (!json) fail(`  Alerts: ${err.message}`);
             }
           }
         }
@@ -381,16 +372,15 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
             accountName: account.name,
           });
         } else {
-          console.log(`\n\u2705 Setup complete! Kill Switch is monitoring your ${PROVIDER_HELP[provider].name} account.`);
+          console.log(`\nSetup complete! Kill Switch is monitoring your ${PROVIDER_HELP[provider].name} account.`);
           console.log("\nNext steps:");
           console.log("  kill-switch accounts list      — view connected accounts");
           console.log("  kill-switch check               — run a monitoring check");
           console.log("  kill-switch shield --list       — see all available shields");
           console.log("  kill-switch onboard --provider  — add another provider\n");
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 }

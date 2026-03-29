@@ -26,6 +26,9 @@ import { registerConfigCommands } from "./commands/config-cmd.js";
 import { registerOnboardCommands } from "./commands/onboard.js";
 import { registerOrgCommands } from "./commands/orgs.js";
 import { registerActivityCommands } from "./commands/activity.js";
+import { registerStatusCommand } from "./commands/status.js";
+import { registerWatchCommand } from "./commands/watch.js";
+import { registerProviderCommands } from "./commands/providers.js";
 
 import type { ClientFactory } from "./types.js";
 
@@ -37,7 +40,8 @@ program
   .version("0.1.0")
   .option("--json", "Output as JSON (for automation/scripting)")
   .option("--api-key <key>", "API key (overrides config and env)")
-  .option("--api-url <url>", "API URL (overrides config and env)");
+  .option("--api-url <url>", "API URL (overrides config and env)")
+  .option("-y, --yes", "Skip confirmation prompts");
 
 /**
  * Create an SDK client with the resolved apiKey/apiUrl.
@@ -63,5 +67,8 @@ registerConfigCommands(program);
 registerOnboardCommands(program, createClient);
 registerOrgCommands(program, createClient);
 registerActivityCommands(program, createClient);
+registerStatusCommand(program, createClient);
+registerWatchCommand(program, createClient);
+registerProviderCommands(program, createClient);
 
 program.parse();

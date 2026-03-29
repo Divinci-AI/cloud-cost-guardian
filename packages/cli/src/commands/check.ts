@@ -1,22 +1,25 @@
 import { Command } from "commander";
-import { apiRequest } from "../api-client.js";
-import { outputJson, formatTable, outputError } from "../output.js";
+import { outputJson, formatTable, handleError, spinner, success, colors as c } from "../output.js";
+import type { ClientFactory } from "../types.js";
 
-export function registerCheckCommands(program: Command) {
+export function registerCheckCommands(program: Command, createClient: ClientFactory) {
   program
     .command("check")
     .description("Run monitoring check on all connected accounts")
     .action(async () => {
       const json = program.opts().json;
+      const s = json ? null : spinner("Running monitoring check...").start();
       try {
-        const data = await apiRequest("/check", { method: "POST" });
+        const client = createClient();
+        const data = await client.monitoring.checkAll();
+        s?.stop();
         if (json) {
           outputJson(data);
         } else {
           const results = data.results || [];
-          console.log(`Checked ${results.length} account(s)\n`);
+          console.log(`Checked ${c.bold(String(results.length))} account(s)\n`);
           for (const r of results) {
-            console.log(`${r.provider || "unknown"}: ${r.name || r.cloudAccountId}`);
+            console.log(`${c.bold((r.provider || "unknown") + ":")} ${(r as any).name || r.cloudAccountId}`);
             if (r.violations?.length) {
               formatTable(r.violations, [
                 { key: "metric", header: "Metric" },
@@ -24,13 +27,13 @@ export function registerCheckCommands(program: Command) {
                 { key: "threshold", header: "Threshold" },
               ]);
             } else {
-              console.log("  All clear\n");
+              success("All clear\n");
             }
           }
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        s?.stop();
+        handleError(err, json);
       }
     });
 }

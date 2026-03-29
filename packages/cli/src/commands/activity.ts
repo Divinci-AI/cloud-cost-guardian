@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { outputJson, formatTable, outputError } from "../output.js";
+import { outputJson, formatTable, handleError } from "../output.js";
 import type { ClientFactory } from "../types.js";
 
 export function registerActivityCommands(program: Command, createClient: ClientFactory) {
@@ -51,9 +51,8 @@ export function registerActivityCommands(program: Command, createClient: ClientF
             console.log(`\nPage ${data.page} of ${totalPages}. Use --page ${data.page + 1} for next.`);
           }
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -77,9 +76,8 @@ export function registerActivityCommands(program: Command, createClient: ClientF
             console.log(`\n  ... ${data.total - 10} more. Use 'ks activity list' for full log.`);
           }
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 }

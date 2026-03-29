@@ -13,18 +13,38 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "commander": "^12.1.0"
+    "@kill-switch/sdk": "*",
+    "chalk": "^5.6.2",
+    "commander": "^12.1.0",
+    "ora": "^8.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
+    "@types/node": "^22.0.0",
     "tsx": "^4.7.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=18"
   },
-  "files": ["dist", "README.md"],
-  "keywords": ["cloud", "kill-switch", "cost-monitoring", "cloudflare", "aws", "gcp", "runpod", "gpu", "finops", "billing", "cli", "devops"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "cloud",
+    "kill-switch",
+    "cost-monitoring",
+    "cloudflare",
+    "aws",
+    "gcp",
+    "runpod",
+    "gpu",
+    "finops",
+    "billing",
+    "cli",
+    "devops"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/AiExpanse/kill-switch",

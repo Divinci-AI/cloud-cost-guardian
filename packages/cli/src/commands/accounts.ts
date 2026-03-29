@@ -1,32 +1,36 @@
 import { Command } from "commander";
-import { apiRequest } from "../api-client.js";
-import { outputJson, formatTable, formatObject, outputError } from "../output.js";
+import { outputJson, formatTable, formatObject, handleError, spinner, success } from "../output.js";
+import { confirm } from "../prompts.js";
+import type { ClientFactory } from "../types.js";
 
-export function registerAccountCommands(program: Command) {
+export function registerAccountCommands(program: Command, createClient: ClientFactory) {
   const accounts = program.command("accounts").description("Manage cloud accounts");
 
   accounts
     .command("list")
     .alias("ls")
     .description("List connected cloud accounts")
-    .action(async () => {
+    .option("--provider <provider>", "Filter by provider (cloudflare, gcp, aws, runpod)")
+    .option("--status <status>", "Filter by status (active, paused, disconnected)")
+    .action(async (opts) => {
       const json = program.opts().json;
       try {
-        const data = await apiRequest("/cloud-accounts");
-        const list = data.accounts || data;
+        const client = createClient();
+        let list = await client.accounts.list();
+        if (opts.provider) list = list.filter((a) => a.provider === opts.provider);
+        if (opts.status) list = list.filter((a) => a.status === opts.status);
         if (json) {
           outputJson(list);
         } else {
-          formatTable(Array.isArray(list) ? list : [], [
-            { key: "_id", header: "ID" },
+          formatTable(list, [
+            { key: "id", header: "ID" },
             { key: "provider", header: "Provider" },
             { key: "name", header: "Name" },
             { key: "status", header: "Status" },
           ]);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -36,15 +40,15 @@ export function registerAccountCommands(program: Command) {
     .action(async (id) => {
       const json = program.opts().json;
       try {
-        const data = await apiRequest(`/cloud-accounts/${id}`);
+        const client = createClient();
+        const data = await client.accounts.get(id);
         if (json) {
           outputJson(data);
         } else {
           formatObject(data);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -64,19 +68,23 @@ export function registerAccountCommands(program: Command) {
       if (opts.projectId) credential.projectId = opts.projectId;
       if (opts.serviceAccount) credential.serviceAccountJson = opts.serviceAccount;
 
+      const s = json ? null : spinner(`Connecting ${provider}...`).start();
       try {
-        const data = await apiRequest("/cloud-accounts", {
-          method: "POST",
-          body: { provider, name: opts.name, credential },
+        const client = createClient();
+        const data = await client.accounts.create({
+          provider: provider as any,
+          name: opts.name,
+          credential: credential as any,
         });
+        s?.stop();
         if (json) {
           outputJson(data);
         } else {
-          console.log(`Connected ${provider} account: ${data.name || data._id}`);
+          success(`Connected ${provider} account: ${data.name || data.id}`);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        s?.stop();
+        handleError(err, json);
       }
     });
 
@@ -85,17 +93,22 @@ export function registerAccountCommands(program: Command) {
     .alias("rm")
     .description("Disconnect and delete a cloud account")
     .action(async (id) => {
-      const json = program.opts().json;
+      const { json, yes } = program.opts();
       try {
-        await apiRequest(`/cloud-accounts/${id}`, { method: "DELETE" });
+        const ok = await confirm(`Are you sure you want to disconnect account ${id}?`, { yes, json });
+        if (!ok) {
+          console.log("Aborted.");
+          return;
+        }
+        const client = createClient();
+        await client.accounts.delete(id);
         if (json) {
           outputJson({ deleted: true, id });
         } else {
-          console.log(`Account ${id} disconnected.`);
+          success(`Account ${id} disconnected.`);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -104,8 +117,11 @@ export function registerAccountCommands(program: Command) {
     .description("Run manual monitoring check on an account")
     .action(async (id) => {
       const json = program.opts().json;
+      const s = json ? null : spinner("Running check...").start();
       try {
-        const data = await apiRequest(`/cloud-accounts/${id}/check`, { method: "POST" });
+        const client = createClient();
+        const data = await client.accounts.check(id);
+        s?.stop();
         if (json) {
           outputJson(data);
         } else {
@@ -119,9 +135,9 @@ export function registerAccountCommands(program: Command) {
             ]);
           }
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        s?.stop();
+        handleError(err, json);
       }
     });
 }

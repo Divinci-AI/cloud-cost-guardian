@@ -1,5 +1,6 @@
 import { Command } from "commander";
-import { outputJson, formatTable, formatObject, outputError } from "../output.js";
+import { outputJson, formatTable, formatObject, handleError, success } from "../output.js";
+import { confirm } from "../prompts.js";
 import type { ClientFactory } from "../types.js";
 
 export function registerOrgCommands(program: Command, createClient: ClientFactory) {
@@ -27,9 +28,8 @@ export function registerOrgCommands(program: Command, createClient: ClientFactor
             { key: "slug", header: "Slug" },
           ]);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -51,9 +51,8 @@ export function registerOrgCommands(program: Command, createClient: ClientFactor
           console.log(`  Type: ${data.type}`);
           console.log(`\nSwitch to it with: ks orgs switch ${data.id}`);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -70,9 +69,8 @@ export function registerOrgCommands(program: Command, createClient: ClientFactor
         } else {
           console.log(`Switched to org: ${orgId}`);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -101,9 +99,8 @@ export function registerOrgCommands(program: Command, createClient: ClientFactor
             });
           }
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -133,9 +130,8 @@ export function registerOrgCommands(program: Command, createClient: ClientFactor
             ]);
           }
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -154,9 +150,8 @@ export function registerOrgCommands(program: Command, createClient: ClientFactor
           console.log(`Invitation sent to ${email} (role: ${opts.role})`);
           console.log(`Accept URL: ${data.acceptUrl}`);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 
@@ -164,18 +159,22 @@ export function registerOrgCommands(program: Command, createClient: ClientFactor
     .command("delete <orgId>")
     .description("Delete an organization (owner only, cannot delete personal workspace)")
     .action(async (orgId) => {
-      const json = program.opts().json;
+      const { json, yes } = program.opts();
       try {
+        const ok = await confirm(`Delete organization ${orgId}? This cannot be undone.`, { yes, json });
+        if (!ok) {
+          console.log("Aborted.");
+          return;
+        }
         const client = createClient();
         await client.orgs.delete(orgId);
         if (json) {
           outputJson({ deleted: true, orgId });
         } else {
-          console.log(`Organization ${orgId} deleted.`);
+          success(`Organization ${orgId} deleted.`);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+      } catch (err) {
+        handleError(err, json);
       }
     });
 }

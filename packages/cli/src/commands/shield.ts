@@ -1,24 +1,25 @@
 import { Command } from "commander";
-import { apiRequest } from "../api-client.js";
-import { outputJson, formatTable, outputError } from "../output.js";
+import { outputJson, formatTable, handleError, spinner, success, colors as c } from "../output.js";
+import type { ClientFactory } from "../types.js";
 
 const PRESETS = [
   "ddos", "brute-force", "cost-runaway", "error-storm",
   "exfiltration", "gpu-runaway", "lambda-loop", "aws-cost-runaway",
 ];
 
-export function registerShieldCommands(program: Command) {
-  const shield = program
+export function registerShieldCommands(program: Command, createClient: ClientFactory) {
+  program
     .command("shield [preset]")
     .description("Quick-apply a protection preset (e.g., kill-switch shield cost-runaway)")
     .option("--list", "List available shields")
+    .option("--dry-run", "Preview what the shield would do without applying")
     .action(async (preset, opts) => {
       const json = program.opts().json;
+      const client = createClient();
 
       if (opts.list || !preset) {
         try {
-          const data = await apiRequest("/rules/presets", { public: true });
-          const presets = data.presets || data;
+          const presets = await client.rules.presets();
           if (json) {
             outputJson(presets);
           } else {
@@ -30,29 +31,47 @@ export function registerShieldCommands(program: Command) {
             ]);
             console.log("\nUsage: kill-switch shield <preset-id>");
           }
-        } catch (err: any) {
-          outputError(err.message, json);
-          process.exit(1);
+        } catch (err) {
+          handleError(err, json);
         }
         return;
       }
 
       if (!PRESETS.includes(preset)) {
-        outputError(`Unknown preset "${preset}". Run: kill-switch shield --list`, json);
-        process.exit(1);
+        handleError(new Error(`Unknown preset "${preset}". Run: kill-switch shield --list`), json);
       }
 
-      try {
-        const data = await apiRequest(`/rules/presets/${preset}`, { method: "POST" });
-        if (json) {
-          outputJson(data);
-        } else {
-          console.log(`Shield activated: ${data.name || preset}`);
-          if (data.id) console.log(`Rule ID: ${data.id}`);
+      if (opts.dryRun) {
+        try {
+          const presets = await client.rules.presets();
+          const match = presets.find((p) => p.id === preset);
+          if (json) {
+            outputJson({ dryRun: true, preset, details: match });
+          } else {
+            console.log(c.yellow("Dry run — shield would be applied:"));
+            console.log(`  ${c.bold("Shield:")}  ${match?.name || preset}`);
+            console.log(`  ${c.bold("Description:")} ${match?.description || "N/A"}`);
+            console.log(`  ${c.bold("Category:")} ${match?.category || "N/A"}`);
+          }
+        } catch (err) {
+          handleError(err, json);
         }
-      } catch (err: any) {
-        outputError(err.message, json);
-        process.exit(1);
+        return;
+      }
+
+      const s = json ? null : spinner(`Applying ${preset} shield...`).start();
+      try {
+        const rule = await client.rules.applyPreset(preset);
+        s?.stop();
+        if (json) {
+          outputJson(rule);
+        } else {
+          success(`Shield activated: ${rule.name || preset}`);
+          if (rule.id) console.log(`  Rule ID: ${c.dim(rule.id)}`);
+        }
+      } catch (err) {
+        s?.stop();
+        handleError(err, json);
       }
     });
 }
