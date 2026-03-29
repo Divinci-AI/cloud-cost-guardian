@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <title>Integration Guide | Kill Switch</title>
     <meta name="description" content="Set up Kill Switch financial protection for your Cloudflare Workers project in under 10 minutes.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -140,6 +143,15 @@
                         <li><a href="#provider-gcp">GCP</a></li>
                         <li><a href="#provider-aws">AWS</a></li>
                         <li><a href="#provider-runpod">RunPod</a></li>
+                        <li><a href="#provider-redis">Redis</a></li>
+                        <li><a href="#provider-mongodb">MongoDB</a></li>
+                        <li><a href="#provider-openai">OpenAI</a></li>
+                        <li><a href="#provider-anthropic">Anthropic</a></li>
+                        <li><a href="#provider-xai">xAI (Grok)</a></li>
+                        <li><a href="#provider-replicate">Replicate</a></li>
+                        <li><a href="#provider-snowflake">Snowflake</a></li>
+                        <li><a href="#provider-vercel">Vercel</a></li>
+                        <li><a href="#provider-datadog">Datadog</a></li>
                     </ul>
                 </li>
                 <li><a href="#runpod-guide">RunPod Setup Guide</a>
@@ -161,7 +173,7 @@
         <div style="display:flex;gap:8px;margin-bottom:2em;">
             <span class="badge badge-api">REST API</span>
             <span class="badge badge-agent">Edge Agent</span>
-            <span class="badge badge-cli">CLI (wrangler)</span>
+            <span class="badge badge-cli">CLI</span>
         </div>
 
         <h2 id="integration-paths">Integration Paths<a href="#integration-paths" class="anchor"></a></h2>
@@ -330,6 +342,15 @@ secret_name = "PAGERDUTY_ROUTING_KEY"</code></pre>
             <tr id="provider-gcp"><td><strong>GCP</strong></td><td>Compute Engine, GKE, BigQuery, Cloud Functions, GCS</td><td>Stop instances, scale down, disable billing</td></tr>
             <tr id="provider-aws"><td><strong>AWS</strong></td><td>EC2, Lambda, RDS, ECS, EKS, SageMaker, S3</td><td>Stop instances, throttle concurrency, disable functions</td></tr>
             <tr id="provider-runpod"><td><strong>RunPod</strong></td><td>GPU Pods (on-demand &amp; spot), Serverless Endpoints, Network Volumes</td><td>Stop pod, terminate pod, scale down endpoints</td></tr>
+            <tr id="provider-redis"><td><strong>Redis</strong></td><td>Redis Cloud, AWS ElastiCache, Self-hosted (memory, connections, ops/sec)</td><td>Kill connections, scale down, flush, pause cluster</td></tr>
+            <tr id="provider-mongodb"><td><strong>MongoDB</strong></td><td>Atlas clusters, Self-hosted (storage, connections, ops/sec)</td><td>Kill connections, isolate (IP whitelist), pause/scale cluster</td></tr>
+            <tr id="provider-openai"><td><strong>OpenAI</strong></td><td>GPT API token usage, request counts, daily cost</td><td>Rotate credentials (manual)</td></tr>
+            <tr id="provider-anthropic"><td><strong>Anthropic</strong></td><td>Claude API token usage, daily cost</td><td>Rotate credentials (manual)</td></tr>
+            <tr id="provider-xai"><td><strong>xAI (Grok)</strong></td><td>Grok API token usage, daily cost</td><td>Rotate credentials (manual)</td></tr>
+            <tr id="provider-replicate"><td><strong>Replicate</strong></td><td>GPU predictions, model usage, daily cost</td><td>Rotate credentials (manual)</td></tr>
+            <tr id="provider-snowflake"><td><strong>Snowflake</strong></td><td>Warehouse credits, query costs, data scanning</td><td>Scale down warehouse, suspend warehouse</td></tr>
+            <tr id="provider-vercel"><td><strong>Vercel</strong></td><td>Function invocations, bandwidth, build minutes</td><td>Scale down, disable service</td></tr>
+            <tr id="provider-datadog"><td><strong>Datadog</strong></td><td>Host count, log ingestion, custom metrics</td><td>Rotate credentials, mute monitors</td></tr>
         </table>
 
         <h2 id="runpod-guide">6. RunPod Setup Guide<a href="#runpod-guide" class="anchor"></a></h2>
@@ -392,6 +413,174 @@ ks onboard --provider runpod \
         </table>
 
         <p>Violations at 1x threshold trigger a <strong>warning</strong>. At 2x threshold, severity escalates to <strong>critical</strong> and auto-kill actions execute (if enabled).</p>
+
+        <!-- ─── Redis ─────────────────────────────────────────────── -->
+        <h2 id="redis-guide">7. Redis Setup Guide<a href="#redis-guide" class="anchor"></a></h2>
+        <p>Monitor Redis Cloud, AWS ElastiCache, or self-hosted Redis instances for memory spikes, connection overload, and cost runaway.</p>
+        <h3>Credentials</h3>
+        <p><strong>Self-hosted:</strong> Provide a Redis URL (<code>redis://user:pass@host:6379</code>).</p>
+        <p><strong>Redis Cloud:</strong> Account Key + Secret Key from <a href="https://app.redislabs.com/#/account/api-keys" target="_blank">Redis Cloud API Keys</a>, plus your Subscription ID.</p>
+        <p><strong>ElastiCache:</strong> AWS Access Key + Secret Key + Region + Cluster ID.</p>
+<pre><code>ks onboard --provider redis --redis-url "redis://user:pass@host:6379" --name "Production Redis"
+# Or connect at https://app.kill-switch.net/accounts/connect/redis</code></pre>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Memory Usage</td><td>512 MB</td></tr>
+            <tr><td>Connected Clients</td><td>100</td></tr>
+            <tr><td>Commands/sec</td><td>10,000</td></tr>
+            <tr><td>Daily Cost</td><td>$25/day</td></tr>
+        </table>
+
+        <!-- ─── MongoDB ──────────────────────────────────────────── -->
+        <h2 id="mongodb-guide">8. MongoDB Setup Guide<a href="#mongodb-guide" class="anchor"></a></h2>
+        <p>Monitor MongoDB Atlas clusters or self-hosted instances for storage growth, connection overload, and cost spikes.</p>
+        <h3>Credentials</h3>
+        <p><strong>Atlas:</strong> Create API keys at Organization &gt; Access Manager &gt; API Keys. Needs "Project Read Only" + "Project Cluster Manager" roles.</p>
+        <p><strong>Self-hosted:</strong> Provide a MongoDB URI (<code>mongodb+srv://user:pass@host/db</code>).</p>
+<pre><code>ks onboard --provider mongodb --atlas-public-key PUB --atlas-private-key PRIV --atlas-project-id PROJ --cluster-name Cluster0
+# Or connect at https://app.kill-switch.net/accounts/connect/mongodb</code></pre>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Storage</td><td>10 GB</td></tr>
+            <tr><td>Active Connections</td><td>200</td></tr>
+            <tr><td>Operations/sec</td><td>5,000</td></tr>
+            <tr><td>Daily Cost</td><td>$30/day</td></tr>
+        </table>
+
+        <!-- ─── OpenAI ───────────────────────────────────────────── -->
+        <h2 id="openai-guide">9. OpenAI Setup Guide<a href="#openai-guide" class="anchor"></a></h2>
+        <p>Monitor GPT API token usage, request counts, and daily spend. Catch runaway agent loops before they drain your budget.</p>
+        <h3>Credentials</h3>
+        <ol>
+            <li>Go to <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a></li>
+            <li>Create a new API key (starts with <code>sk-</code>)</li>
+            <li>Optionally provide your Organization ID from Settings</li>
+        </ol>
+<pre><code>ks onboard --provider openai --openai-api-key "sk-..." --name "Production OpenAI"
+# Or connect at https://app.kill-switch.net/accounts/connect/openai</code></pre>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Tokens/day</td><td>1,000,000</td></tr>
+            <tr><td>Requests/day</td><td>10,000</td></tr>
+            <tr><td>Daily Cost</td><td>$50/day</td></tr>
+        </table>
+
+        <!-- ─── Anthropic ────────────────────────────────────────── -->
+        <h2 id="anthropic-guide">10. Anthropic Setup Guide<a href="#anthropic-guide" class="anchor"></a></h2>
+        <p>Monitor Claude API token usage and daily spend.</p>
+        <h3>Credentials</h3>
+        <ol>
+            <li>Go to <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a></li>
+            <li>Create a new API key (starts with <code>sk-ant-</code>)</li>
+        </ol>
+<pre><code>ks onboard --provider anthropic --anthropic-api-key "sk-ant-..." --name "Production Claude"
+# Or connect at https://app.kill-switch.net/accounts/connect/anthropic</code></pre>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Tokens/day</td><td>1,000,000</td></tr>
+            <tr><td>Daily Cost</td><td>$50/day</td></tr>
+        </table>
+
+        <!-- ─── xAI ──────────────────────────────────────────────── -->
+        <h2 id="xai-guide">11. xAI (Grok) Setup Guide<a href="#xai-guide" class="anchor"></a></h2>
+        <p>Monitor Grok API token usage and daily spend.</p>
+        <h3>Credentials</h3>
+        <ol>
+            <li>Go to <a href="https://console.x.ai/api-keys" target="_blank">console.x.ai/api-keys</a></li>
+            <li>Create a new API key</li>
+        </ol>
+<pre><code>ks onboard --provider xai --xai-api-key "xai-..." --name "Grok API"
+# Or connect at https://app.kill-switch.net/accounts/connect/xai</code></pre>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Tokens/day</td><td>1,000,000</td></tr>
+            <tr><td>Daily Cost</td><td>$50/day</td></tr>
+        </table>
+
+        <!-- ─── Replicate ────────────────────────────────────────── -->
+        <h2 id="replicate-guide">12. Replicate Setup Guide<a href="#replicate-guide" class="anchor"></a></h2>
+        <p>Monitor GPU prediction costs, model usage, and daily spend on Replicate.</p>
+        <h3>Credentials</h3>
+        <ol>
+            <li>Go to <a href="https://replicate.com/account/api-tokens" target="_blank">replicate.com/account/api-tokens</a></li>
+            <li>Create a new token (starts with <code>r8_</code>)</li>
+        </ol>
+<pre><code>ks onboard --provider replicate --replicate-api-token "r8_..." --name "ML Predictions"
+# Or connect at https://app.kill-switch.net/accounts/connect/replicate</code></pre>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Predictions/day</td><td>100</td></tr>
+            <tr><td>GPU Hours/day</td><td>4</td></tr>
+            <tr><td>Daily Cost</td><td>$25/day</td></tr>
+        </table>
+
+        <!-- ─── Snowflake ────────────────────────────────────────── -->
+        <h2 id="snowflake-guide">13. Snowflake Setup Guide<a href="#snowflake-guide" class="anchor"></a></h2>
+        <p>Monitor Snowflake warehouse credits, query costs, and data scanning. Auto-suspend warehouses on threshold breach.</p>
+        <h3>Credentials</h3>
+        <p>Provide your Snowflake account name (from the URL), username, and password.</p>
+<pre><code>ks onboard --provider snowflake --snowflake-account "xy12345.us-east-1" \
+  --snowflake-username "USER" --snowflake-password "PASS" \
+  --warehouse "COMPUTE_WH" --name "Production Snowflake"
+# Or connect at https://app.kill-switch.net/accounts/connect/snowflake</code></pre>
+        <h3>Kill Actions</h3>
+        <table>
+            <tr><th>Action</th><th>What Happens</th><th>Reversible</th></tr>
+            <tr><td><code>scale-down</code></td><td>Resize warehouse to X-SMALL</td><td>Yes</td></tr>
+            <tr><td><code>stop-instances</code></td><td>Suspend warehouse entirely</td><td>Yes</td></tr>
+        </table>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Credits/day</td><td>10</td></tr>
+            <tr><td>Warehouses</td><td>3</td></tr>
+            <tr><td>Daily Cost</td><td>$100/day</td></tr>
+        </table>
+
+        <!-- ─── Vercel ───────────────────────────────────────────── -->
+        <h2 id="vercel-guide">14. Vercel Setup Guide<a href="#vercel-guide" class="anchor"></a></h2>
+        <p>Monitor Vercel function invocations, bandwidth usage, and build minutes.</p>
+        <h3>Credentials</h3>
+        <ol>
+            <li>Go to <a href="https://vercel.com/account/tokens" target="_blank">vercel.com/account/tokens</a></li>
+            <li>Create a new token with appropriate scope</li>
+            <li>Optionally provide your Team ID (from Team Settings)</li>
+        </ol>
+<pre><code>ks onboard --provider vercel --vercel-api-token "TOKEN" --name "Production Vercel"
+# Or connect at https://app.kill-switch.net/accounts/connect/vercel</code></pre>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Function Invocations/day</td><td>100,000</td></tr>
+            <tr><td>Bandwidth/day</td><td>100 GB</td></tr>
+            <tr><td>Daily Cost</td><td>$50/day</td></tr>
+        </table>
+
+        <!-- ─── Datadog ──────────────────────────────────────────── -->
+        <h2 id="datadog-guide">15. Datadog Setup Guide<a href="#datadog-guide" class="anchor"></a></h2>
+        <p>Monitor Datadog host count, log ingestion volume, and custom metrics costs.</p>
+        <h3>Credentials</h3>
+        <p>You need both an API Key and an Application Key:</p>
+        <ol>
+            <li><strong>API Key:</strong> Organization Settings &gt; API Keys</li>
+            <li><strong>Application Key:</strong> Organization Settings &gt; Application Keys</li>
+            <li>Optionally specify <code>--datadog-site eu</code> for EU region (default: US)</li>
+        </ol>
+<pre><code>ks onboard --provider datadog --datadog-api-key "KEY" --datadog-application-key "APP_KEY" --name "Production Datadog"
+# Or connect at https://app.kill-switch.net/accounts/connect/datadog</code></pre>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Host Count</td><td>50</td></tr>
+            <tr><td>Log Ingestion/day</td><td>10 GB</td></tr>
+            <tr><td>Daily Cost</td><td>$100/day</td></tr>
+        </table>
 
         <h2 id="help">Need Help?<a href="#help" class="anchor"></a></h2>
         <ul>
