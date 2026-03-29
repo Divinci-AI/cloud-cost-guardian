@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell,
 } from "recharts";
 import { api } from "../../api/client";
+import { useOrg } from "../../context/OrgContext";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -139,6 +140,7 @@ function ChartTooltip({ active, payload }: any) {
 // ─── Main Dashboard ─────────────────────────────────────────────────────────
 
 export function DashboardPage() {
+  const { orgVersion } = useOrg();
   const [accounts, setAccounts] = useState<CloudAccount[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,7 +155,7 @@ export function DashboardPage() {
       setAccounts(accountsData.accounts || []);
       setAnalytics(analyticsData);
     }).finally(() => setLoading(false));
-  }, [days]);
+  }, [days, orgVersion]);
 
   const runManualCheck = async () => {
     setChecking(true);

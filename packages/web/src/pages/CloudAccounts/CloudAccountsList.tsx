@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
+import { useOrg } from "../../context/OrgContext";
 
 export function CloudAccountsList() {
+  const { orgVersion } = useOrg();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     api.listCloudAccounts()
       .then(data => setAccounts(data.accounts || []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [orgVersion]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Disconnect this cloud account? Credentials will be permanently deleted.")) return;

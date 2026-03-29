@@ -74,7 +74,7 @@ export function OrgProvider({ children, initialAccount }: OrgProviderProps) {
     } catch (err: any) {
       console.error("[OrgContext] Failed to refresh orgs:", err);
       // If we get a 403, the current org may have been deleted
-      if (err.message?.includes("403") || err.message?.includes("don't have access")) {
+      if (err.message?.includes("403") || err.message?.includes("404") || err.message?.includes("don't have access")) {
         setActiveOrgIdState(null);
         setActiveOrgId(null);
         setOrgVersion(v => v + 1);

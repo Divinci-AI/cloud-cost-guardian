@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
+import { useOrg } from "../../context/OrgContext";
 
 export function AlertsHistory() {
+  const { orgVersion } = useOrg();
   const [alerts, setAlerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
+    setLoading(true);
     api.getAlertHistory()
       .then(data => setAlerts(data.alerts || []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [orgVersion]);
 
   const handleTest = async () => {
     setTesting(true);
