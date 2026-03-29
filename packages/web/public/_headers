@@ -1,2 +1,4 @@
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://clerk.kill-switch.net https://*.clerk.accounts.dev 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://clerk.kill-switch.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://clerk.kill-switch.net https://*.clerk.accounts.dev https://*.stripe.com https://api.kill-switch.net; frame-src https://*.stripe.com https://clerk.kill-switch.net; object-src 'none'; base-uri 'self'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: same-origin
