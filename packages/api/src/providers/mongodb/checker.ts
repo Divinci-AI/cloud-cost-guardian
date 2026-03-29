@@ -20,6 +20,31 @@ import type {
   MongoDBSubType,
 } from "../types.js";
 
+// ─── SSRF Protection ──────────────────────────────────────────────────────
+
+function validateConnectionUrl(uri: string, protocol: string): void {
+  let parsed: URL;
+  try {
+    // mongodb+srv:// doesn't parse as URL natively, extract host
+    const hostMatch = uri.match(/:\/\/(?:[^@]+@)?([^/:?]+)/);
+    if (!hostMatch) throw new Error("Cannot parse host");
+    const host = hostMatch[1].toLowerCase();
+    if (
+      host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0" ||
+      host.startsWith("10.") || host.startsWith("192.168.") ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      host.startsWith("169.254.") ||
+      host === "metadata.google.internal" ||
+      host.endsWith(".internal")
+    ) {
+      throw new Error("Connections to private/internal network addresses are not allowed");
+    }
+  } catch (e: any) {
+    if (e.message.includes("private") || e.message.includes("internal")) throw e;
+    throw new Error(`Invalid ${protocol} connection URI format`);
+  }
+}
+
 // ─── Credential Helpers ───────────────────────────────────────────────────
 
 interface MongoDBCreds {
@@ -67,7 +92,8 @@ async function atlasRequest(creds: MongoDBCreds, method: string, path: string, b
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Atlas API error: ${resp.status} ${text.substring(0, 200)}`);
+    console.error(`[guardian] Atlas API error: ${resp.status}`, text.substring(0, 500));
+    throw new Error(`Atlas API error: ${resp.status}`);
   }
 
   return resp.json();
@@ -147,6 +173,7 @@ async function checkAtlas(creds: MongoDBCreds): Promise<ServiceUsage[]> {
 // ─── Self-Hosted Monitoring ───────────────────────────────────────────────
 
 async function checkSelfHostedMongo(creds: MongoDBCreds): Promise<ServiceUsage[]> {
+  validateConnectionUrl(creds.mongodbUri!, "MongoDB");
   const { MongoClient } = await import("mongodb");
   const client = new MongoClient(creds.mongodbUri!, {
     serverSelectionTimeoutMS: 10000,
@@ -426,6 +453,7 @@ export const mongodbProvider: CloudProvider = {
           if (!creds.mongodbUri) {
             return { valid: false, error: "Missing MongoDB connection URI" };
           }
+          validateConnectionUrl(creds.mongodbUri, "MongoDB");
           const { MongoClient } = await import("mongodb");
           const client = new MongoClient(creds.mongodbUri, {
             serverSelectionTimeoutMS: 10000,

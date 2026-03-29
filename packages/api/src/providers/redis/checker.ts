@@ -21,6 +21,30 @@ import type {
   RedisSubType,
 } from "../types.js";
 
+// ─── SSRF Protection ──────────────────────────────────────────────────────
+
+function validateConnectionUrl(uri: string, protocol: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch {
+    throw new Error(`Invalid ${protocol} URL format`);
+  }
+  const host = parsed.hostname.toLowerCase();
+  // Block private/internal IPs and metadata endpoints
+  if (
+    host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0" ||
+    host.startsWith("10.") || host.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    host.startsWith("169.254.") || // Link-local / cloud metadata
+    host.startsWith("fe80:") ||
+    host === "metadata.google.internal" ||
+    host.endsWith(".internal")
+  ) {
+    throw new Error("Connections to private/internal network addresses are not allowed");
+  }
+}
+
 // ─── Credential Helpers ───────────────────────────────────────────────────
 
 interface RedisCreds {
@@ -71,7 +95,8 @@ async function redisCloudRequest(creds: RedisCreds, method: string, path: string
   });
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Redis Cloud API error: ${resp.status} ${text.substring(0, 200)}`);
+    console.error(`[guardian] Redis Cloud API error: ${resp.status}`, text.substring(0, 500));
+    throw new Error(`Redis Cloud API error: ${resp.status}`);
   }
   return resp.json();
 }
@@ -81,8 +106,8 @@ async function checkRedisCloud(creds: RedisCreds): Promise<ServiceUsage[]> {
 
   // Get subscription info for cost
   const subscription = await redisCloudRequest(creds, "GET", `/subscriptions/${creds.subscriptionId}`);
-  const monthlyCost = subscription.price || 0;
-  const dailyCost = monthlyCost / 30;
+  const monthlyCost = Number(subscription.price) || 0;
+  const dailyCost = isFinite(monthlyCost) ? monthlyCost / 30 : 0;
 
   // Get databases under the subscription
   const dbs = await redisCloudRequest(creds, "GET", `/subscriptions/${creds.subscriptionId}/databases`);
@@ -211,6 +236,7 @@ async function checkElastiCache(creds: RedisCreds): Promise<ServiceUsage[]> {
 // ─── Self-Hosted Redis ────────────────────────────────────────────────────
 
 async function checkSelfHostedRedis(creds: RedisCreds): Promise<ServiceUsage[]> {
+  validateConnectionUrl(creds.redisUrl!, "Redis");
   const ioredis = await import("ioredis");
   const Redis = ioredis.default || ioredis;
   const client = new (Redis as any)(creds.redisUrl!, {
@@ -470,6 +496,7 @@ export const redisProvider: CloudProvider = {
           if (!creds.redisUrl) {
             return { valid: false, error: "Missing Redis URL" };
           }
+          validateConnectionUrl(creds.redisUrl, "Redis");
           const ioredisValidate = await import("ioredis");
           const RedisValidate = ioredisValidate.default || ioredisValidate;
           const client = new (RedisValidate as any)(creds.redisUrl, {
