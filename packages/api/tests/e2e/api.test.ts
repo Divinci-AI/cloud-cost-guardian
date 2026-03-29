@@ -132,6 +132,44 @@ vi.mock("stripe", () => {
   return { default: class { constructor() {} } };
 });
 
+// Mock permissions (allow all in tests)
+vi.mock("../../src/middleware/permissions.js", () => ({
+  requirePermission: () => (_req: any, _res: any, next: any) => next(),
+}));
+
+// Mock activity logger
+vi.mock("../../src/services/activity-logger.js", () => ({
+  logActivity: vi.fn(),
+}));
+
+// Mock API key model with in-memory storage
+const apiKeyStore = new Map<string, any>();
+let apiKeyCounter = 1;
+vi.mock("../../src/models/api-key/schema.js", () => {
+  const { randomBytes, createHash } = require("crypto");
+  return {
+    createApiKey: vi.fn(async (guardianAccountId: string, userId: string, name: string) => {
+      const raw = randomBytes(32).toString("hex");
+      const key = `ks_live_${raw}`;
+      const id = `apikey-${apiKeyCounter++}`;
+      apiKeyStore.set(id, { _id: id, guardianAccountId, userId, name, keyPrefix: key.substring(0, 16), createdAt: new Date() });
+      return { key, id };
+    }),
+    listApiKeys: vi.fn(async (guardianAccountId: string) => {
+      return Array.from(apiKeyStore.values()).filter(k => k.guardianAccountId === guardianAccountId);
+    }),
+    deleteApiKey: vi.fn(async (id: string, guardianAccountId: string) => {
+      const key = apiKeyStore.get(id);
+      if (!key || key.guardianAccountId !== guardianAccountId) return false;
+      apiKeyStore.delete(id);
+      return true;
+    }),
+    validateApiKey: vi.fn(async () => null),
+    PersonalApiKeyModel: {},
+    deleteAllApiKeysForAccount: vi.fn(async () => 0),
+  };
+});
+
 let app: Express;
 
 beforeAll(() => {
@@ -677,5 +715,127 @@ describe("E2E: Analytics Overview", () => {
     expect(acct).toHaveProperty("provider");
     expect(acct).toHaveProperty("totalCost");
     expect(acct).toHaveProperty("avgDailyCost");
+  });
+});
+
+describe("E2E: API Key Management", () => {
+  it("POST /auth/api-keys creates a key with a name", async () => {
+    const res = await request(app)
+      .post("/auth/api-keys")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({ name: "My CLI Key" });
+    expect(res.status).toBe(201);
+    expect(res.body.key).toBeDefined();
+    expect(res.body.key).toMatch(/^ks_live_/);
+    expect(res.body.name).toBe("My CLI Key");
+    expect(res.body.id).toBeDefined();
+    expect(res.body.message).toContain("not be shown again");
+  });
+
+  it("POST /auth/api-keys rejects missing name", async () => {
+    const res = await request(app)
+      .post("/auth/api-keys")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("name");
+  });
+
+  it("POST /auth/api-keys rejects empty string name", async () => {
+    const res = await request(app)
+      .post("/auth/api-keys")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({ name: "" });
+    expect(res.status).toBe(400);
+  });
+
+  it("GET /auth/api-keys lists keys (metadata only, no hashes)", async () => {
+    // Create a key first
+    await request(app)
+      .post("/auth/api-keys")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({ name: "List Test Key" });
+
+    const res = await request(app)
+      .get("/auth/api-keys")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(200);
+    expect(res.body.keys).toBeDefined();
+    expect(Array.isArray(res.body.keys)).toBe(true);
+
+    // Verify no sensitive data is exposed
+    for (const key of res.body.keys) {
+      expect(key.keyHash).toBeUndefined();
+      expect(key.keyPrefix).toBeDefined();
+      expect(key.name).toBeDefined();
+    }
+  });
+
+  it("POST /auth/api-keys/:id/roll rotates a key atomically", async () => {
+    // Create a key to roll
+    const createRes = await request(app)
+      .post("/auth/api-keys")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({ name: "Roll Test Key" });
+    expect(createRes.status).toBe(201);
+    const originalKey = createRes.body.key;
+    const originalId = createRes.body.id;
+
+    // Roll it
+    const rollRes = await request(app)
+      .post(`/auth/api-keys/${originalId}/roll`)
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+    expect(rollRes.status).toBe(201);
+    expect(rollRes.body.key).toBeDefined();
+    expect(rollRes.body.key).toMatch(/^ks_live_/);
+    expect(rollRes.body.key).not.toBe(originalKey); // New key is different
+    expect(rollRes.body.name).toBe("Roll Test Key"); // Same name preserved
+    expect(rollRes.body.previousKeyRevoked).toBe(true);
+    expect(rollRes.body.id).not.toBe(originalId); // New ID
+  });
+
+  it("POST /auth/api-keys/:id/roll returns 404 for nonexistent key", async () => {
+    const res = await request(app)
+      .post("/auth/api-keys/nonexistent-id/roll")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(404);
+  });
+
+  it("DELETE /auth/api-keys/:id revokes a key", async () => {
+    // Create a key to revoke
+    const createRes = await request(app)
+      .post("/auth/api-keys")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({ name: "Revoke Test Key" });
+    const keyId = createRes.body.id;
+
+    const res = await request(app)
+      .delete(`/auth/api-keys/${keyId}`)
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(true);
+  });
+
+  it("DELETE /auth/api-keys/:id returns 404 for nonexistent key", async () => {
+    const res = await request(app)
+      .delete("/auth/api-keys/nonexistent-id")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(404);
+  });
+
+  it("API keys require authentication", async () => {
+    const res = await request(app).get("/auth/api-keys");
+    expect(res.status).toBe(401);
   });
 });
