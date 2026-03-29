@@ -748,47 +748,78 @@
 
     <section id="providers">
         <div class="section-label">Supported Providers</div>
-        <div class="section-title">Kill switches for every major cloud</div>
-        <div class="section-desc">Monitor spending and auto-kill runaway services across all three platforms.</div>
-        <div class="provider-cards">
+        <div class="section-title">Kill switches for 13 cloud services</div>
+        <div class="section-desc">Monitor spending and auto-kill runaway services across cloud infrastructure, AI APIs, databases, and SaaS platforms.</div>
+
+        <!-- Provider Logo Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; max-width: 900px; margin: 0 auto 48px;">
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #f6821f; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">Cloudflare</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #4285f4; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">Google Cloud</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #ff9900; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">AWS</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #673ab7; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">RunPod</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #dc382d; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">Redis</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #00684a; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">MongoDB</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #10a37f; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">OpenAI</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #d4a574; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">Anthropic</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #1d9bf0; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">xAI (Grok)</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #0081fb; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">Replicate</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #29b5e8; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">Snowflake</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #171717; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">Vercel</span>
+            </div>
+            <div class="provider-logo-card" style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: #632ca6; flex-shrink: 0;"></div>
+                <span style="color: #fff; font-weight: 600; font-size: 14px;">Datadog</span>
+            </div>
+        </div>
+
+        <!-- Category Descriptions -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; max-width: 900px; margin: 0 auto;">
             <div class="provider-card">
-                <div class="provider-header">
-                    <img src="https://chat.assets.divinci.app/kill-switch/providers/cloudflare-icon.svg" alt="Cloudflare">
-                    <h3>Cloudflare</h3>
-                </div>
-                <p>Catch runaway Workers and Durable Objects before they rack up millions of requests.</p>
-                <ul>
-                    <li>Worker request volume spikes</li>
-                    <li>Durable Object wall-time hours</li>
-                    <li>DO subrequest loops</li>
-                    <li>Route removal &amp; domain disconnect</li>
-                </ul>
+                <h3>Cloud Infrastructure</h3>
+                <p>Cloudflare Workers, GCP Cloud Run, AWS Lambda, RunPod GPU pods — catch runaway compute before your bill hits five figures.</p>
             </div>
             <div class="provider-card">
-                <div class="provider-header">
-                    <img src="https://chat.assets.divinci.app/kill-switch/providers/gcp-icon.svg" alt="Google Cloud">
-                    <h3>Google Cloud</h3>
-                </div>
-                <p>Stop runaway Cloud Run containers and GCE instances from spiraling your billing.</p>
-                <ul>
-                    <li>Cloud Run auto-scaling spikes</li>
-                    <li>Compute Engine instance hours</li>
-                    <li>Cloud Functions invocation surges</li>
-                    <li>Billing API threshold alerts</li>
-                </ul>
+                <h3>Databases</h3>
+                <p>Redis memory spikes, MongoDB Atlas storage growth, Snowflake warehouse credits — auto-pause or scale down on threshold breach.</p>
             </div>
             <div class="provider-card">
-                <div class="provider-header">
-                    <img src="https://chat.assets.divinci.app/kill-switch/providers/aws-icon.svg" alt="AWS">
-                    <h3>AWS</h3>
-                </div>
-                <p>Shut down Lambda feedback loops and EC2 sprawl before your bill hits five figures.</p>
-                <ul>
-                    <li>Lambda invocation runaway</li>
-                    <li>EC2 instance sprawl detection</li>
-                    <li>ECS/Fargate task explosion</li>
-                    <li>Cost Explorer threshold triggers</li>
-                </ul>
+                <h3>AI &amp; SaaS</h3>
+                <p>OpenAI, Anthropic, xAI token costs. Replicate GPU predictions. Vercel bandwidth. Datadog host count — monitor everything that bills by usage.</p>
             </div>
         </div>
     </section>

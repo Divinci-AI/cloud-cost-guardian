@@ -26,13 +26,23 @@ ks onboard --provider cloudflare \
 ks check
 ```
 
-## Supported Cloud Providers
+## Supported Providers (13)
 
 | Provider | Services Monitored | Kill Actions |
 |----------|-------------------|--------------|
-| **Cloudflare** | Workers, Durable Objects, R2, D1, Queues, Stream, Zones, Argo | Disconnect routes, delete workers, delete R2/D1/queues, disable live inputs, pause zones |
-| **Google Cloud** | Cloud Run, Compute Engine, GKE, BigQuery, Cloud Functions, Cloud Storage | Scale down, stop instances, set quotas, disable APIs, disable billing |
-| **Amazon Web Services** | EC2, Lambda, RDS, ECS, EKS, SageMaker, Cost Explorer | Stop/terminate instances, throttle Lambda, scale ECS/EKS, deny S3 policies, delete endpoints |
+| **Cloudflare** | Workers, Durable Objects, R2, D1, Queues, Stream, Zones | Disconnect routes, delete workers, pause zones |
+| **Google Cloud** | Cloud Run, Compute Engine, GKE, BigQuery, Cloud Functions, Cloud Storage | Scale down, stop instances, set quotas, disable billing |
+| **AWS** | EC2, Lambda, RDS, ECS, EKS, S3, SageMaker, Cost Explorer | Stop/terminate instances, throttle Lambda, deny S3 policies |
+| **RunPod** | GPU Pods (on-demand & spot), Serverless Endpoints, Network Volumes | Stop/terminate pods, scale endpoints |
+| **Redis** | Redis Cloud, AWS ElastiCache, Self-hosted (memory, connections, ops/sec) | Kill connections, scale down, flush, pause cluster |
+| **MongoDB** | Atlas clusters, Self-hosted (storage, connections, ops/sec) | Kill connections, isolate (IP whitelist), pause/scale cluster |
+| **OpenAI** | GPT API token usage, request counts, daily cost | Rotate credentials |
+| **Anthropic** | Claude API token usage, daily cost | Rotate credentials |
+| **xAI (Grok)** | Grok API token usage, daily cost | Rotate credentials |
+| **Replicate** | GPU predictions, model usage, daily cost | Rotate credentials |
+| **Snowflake** | Warehouse credits, query costs, data scanning | Scale down warehouse, suspend warehouse |
+| **Vercel** | Function invocations, bandwidth, build minutes | Scale down, disable service |
+| **Datadog** | Host count, log ingestion, custom metrics | Rotate credentials, mute monitors |
 
 ## Packages
 

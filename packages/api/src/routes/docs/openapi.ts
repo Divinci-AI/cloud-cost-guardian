@@ -37,7 +37,7 @@ export const openApiSpec = {
     },
     "/providers/{providerId}/validate": {
       post: { summary: "Validate cloud credentials", operationId: "validateCredential", tags: ["Providers"],
-        parameters: [{ name: "providerId", in: "path", required: true, schema: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb"] } }],
+        parameters: [{ name: "providerId", in: "path", required: true, schema: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog"] } }],
         requestBody: { required: true, content: { "application/json": { schema: { "$ref": "#/components/schemas/Credential" } } } },
         responses: { "200": { description: "Validation result" } } },
     },
@@ -48,7 +48,7 @@ export const openApiSpec = {
         requestBody: { required: true, content: { "application/json": { schema: {
           type: "object", required: ["provider", "name", "credential"],
           properties: {
-            provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb"] },
+            provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog"] },
             name: { type: "string", example: "Production Cloudflare" },
             credential: { "$ref": "#/components/schemas/Credential" },
           },
@@ -200,7 +200,7 @@ export const openApiSpec = {
       Credential: {
         type: "object",
         properties: {
-          provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb"] },
+          provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog"] },
           apiToken: { type: "string", description: "Cloudflare API token" },
           accountId: { type: "string", description: "Cloudflare Account ID" },
           serviceAccountJson: { type: "string", description: "GCP Service Account JSON" },

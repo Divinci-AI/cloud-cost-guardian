@@ -110,6 +110,58 @@ const PROVIDER_HELP: Record<string, { name: string; fields: string; howToGet: st
   Self-hosted MongoDB:
     Provide a URI: --mongodb-uri mongodb+srv://user:pass@host/db`,
   },
+  openai: {
+    name: "OpenAI",
+    fields: "--openai-api-key",
+    howToGet: `  1. Go to https://platform.openai.com/api-keys
+  2. Create a new API key
+  3. Copy the key (starts with sk-)
+  Optional: --openai-org-id (from Organization Settings)`,
+  },
+  anthropic: {
+    name: "Anthropic",
+    fields: "--anthropic-api-key",
+    howToGet: `  1. Go to https://console.anthropic.com/settings/keys
+  2. Create a new API key
+  3. Copy the key (starts with sk-ant-)
+  Optional: --anthropic-workspace-id`,
+  },
+  xai: {
+    name: "xAI (Grok)",
+    fields: "--xai-api-key",
+    howToGet: `  1. Go to https://console.x.ai/api-keys
+  2. Create a new API key
+  3. Copy the key`,
+  },
+  replicate: {
+    name: "Replicate",
+    fields: "--replicate-api-token",
+    howToGet: `  1. Go to https://replicate.com/account/api-tokens
+  2. Create a new token
+  3. Copy the token (starts with r8_)`,
+  },
+  snowflake: {
+    name: "Snowflake",
+    fields: "--snowflake-account + --snowflake-username + --snowflake-password",
+    howToGet: `  Account: Found in your Snowflake URL (https://<account>.snowflakecomputing.com)
+  Username/Password: Your Snowflake login credentials
+  Optional: --warehouse COMPUTE_WH --role ACCOUNTADMIN`,
+  },
+  vercel: {
+    name: "Vercel",
+    fields: "--vercel-api-token",
+    howToGet: `  1. Go to https://vercel.com/account/tokens
+  2. Create a new token with appropriate scope
+  3. Copy the token
+  Optional: --vercel-team-id (from Team Settings)`,
+  },
+  datadog: {
+    name: "Datadog",
+    fields: "--datadog-api-key + --datadog-application-key",
+    howToGet: `  API Key: Organization Settings > API Keys
+  Application Key: Organization Settings > Application Keys
+  Optional: --datadog-site us|eu (default: us)`,
+  },
 };
 
 const AVAILABLE_SHIELDS = [
