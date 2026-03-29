@@ -5,8 +5,11 @@
  * Writes to the activity_log PostgreSQL table.
  * All calls are fire-and-forget to avoid blocking API responses.
  *
- * When PostgreSQL is unavailable, entries are buffered in memory
- * (up to a cap) and flushed on the next successful write.
+ * Resilience strategy:
+ * 1. Primary: PostgreSQL INSERT
+ * 2. On failure: buffer in memory (up to 500 entries)
+ * 3. On buffer overflow: spill to MongoDB as fallback
+ * 4. On next successful PG write: flush memory buffer, then drain MongoDB fallback
  */
 
 import { getPostgresPool } from "../globals/index.js";
@@ -23,27 +26,27 @@ export interface ActivityLogEntry {
 }
 
 const BUFFER_CAP = 500;
+const MONGO_FALLBACK_WARN_THRESHOLD = 400;
 const buffer: ActivityLogEntry[] = [];
 let consecutiveFailures = 0;
+let mongoFallbackCount = 0;
+let lastWarningAt = 0;
 
 /**
  * Log an activity entry. Fire-and-forget — errors are logged but don't
- * propagate to the caller. Failed writes are buffered in memory and
- * retried on the next successful write.
+ * propagate to the caller.
  */
 export function logActivity(entry: ActivityLogEntry): void {
   let pool;
   try {
     pool = getPostgresPool();
   } catch {
-    // PostgreSQL not configured — buffer the entry
     bufferEntry(entry);
     return;
   }
 
   insertEntry(pool, entry).then(() => {
     consecutiveFailures = 0;
-    // Flush buffered entries on success
     flushBuffer(pool);
   }).catch((err) => {
     consecutiveFailures++;
@@ -56,28 +59,109 @@ export function logActivity(entry: ActivityLogEntry): void {
 
 function bufferEntry(entry: ActivityLogEntry): void {
   if (buffer.length >= BUFFER_CAP) {
-    // Drop oldest entry to make room
-    buffer.shift();
+    // Buffer full — spill to MongoDB fallback
+    spillToMongo(entry);
+    return;
   }
   buffer.push(entry);
+
+  // Warn when buffer is getting full
+  const now = Date.now();
+  if (buffer.length >= MONGO_FALLBACK_WARN_THRESHOLD && now - lastWarningAt > 60000) {
+    lastWarningAt = now;
+    console.error(`[guardian] Activity log buffer at ${buffer.length}/${BUFFER_CAP} — PostgreSQL may be down`);
+  }
+}
+
+/** Spill an entry to MongoDB when the in-memory buffer is full */
+function spillToMongo(entry: ActivityLogEntry): void {
+  import("mongoose").then((mongoose) => {
+    const db = mongoose.default.connection?.db;
+    if (!db) {
+      // MongoDB also unavailable — drop the entry
+      if (mongoFallbackCount === 0) {
+        console.error("[guardian] Activity log: both PostgreSQL and MongoDB unavailable — entries are being dropped");
+      }
+      return;
+    }
+    db.collection("activity_log_fallback").insertOne({
+      ...entry,
+      details: entry.details || {},
+      createdAt: new Date(),
+      _fallback: true,
+    }).then(() => {
+      mongoFallbackCount++;
+      if (mongoFallbackCount === 1 || mongoFallbackCount % 50 === 0) {
+        console.error(`[guardian] Activity log: ${mongoFallbackCount} entries spilled to MongoDB fallback`);
+      }
+    }).catch(() => {
+      // Both PG and Mongo failed — entry is lost
+    });
+  }).catch(() => {
+    // Can't even import mongoose
+  });
 }
 
 function flushBuffer(pool: any): void {
-  if (buffer.length === 0) return;
+  if (buffer.length === 0) {
+    // Memory buffer empty — also drain MongoDB fallback if any
+    if (mongoFallbackCount > 0) {
+      drainMongoFallback(pool);
+    }
+    return;
+  }
 
-  // Drain the buffer into a local copy
   const toFlush = buffer.splice(0, buffer.length);
 
-  // Insert buffered entries one at a time (best-effort)
   for (const entry of toFlush) {
     insertEntry(pool, entry).catch((err) => {
-      // If still failing, re-buffer it (if there's room)
       if (buffer.length < BUFFER_CAP) {
         buffer.push(entry);
       }
       console.error("[guardian] Failed to flush buffered activity entry:", err.message);
     });
   }
+}
+
+/** Drain entries from MongoDB fallback back into PostgreSQL */
+function drainMongoFallback(pool: any): void {
+  import("mongoose").then(async (mongoose) => {
+    const db = mongoose.default.connection?.db;
+    if (!db) return;
+
+    const collection = db.collection("activity_log_fallback");
+    const entries = await collection.find({}).limit(100).toArray();
+    if (entries.length === 0) {
+      if (mongoFallbackCount > 0) {
+        console.error(`[guardian] Activity log: MongoDB fallback fully drained (${mongoFallbackCount} entries recovered)`);
+        mongoFallbackCount = 0;
+      }
+      return;
+    }
+
+    let drained = 0;
+    for (const entry of entries) {
+      try {
+        await pool.query(
+          `INSERT INTO activity_log (org_id, actor_user_id, actor_email, action, resource_type, resource_id, details, ip_address, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            entry.orgId, entry.actorUserId, entry.actorEmail || null,
+            entry.action, entry.resourceType, entry.resourceId || null,
+            JSON.stringify(entry.details || {}), entry.ipAddress || null,
+            entry.createdAt,
+          ]
+        );
+        await collection.deleteOne({ _id: entry._id });
+        drained++;
+      } catch {
+        break; // PG failed again, stop draining
+      }
+    }
+    if (drained > 0) {
+      console.error(`[guardian] Activity log: drained ${drained} entries from MongoDB fallback to PostgreSQL`);
+    }
+  }).catch(() => {});
 }
 
 function insertEntry(pool: any, entry: ActivityLogEntry): Promise<any> {
@@ -105,6 +189,11 @@ export function getBufferSize(): number {
 /** Returns consecutive failure count (for monitoring/tests) */
 export function getConsecutiveFailures(): number {
   return consecutiveFailures;
+}
+
+/** Returns count of entries spilled to MongoDB fallback */
+export function getMongoFallbackCount(): number {
+  return mongoFallbackCount;
 }
 
 /**

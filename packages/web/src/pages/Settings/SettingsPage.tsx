@@ -32,7 +32,7 @@ const btnStyle = {
 
 export function SettingsPage() {
   const { user } = useUser();
-  const { activeOrg, teamRole, refreshOrgs } = useOrg();
+  const { activeOrg, teamRole, refreshOrgs, orgVersion } = useOrg();
   const [account, setAccount] = useState<any>(null);
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
@@ -95,7 +95,7 @@ export function SettingsPage() {
         setApiKeys(data.keys || []);
       }).catch(() => {}),
     ]).finally(() => setLoading(false));
-  }, []);
+  }, [orgVersion]); // eslint-disable-line react-hooks/exhaustive-deps -- refetch on org switch
 
   const flash = (text: string, type: "success" | "error" = "success") => {
     setMessage({ text, type });

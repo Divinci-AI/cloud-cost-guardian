@@ -17,6 +17,11 @@ interface OrgContextValue {
   switchOrg: (orgId: string) => Promise<void>;
   refreshOrgs: () => Promise<void>;
   loading: boolean;
+  /**
+   * Incremented on every org switch. Components can use this as a
+   * useEffect dependency to refetch data when the org changes.
+   */
+  orgVersion: number;
 }
 
 const OrgContext = createContext<OrgContextValue>({
@@ -26,6 +31,7 @@ const OrgContext = createContext<OrgContextValue>({
   switchOrg: async () => {},
   refreshOrgs: async () => {},
   loading: true,
+  orgVersion: 0,
 });
 
 export function useOrg() {
@@ -43,6 +49,7 @@ export function OrgProvider({ children, initialAccount }: OrgProviderProps) {
   const [activeOrgIdState, setActiveOrgIdState] = useState<string | null>(null);
   const [teamRole, setTeamRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [orgVersion, setOrgVersion] = useState(0);
 
   const applyAccountData = useCallback((me: any) => {
     const orgList: Org[] = me.orgs || [];
@@ -57,12 +64,25 @@ export function OrgProvider({ children, initialAccount }: OrgProviderProps) {
     try {
       const me = await api.getMe();
       applyAccountData(me);
-    } catch (err) {
+
+      // Detect if the active org was deleted or user was removed:
+      // If the server returned a different activeOrgId than what we had,
+      // it means the old org is no longer accessible.
+      if (me.activeOrgId && me.activeOrgId !== activeOrgIdState && activeOrgIdState !== null) {
+        setOrgVersion(v => v + 1); // Force pages to refetch
+      }
+    } catch (err: any) {
       console.error("[OrgContext] Failed to refresh orgs:", err);
+      // If we get a 403, the current org may have been deleted
+      if (err.message?.includes("403") || err.message?.includes("don't have access")) {
+        setActiveOrgIdState(null);
+        setActiveOrgId(null);
+        setOrgVersion(v => v + 1);
+      }
     } finally {
       setLoading(false);
     }
-  }, [applyAccountData]);
+  }, [applyAccountData, activeOrgIdState]);
 
   // Initialize from parent data or fetch fresh
   useEffect(() => {
@@ -72,19 +92,22 @@ export function OrgProvider({ children, initialAccount }: OrgProviderProps) {
     } else {
       refreshOrgs();
     }
-  }, [initialAccount, applyAccountData, refreshOrgs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAccount, applyAccountData]);
 
   const switchOrg = useCallback(async (orgId: string) => {
     await api.switchOrg(orgId);
     setActiveOrgIdState(orgId);
     setActiveOrgId(orgId);
+    // Bump version BEFORE refreshing so pages start refetching immediately
+    setOrgVersion(v => v + 1);
     await refreshOrgs();
   }, [refreshOrgs]);
 
   const activeOrg = orgs.find(o => o.id === activeOrgIdState) || null;
 
   return (
-    <OrgContext.Provider value={{ activeOrg, orgs, teamRole, switchOrg, refreshOrgs, loading }}>
+    <OrgContext.Provider value={{ activeOrg, orgs, teamRole, switchOrg, refreshOrgs, loading, orgVersion }}>
       {children}
     </OrgContext.Provider>
   );
