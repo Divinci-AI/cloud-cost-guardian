@@ -402,7 +402,7 @@ export function SettingsPage() {
               <button
                 onClick={async () => {
                   try {
-                    const result = await api.createApiKey(newKeyName || "CLI Key");
+                    const result = await api.createApiKey(newKeyName.trim());
                     setCreatedKey(result.key);
                     setNewKeyName("");
                     const refreshed = await api.listApiKeys();
@@ -411,7 +411,8 @@ export function SettingsPage() {
                     flash(e.message, "error");
                   }
                 }}
-                style={{ ...btnStyle, background: "#c25800", border: "none", height: "41px", flexShrink: 0 }}
+                disabled={!newKeyName.trim()}
+                style={{ ...btnStyle, background: "#c25800", border: "none", height: "41px", flexShrink: 0, opacity: newKeyName.trim() ? 1 : 0.5 }}
               >
                 Create Key
               </button>
