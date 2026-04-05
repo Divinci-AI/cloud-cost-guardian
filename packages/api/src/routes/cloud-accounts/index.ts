@@ -102,6 +102,7 @@ cloudAccountRouter.get("/", requirePermission("cloud_accounts:read"), async (req
         autoDisconnect: a.autoDisconnect,
         lastCheckAt: a.lastCheckAt,
         lastCheckStatus: a.lastCheckStatus,
+        lastCheckError: a.lastCheckError,
         lastViolations: a.lastViolations,
       })),
     });
@@ -184,6 +185,58 @@ cloudAccountRouter.delete("/:id", requirePermission("cloud_accounts:delete"), as
     });
 
     res.json({ deleted: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * PATCH /cloud-accounts/:id/credentials — Update credentials for an existing account
+ */
+cloudAccountRouter.patch("/:id/credentials", requirePermission("cloud_accounts:write"), async (req, res, next) => {
+  try {
+    const { credential } = req.body;
+    const guardianAccountId = (req as any).guardianAccountId;
+
+    if (!credential) {
+      return res.status(400).json({ error: "Missing credential" });
+    }
+
+    const account = await CloudAccountModel.findOne({ _id: req.params.id, guardianAccountId });
+    if (!account) {
+      return res.status(404).json({ error: "Cloud account not found" });
+    }
+
+    const provider = getProvider(account.provider);
+    if (!provider) {
+      return res.status(400).json({ error: `Unknown provider: ${account.provider}` });
+    }
+
+    // Validate new credentials before storing
+    const validation = await provider.validateCredential(credential as DecryptedCredential);
+    if (!validation.valid) {
+      return res.status(400).json({ error: "Invalid credentials", details: validation.error });
+    }
+
+    // Replace encrypted credential
+    await deleteCredential(account.credentialId);
+    const newCredentialId = await storeCredential(guardianAccountId, account.provider, credential);
+
+    await CloudAccountModel.findByIdAndUpdate(req.params.id, {
+      credentialId: newCredentialId,
+      providerAccountId: validation.accountId || account.providerAccountId,
+      status: "active",
+      lastCheckStatus: undefined,
+      lastCheckError: undefined,
+    });
+
+    logActivity({
+      orgId: guardianAccountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "cloud_account.update_credentials", resourceType: "cloud_account", resourceId: req.params.id,
+      details: { provider: account.provider, name: account.name }, ipAddress: req.ip,
+    });
+
+    res.json({ updated: true, accountName: validation.accountName });
   } catch (e) {
     next(e);
   }
