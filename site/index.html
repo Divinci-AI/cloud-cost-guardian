@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kill Switch | Stop Runaway Cloud Bills</title>
-    <meta name="description" content="Auto-kill runaway cloud services before they generate surprise bills. Monitor Cloudflare, GCP, and AWS spending. Free tier available. Born from a $91K bill.">
+    <meta name="description" content="Auto-kill runaway cloud services before they generate surprise bills. Monitor Cloudflare, GCP, and AWS spending. Plans from $29/mo. Born from a $91K bill.">
     <meta property="og:title" content="Kill Switch — Stop Runaway Cloud Bills">
-    <meta property="og:description" content="Cloud cost monitoring with automatic kill switches. Protect Cloudflare, GCP, and AWS from runaway bills. Free tier available.">
+    <meta property="og:description" content="Cloud cost monitoring with automatic kill switches. Protect Cloudflare, GCP, and AWS from runaway bills. Plans from $29/mo.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://kill-switch.net">
     <meta name="twitter:card" content="summary_large_image">
@@ -238,6 +238,41 @@
         }
 
         /* ── How It Works ────────────────────────────── */
+        #how-it-works {
+            position: relative;
+            overflow: hidden;
+        }
+        .hiw-bg {
+            position: absolute;
+            top: 50%; left: 77%;
+            width: 120%;
+            height: 120%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .hiw-bg svg {
+            width: 100%; height: 100%;
+            opacity: 0;
+            position: absolute;
+            top: 0; left: 0;
+            transition: opacity 0.6s ease;
+        }
+        .hiw-bg svg.active { opacity: 0.08; }
+        /* Always animate background SVG artwork */
+        .hiw-bg .anim-spin { transform-origin: 100px 100px; animation: spin-loop 6s linear infinite; }
+        .hiw-bg .anim-pulse { animation: pulse-loop 2.5s ease infinite; }
+        .hiw-bg .anim-draw { stroke-dasharray: 300; stroke-dashoffset: 300; animation: draw-loop 3s ease infinite; }
+        .hiw-bg .anim-float { animation: float-loop 3s ease-in-out infinite; }
+        .hiw-bg .anim-split-l { animation: split-l-loop 3s ease-in-out infinite; }
+        .hiw-bg .anim-split-r { animation: split-r-loop 3s ease-in-out infinite; }
+        #how-it-works .section-label,
+        #how-it-works .section-title,
+        #how-it-works .section-desc,
+        #how-it-works .flow {
+            position: relative;
+            z-index: 1;
+        }
         .flow {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -263,11 +298,11 @@
         .flow-step .step-bg {
             position: absolute; bottom: -20px; right: -20px;
             width: 200px; height: 200px;
-            opacity: 0.06; pointer-events: none;
+            opacity: 0.10; pointer-events: none;
             transition: opacity 0.4s ease, transform 0.6s ease;
         }
         .flow-step:hover .step-bg {
-            opacity: 0.14;
+            opacity: 0.22;
             transform: scale(1.08);
         }
         /* Looping hover animations for step backgrounds */
@@ -523,7 +558,6 @@
             margin-bottom: 4px;
         }
         .pricing-card .plan-price .per { font-size: 16px; font-weight: 400; color: #6b7280; }
-        .pricing-card .plan-price.free { color: #5ce2e7; }
         .pricing-card .plan-features {
             list-style: none; padding: 0; margin: 20px 0 28px; flex: 1;
         }
@@ -632,10 +666,10 @@
         <p class="hero-sub">
             Cloud providers have no spending caps. A single feedback loop can drain your account
             overnight. Kill Switch monitors usage and auto-kills runaway services before
-            the bill arrives. Cloudflare, GCP, and AWS.
+            the bill arrives. Cloudflare, GCP, AWS, and 11 more providers.
         </p>
         <div class="hero-actions">
-            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started Free</a>
+            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started</a>
             <a href="#how-it-works" class="btn-secondary">See How It Works</a>
         </div>
         <div class="cost-banner">
@@ -655,6 +689,7 @@
     </div>
 
     <section id="how-it-works">
+        <div class="hiw-bg" id="hiwBg"></div>
         <div class="section-label">How It Works</div>
         <div class="section-title">Three steps to peace of mind</div>
         <div class="section-desc">Deploy in under 5 minutes. No external dependencies.</div>
@@ -685,7 +720,7 @@
                     <ellipse cx="155" cy="130" rx="14" ry="20" fill="#fff" opacity="0.04"/>
                 </svg>
                 <h3>Monitor</h3>
-                <p>Every 6 hours, queries Cloudflare's GraphQL API for Durable Object requests, wall-time, and Worker request volume.</p>
+                <p>Every 5 minutes, queries provider APIs for usage, costs, and anomalies across all connected cloud accounts.</p>
             </div>
             <div class="flow-step">
                 <div class="step-num">2</div>
@@ -748,7 +783,7 @@
 
     <section id="providers">
         <div class="section-label">Supported Providers</div>
-        <div class="section-title">Kill switches for 13 cloud services</div>
+        <div class="section-title">Kill switches for 14 cloud services</div>
         <div class="section-desc">Monitor spending and auto-kill runaway services across cloud infrastructure, AI APIs, databases, and SaaS platforms.</div>
 
         <!-- Big 3 Provider Cards -->
@@ -846,7 +881,7 @@
             <div class="feature-card">
                 <div class="icon">&#127760;</div>
                 <h3>Zero Dependencies</h3>
-                <p>Single TypeScript file. No npm packages beyond Wrangler. Deploys in under a minute. Runs on the free tier.</p>
+                <p>Single TypeScript file. No npm packages beyond Wrangler. Deploys in under a minute.</p>
             </div>
         </div>
     </section>
@@ -861,11 +896,11 @@
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 8px;">Managed Platform</h3>
                 <p style="font-size: 14px; color: #8b8fa3; margin-bottom: 16px;">Sign up, connect your cloud credentials, set your thresholds. Done.</p>
                 <ol style="list-style: none; padding: 0; margin: 0 0 20px;">
-                    <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">1.</span> Create a free account</li>
+                    <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">1.</span> Create an account</li>
                     <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">2.</span> Connect Cloudflare, GCP, or AWS</li>
                     <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">3.</span> Set cost thresholds and alert channels</li>
                 </ol>
-                <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary" style="display: inline-block; font-size: 14px; padding: 10px 24px;">Get Started Free</a>
+                <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary" style="display: inline-block; font-size: 14px; padding: 10px 24px;">Get Started</a>
             </div>
             <div class="code-block" style="margin: 0;">
                 <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 12px;">Self-Hosted (Open Source)</div>
@@ -919,22 +954,9 @@
 
     <section id="pricing">
         <div class="section-label">Pricing</div>
-        <div class="section-title">Start free. Scale when you need to.</div>
-        <div class="section-desc">No credit card required. Protect your first cloud account in under 5 minutes.</div>
+        <div class="section-title">Simple, transparent pricing</div>
+        <div class="section-desc">Protect your cloud accounts in under 5 minutes. Plans start at $29/mo.</div>
         <div class="pricing-grid">
-            <div class="pricing-card">
-                <div class="plan-name">Free</div>
-                <div class="plan-desc">For solo developers</div>
-                <div class="plan-price free">$0</div>
-                <ul class="plan-features">
-                    <li>1 cloud account</li>
-                    <li>6-hour check interval</li>
-                    <li>1 alert channel</li>
-                    <li>Basic cost monitoring</li>
-                    <li>Community support</li>
-                </ul>
-                <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-plan secondary">Get Started Free</a>
-            </div>
             <div class="pricing-card featured">
                 <div class="plan-name">Pro</div>
                 <div class="plan-desc">For teams shipping fast</div>
@@ -975,7 +997,7 @@
                     <li>Custom integrations</li>
                     <li>Everything in Team</li>
                 </ul>
-                <a href="mailto:support@divinci.ai" class="btn-plan secondary">Contact Sales</a>
+                <a href="mailto:admin@kill-switch.net" class="btn-plan secondary">Contact Sales</a>
             </div>
         </div>
     </section>
@@ -984,11 +1006,11 @@
         <div class="section-label">Open Source &amp; SaaS</div>
         <div class="section-title">Stop your next surprise bill</div>
         <p class="section-desc" style="margin: 0 auto 32px; text-align: center;">
-            Self-host for free or use our managed platform.<br>
+            Self-host the open source core or use our managed platform.<br>
             Either way, you're protected in under 5 minutes.
         </p>
         <div class="hero-actions">
-            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started Free</a>
+            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started</a>
             <a href="https://github.com/Divinci-AI/kill-switch" class="btn-secondary">View on GitHub</a>
         </div>
     </div>
@@ -1069,6 +1091,57 @@
             text.remove();
         }, 9000);
     }
+    </script>
+    <script>
+    // How It Works — background SVG swap on card hover
+    (function() {
+        var bg = document.getElementById('hiwBg');
+        var steps = document.querySelectorAll('.flow-step');
+        if (!bg || !steps.length) return;
+
+        // Clone each card's SVG into the background container
+        // Give each a unique set of gradient/filter IDs to avoid conflicts
+        steps.forEach(function(step, i) {
+            var svg = step.querySelector('.step-bg');
+            if (!svg) return;
+            var clone = svg.cloneNode(true);
+            clone.removeAttribute('class');
+            clone.style.cssText = '';
+            clone.dataset.idx = i;
+            // Rename IDs in defs to avoid duplicates
+            var defs = clone.querySelectorAll('[id]');
+            defs.forEach(function(el) {
+                var oldId = el.getAttribute('id');
+                var newId = 'hiw-bg-' + i + '-' + oldId;
+                el.setAttribute('id', newId);
+                // Update references
+                var refs = clone.querySelectorAll('[fill*="url(#' + oldId + ')"], [stroke*="url(#' + oldId + ')"]');
+                refs.forEach(function(ref) {
+                    ['fill', 'stroke'].forEach(function(attr) {
+                        var val = ref.getAttribute(attr);
+                        if (val && val.indexOf('url(#' + oldId + ')') !== -1) {
+                            ref.setAttribute(attr, val.replace('url(#' + oldId + ')', 'url(#' + newId + ')'));
+                        }
+                    });
+                });
+            });
+            // Keep animation classes — CSS will run them always in the background
+            if (i === 0) clone.classList.add('active');
+            bg.appendChild(clone);
+        });
+
+        var bgSvgs = bg.querySelectorAll('svg');
+        var currentIdx = 0;
+
+        steps.forEach(function(step, i) {
+            step.addEventListener('mouseenter', function() {
+                if (i === currentIdx) return;
+                bgSvgs.forEach(function(s) { s.classList.remove('active'); });
+                bgSvgs[i].classList.add('active');
+                currentIdx = i;
+            });
+        });
+    })();
     </script>
 </body>
 </html>

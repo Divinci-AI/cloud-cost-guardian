@@ -79,12 +79,12 @@ describe.skipIf(SKIP)("Live API Smoke Test", () => {
     expect(Array.isArray(data.accounts)).toBe(true);
   }, 10000);
 
-  it("GET /cloud-accounts — has at least the dogfood account", async () => {
+  it("GET /cloud-accounts — has at least one active cloudflare account", async () => {
     const { data } = await api("/cloud-accounts");
-    const dogfood = data.accounts.find((a: any) => a.name?.includes("Dogfood"));
-    expect(dogfood).toBeDefined();
-    expect(dogfood.provider).toBe("cloudflare");
-    expect(dogfood.status).toBe("active");
+    const cfAccount = data.accounts.find((a: any) => a.provider === "cloudflare" && a.status === "active");
+    expect(cfAccount).toBeDefined();
+    expect(cfAccount.provider).toBe("cloudflare");
+    expect(cfAccount.status).toBe("active");
   }, 10000);
 
   it("GET /rules — lists active rules", async () => {

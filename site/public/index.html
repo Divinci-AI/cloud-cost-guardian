@@ -241,6 +241,41 @@
         }
 
         /* ── How It Works ────────────────────────────── */
+        #how-it-works {
+            position: relative;
+            overflow: hidden;
+        }
+        .hiw-bg {
+            position: absolute;
+            top: 50%; left: 77%;
+            width: 120%;
+            height: 120%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .hiw-bg svg {
+            width: 100%; height: 100%;
+            opacity: 0;
+            position: absolute;
+            top: 0; left: 0;
+            transition: opacity 0.6s ease;
+        }
+        .hiw-bg svg.active { opacity: 0.08; }
+        /* Always animate background SVG artwork */
+        .hiw-bg .anim-spin { transform-origin: 100px 100px; animation: spin-loop 6s linear infinite; }
+        .hiw-bg .anim-pulse { animation: pulse-loop 2.5s ease infinite; }
+        .hiw-bg .anim-draw { stroke-dasharray: 300; stroke-dashoffset: 300; animation: draw-loop 3s ease infinite; }
+        .hiw-bg .anim-float { animation: float-loop 3s ease-in-out infinite; }
+        .hiw-bg .anim-split-l { animation: split-l-loop 3s ease-in-out infinite; }
+        .hiw-bg .anim-split-r { animation: split-r-loop 3s ease-in-out infinite; }
+        #how-it-works .section-label,
+        #how-it-works .section-title,
+        #how-it-works .section-desc,
+        #how-it-works .flow {
+            position: relative;
+            z-index: 1;
+        }
         .flow {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -266,11 +301,11 @@
         .flow-step .step-bg {
             position: absolute; bottom: -20px; right: -20px;
             width: 200px; height: 200px;
-            opacity: 0.06; pointer-events: none;
+            opacity: 0.10; pointer-events: none;
             transition: opacity 0.4s ease, transform 0.6s ease;
         }
         .flow-step:hover .step-bg {
-            opacity: 0.14;
+            opacity: 0.22;
             transform: scale(1.08);
         }
         /* Looping hover animations for step backgrounds */
@@ -556,10 +591,10 @@
         <p class="hero-sub">
             Cloud providers have no spending caps. A single feedback loop can drain your account
             overnight. Kill Switch monitors usage and auto-kills runaway services before
-            the bill arrives. Cloudflare, GCP, and AWS.
+            the bill arrives. Cloudflare, GCP, AWS, and 11 more providers.
         </p>
         <div class="hero-actions">
-            <a href="https://github.com/Divinci-AI/cloudflare-billing-kill-switch" class="btn-primary">Get Started</a>
+            <a href="https://github.com/Divinci-AI/kill-switch" class="btn-primary">Get Started</a>
             <a href="#how-it-works" class="btn-secondary">See How It Works</a>
         </div>
         <div class="cost-banner">
@@ -579,6 +614,7 @@
     </div>
 
     <section id="how-it-works">
+        <div class="hiw-bg" id="hiwBg"></div>
         <div class="section-label">How It Works</div>
         <div class="section-title">Three steps to peace of mind</div>
         <div class="section-desc">Deploy in under 5 minutes. No external dependencies.</div>
@@ -609,7 +645,7 @@
                     <ellipse cx="155" cy="130" rx="14" ry="20" fill="#fff" opacity="0.04"/>
                 </svg>
                 <h3>Monitor</h3>
-                <p>Every 6 hours, queries Cloudflare's GraphQL API for Durable Object requests, wall-time, and Worker request volume.</p>
+                <p>Every 5 minutes, queries provider APIs for usage, costs, and anomalies across all connected cloud accounts.</p>
             </div>
             <div class="flow-step">
                 <div class="step-num">2</div>
@@ -672,7 +708,7 @@
 
     <section id="providers">
         <div class="section-label">Supported Providers</div>
-        <div class="section-title">Kill switches for 13 cloud services</div>
+        <div class="section-title">Kill switches for 14 cloud services</div>
         <div class="section-desc">Monitor spending and auto-kill runaway services across cloud infrastructure, AI APIs, databases, and SaaS platforms.</div>
         <div class="provider-cards">
             <div class="provider-card">
@@ -768,7 +804,7 @@
             <div class="feature-card">
                 <div class="icon">&#127760;</div>
                 <h3>Zero Dependencies</h3>
-                <p>Single TypeScript file. No npm packages beyond Wrangler. Deploys in under a minute. Runs on the free tier.</p>
+                <p>Single TypeScript file. No npm packages beyond Wrangler. Deploys in under a minute.</p>
             </div>
         </div>
     </section>
@@ -780,7 +816,7 @@
         <div class="section-desc">Three commands and you're protected.</div>
         <div class="code-block">
             <span class="comment"># Clone and deploy</span><br>
-            <span class="cmd">git clone</span> https://github.com/Divinci-AI/cloudflare-billing-kill-switch<br>
+            <span class="cmd">git clone</span> https://github.com/Divinci-AI/kill-switch<br>
             <span class="cmd">cd</span> cloudflare-billing-kill-switch<br>
             <span class="cmd">npm install</span> <span class="flag">&&</span> <span class="cmd">wrangler deploy</span><br>
             <br>
@@ -830,18 +866,18 @@
         <div class="section-label">Open Source</div>
         <div class="section-title">Stop your next surprise bill</div>
         <p class="section-desc" style="margin: 0 auto 32px; text-align: center;">
-            MIT licensed. Single file. Zero dependencies. Free tier compatible.<br>
-            Deploys in 60 seconds.
+            MIT licensed. Single file. Zero dependencies.<br>
+            Deploys in 60 seconds. Plans start at $29/mo.
         </p>
         <div class="hero-actions">
-            <a href="/docs" class="btn-primary">Get Started — Free</a>
+            <a href="/docs" class="btn-primary">Get Started</a>
             <a href="https://github.com/Divinci-AI/kill-switch" class="btn-secondary">View on GitHub</a>
         </div>
     </div>
 
     <footer>
         <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 16px;">
-            <a href="https://github.com/AiExpanse/kill-switch" title="GitHub" style="color: #6b7280; transition: color 0.2s;">
+            <a href="https://github.com/divinci-ai/kill-switch" title="GitHub" style="color: #6b7280; transition: color 0.2s;">
                 <svg height="22" width="22" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
             </a>
             <a href="https://www.npmjs.com/package/@kill-switch/cli" title="npm" style="color: #6b7280; transition: color 0.2s;">
@@ -854,7 +890,7 @@
         <p>
             Built by <a href="https://divinci.ai">Divinci AI</a>
             <span class="divider">|</span>
-            <a href="https://github.com/AiExpanse/kill-switch/blob/main/LICENSE">MIT License</a>
+            <a href="https://github.com/divinci-ai/kill-switch/blob/main/LICENSE">MIT License</a>
             <span class="divider">|</span>
             &copy; 2026 Kill Switch
         </p>
@@ -924,6 +960,57 @@
             text.remove();
         }, 9000);
     }
+    </script>
+    <script>
+    // How It Works — background SVG swap on card hover
+    (function() {
+        var bg = document.getElementById('hiwBg');
+        var steps = document.querySelectorAll('.flow-step');
+        if (!bg || !steps.length) return;
+
+        // Clone each card's SVG into the background container
+        // Give each a unique set of gradient/filter IDs to avoid conflicts
+        steps.forEach(function(step, i) {
+            var svg = step.querySelector('.step-bg');
+            if (!svg) return;
+            var clone = svg.cloneNode(true);
+            clone.removeAttribute('class');
+            clone.style.cssText = '';
+            clone.dataset.idx = i;
+            // Rename IDs in defs to avoid duplicates
+            var defs = clone.querySelectorAll('[id]');
+            defs.forEach(function(el) {
+                var oldId = el.getAttribute('id');
+                var newId = 'hiw-bg-' + i + '-' + oldId;
+                el.setAttribute('id', newId);
+                // Update references
+                var refs = clone.querySelectorAll('[fill*="url(#' + oldId + ')"], [stroke*="url(#' + oldId + ')"]');
+                refs.forEach(function(ref) {
+                    ['fill', 'stroke'].forEach(function(attr) {
+                        var val = ref.getAttribute(attr);
+                        if (val && val.indexOf('url(#' + oldId + ')') !== -1) {
+                            ref.setAttribute(attr, val.replace('url(#' + oldId + ')', 'url(#' + newId + ')'));
+                        }
+                    });
+                });
+            });
+            // Keep animation classes — CSS will run them always in the background
+            if (i === 0) clone.classList.add('active');
+            bg.appendChild(clone);
+        });
+
+        var bgSvgs = bg.querySelectorAll('svg');
+        var currentIdx = 0;
+
+        steps.forEach(function(step, i) {
+            step.addEventListener('mouseenter', function() {
+                if (i === currentIdx) return;
+                bgSvgs.forEach(function(s) { s.classList.remove('active'); });
+                bgSvgs[i].classList.add('active');
+                currentIdx = i;
+            });
+        });
+    })();
     </script>
 </body>
 </html>
