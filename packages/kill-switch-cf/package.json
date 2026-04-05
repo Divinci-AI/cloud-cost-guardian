@@ -14,7 +14,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AiExpanse/cloudflare-billing-kill-switch"
+    "url": "https://github.com/divinci-ai/cloudflare-billing-kill-switch"
   },
   "scripts": {
     "dev": "wrangler dev",

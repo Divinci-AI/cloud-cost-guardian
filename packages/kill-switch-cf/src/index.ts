@@ -13,7 +13,7 @@
  * - Configurable thresholds via environment variables
  * - Manual check endpoint for testing
  *
- * @see https://github.com/AiExpanse/cloudflare-billing-kill-switch
+ * @see https://github.com/divinci-ai/cloudflare-billing-kill-switch
  * @license MIT
  */
 
@@ -159,7 +159,7 @@ async function disconnectWorker(env: Env, scriptName: string): Promise<string[]>
 
   // 1. Disable workers.dev subdomain
   try {
-    const res = await fetch(`${baseUrl}/workers/scripts/${scriptName}/subdomain`, {
+    const res = await fetch(`${baseUrl}/workers/scripts/${encodeURIComponent(scriptName)}/subdomain`, {
       method: "POST",
       headers,
       body: JSON.stringify({ enabled: false }),
@@ -176,7 +176,7 @@ async function disconnectWorker(env: Env, scriptName: string): Promise<string[]>
 
   // 2. Get and remove custom domains
   try {
-    const res = await fetch(`${baseUrl}/workers/domains?service=${scriptName}`, { headers });
+    const res = await fetch(`${baseUrl}/workers/domains?service=${encodeURIComponent(scriptName)}`, { headers });
     if (res.ok) {
       const responseText = await res.text();
       let data: any;
@@ -205,7 +205,7 @@ async function disconnectWorker(env: Env, scriptName: string): Promise<string[]>
 
 async function deleteWorker(env: Env, scriptName: string): Promise<string> {
   const res = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${scriptName}?force=true`,
+    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${encodeURIComponent(scriptName)}?force=true`,
     {
       method: "DELETE",
       headers: { "Authorization": `Bearer ${env.CLOUDFLARE_API_TOKEN}` },

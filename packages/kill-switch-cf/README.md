@@ -26,7 +26,7 @@ Kill switch: Worker    Traffic ✗ Routes removed
 ### 1. Clone and deploy
 
 ```bash
-git clone https://github.com/AiExpanse/cloudflare-billing-kill-switch.git
+git clone https://github.com/divinci-ai/cloudflare-billing-kill-switch.git
 cd cloudflare-billing-kill-switch
 npm install
 wrangler deploy
