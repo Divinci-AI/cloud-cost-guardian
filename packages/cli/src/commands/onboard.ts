@@ -185,6 +185,7 @@ export function registerOnboardCommands(program: Command, createClient: ClientFa
     .option("--region <region>", "Region (AWS, default: us-east-1)")
     .option("--runpod-api-key <key>", "API Key (RunPod)")
     .option("--shields <presets>", "Comma-separated shield presets to apply (default: cost-runaway)")
+    .option("--alert-pagerduty <key>", "PagerDuty Events API v2 routing key (recommended)")
     .option("--alert-email <email>", "Email address for alerts")
     .option("--alert-discord <url>", "Discord webhook URL for alerts")
     .option("--alert-slack <url>", "Slack webhook URL for alerts")
@@ -197,14 +198,14 @@ Examples:
   # Interactive onboarding
   kill-switch onboard
 
-  # AI agent / non-interactive: connect Cloudflare
+  # AI agent / non-interactive: connect Cloudflare with PagerDuty
   kill-switch onboard \\
     --provider cloudflare \\
     --account-id 14a6fa23390363382f378b5bd4a0f849 \\
     --token cf-api-token-here \\
     --name "Production" \\
     --shields cost-runaway,ddos \\
-    --alert-email you@example.com
+    --alert-pagerduty YOUR_ROUTING_KEY
 
   # Show how to get Cloudflare credentials
   kill-switch onboard --help-provider cloudflare
@@ -381,6 +382,9 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
         // 3. Set up alerts
         if (!opts.skipAlerts) {
           const channels: any[] = [];
+          if (opts.alertPagerduty) {
+            channels.push({ type: "pagerduty", name: "PagerDuty", config: { routingKey: opts.alertPagerduty }, enabled: true });
+          }
           if (opts.alertEmail) {
             channels.push({ type: "email", name: "Email", config: { email: opts.alertEmail }, enabled: true });
           }
@@ -392,16 +396,18 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           }
 
           if (channels.length === 0 && !json) {
-            const email = await ask("\nAlert email (or Enter to skip): ");
-            if (email) {
-              channels.push({ type: "email", name: "Email", config: { email }, enabled: true });
+            const pdKey = await ask("\nPagerDuty routing key (or Enter to skip): ");
+            if (pdKey) {
+              channels.push({ type: "pagerduty", name: "PagerDuty", config: { routingKey: pdKey }, enabled: true });
             }
           }
 
           if (channels.length > 0) {
             if (!json) console.log("Setting up alerts...");
             try {
-              await client.alerts.updateChannels(channels);
+              // Append to existing channels — re-running onboard must not wipe prior integrations.
+              const existing = await client.alerts.channels().catch(() => []);
+              await client.alerts.updateChannels([...existing, ...channels]);
               if (!json) success(`  ${channels.length} alert channel(s) configured`);
             } catch (err: any) {
               if (!json) fail(`  Alerts: ${err.message}`);
@@ -426,10 +432,11 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
         } else {
           console.log(`\nSetup complete! Kill Switch is monitoring your ${PROVIDER_HELP[provider].name} account.`);
           console.log("\nNext steps:");
-          console.log("  kill-switch accounts list      — view connected accounts");
-          console.log("  kill-switch check               — run a monitoring check");
-          console.log("  kill-switch shield --list       — see all available shields");
-          console.log("  kill-switch onboard --provider  — add another provider\n");
+          console.log("  kill-switch check                                         — run a monitoring check");
+          console.log("  kill-switch alerts add --type pagerduty --routing-key KEY — set up on-call alerts");
+          console.log("  kill-switch alerts test                                   — verify alerts work");
+          console.log("  kill-switch accounts list                                 — view connected accounts");
+          console.log("  kill-switch onboard --provider <p>                        — add another provider\n");
         }
       } catch (err) {
         handleError(err, json);

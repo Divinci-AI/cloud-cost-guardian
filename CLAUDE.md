@@ -5,6 +5,18 @@
 - Use `ks` (alias for `kill-switch`) CLI for monitoring setup
 - Cloudflare account ID: 14a6fa23390363382f378b5bd4a0f849
 
+## Wrangler Deploy Trick (Secrets Store auth workaround)
+The `CLOUDFLARE_API_TOKEN` env var (set in zshrc) overrides the Wrangler OAuth session and may
+lack certain permissions (e.g. Secrets Store). Always deploy CF workers by stripping it:
+```sh
+# One-time login (if not already logged in):
+unset CLOUDFLARE_API_TOKEN CLOUDFLARE_EMAIL CLOUDFLARE_ACCOUNT_ID && wrangler logout && wrangler login
+
+# Every wrangler deploy (web, kill-switch, site, agent):
+env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID wrangler deploy
+```
+Symptoms: `failed to fetch secrets store binding [code: 10021]` or any wrangler auth error.
+
 ## Project Structure
 - `site/` — Marketing landing page (CF Worker: `cloud-switch-site`)
 - `packages/web` — React SPA dashboard (CF Worker: `kill-switch-app`)
@@ -36,12 +48,21 @@ The CLI is at `packages/cli`. Build with `npm run build`, link with `npm link`.
 # Authenticate
 ks auth login --api-key ks_live_YOUR_KEY
 
-# One-command setup (connect + shields + alerts)
+# One-command setup (connect + shields + PagerDuty alerts)
 ks onboard --provider cloudflare \
   --account-id CF_ACCOUNT_ID \
   --token CF_API_TOKEN \
   --name "Production" \
-  --shields cost-runaway,ddos
+  --shields cost-runaway,ddos \
+  --alert-pagerduty ROUTING_KEY
+
+# Alert channels
+ks alerts list
+ks alerts add --type pagerduty --routing-key KEY
+ks alerts add --type slack --webhook-url URL
+ks alerts add --type github --token PAT --repo-owner ORG --repo-name REPO
+ks alerts remove "PagerDuty"
+ks alerts test
 
 # Check all accounts
 ks check --json
@@ -58,8 +79,9 @@ When setting up Kill Switch for another project:
 1. User needs a `ks_live_` API key from https://app.kill-switch.net (Settings > API Keys)
 2. Set `KILL_SWITCH_API_KEY` env var or run `ks auth login --api-key KEY`
 3. Run `ks onboard --help-provider <provider>` to learn what credentials are needed
-4. Run `ks onboard --provider <provider> --token ... --account-id ... --shields cost-runaway,ddos --json`
+4. Run `ks onboard --provider <provider> --token ... --account-id ... --shields cost-runaway,ddos --alert-pagerduty KEY --json`
 5. Verify with `ks check --json`
+6. Optionally add more alert channels: `ks alerts add --type slack --webhook-url URL`
 
 ### Cloudflare API Token Requirements
 The token must be an **API Token** (not Global API Key), created at:
