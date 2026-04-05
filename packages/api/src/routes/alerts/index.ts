@@ -28,8 +28,17 @@ alertRouter.get("/channels", requirePermission("alerts:read"), async (req, res, 
         type: c.type,
         name: c.name,
         enabled: c.enabled,
-        config: c.config,
-        // Masked values for display (full values needed for PUT round-trip)
+        // Never return raw secrets — callers must re-submit secrets on PUT
+        config: {
+          ...(c.config.email      && { email: c.config.email }),
+          ...(c.config.webhookUrl && { webhookUrl: c.config.webhookUrl.substring(0, 40) + "..." }),
+          ...(c.config.routingKey && { routingKey: "****" + c.config.routingKey.slice(-4) }),
+          ...(c.config.repoOwner  && { repoOwner: c.config.repoOwner }),
+          ...(c.config.repoName   && { repoName: c.config.repoName }),
+          ...(c.config.workflowFile && { workflowFile: c.config.workflowFile }),
+          ...(c.config.branchRef  && { branchRef: c.config.branchRef }),
+          // githubToken and full routingKey intentionally omitted
+        },
         configPreview: c.config.email
           || (c.config.webhookUrl ? c.config.webhookUrl.substring(0, 40) + "..." : null)
           || (c.config.routingKey ? "****" + c.config.routingKey.slice(-4) : null)
