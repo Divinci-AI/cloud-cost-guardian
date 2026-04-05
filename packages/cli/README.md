@@ -40,7 +40,7 @@ ks onboard --provider cloudflare \
   --token YOUR_CF_API_TOKEN \
   --name "Production" \
   --shields cost-runaway,ddos \
-  --alert-email you@example.com
+  --alert-pagerduty YOUR_ROUTING_KEY
 
 # AWS
 ks onboard --provider aws \
@@ -85,6 +85,40 @@ ks shield error-storm         # Scale down on sustained high error rate
 ks shield --list
 ```
 
+## Alert Channels
+
+```sh
+# List configured channels
+ks alerts list
+
+# Add PagerDuty (recommended — get routing key from PagerDuty > Service > Integrations)
+ks alerts add --type pagerduty --routing-key YOUR_ROUTING_KEY
+
+# Add Slack
+ks alerts add --type slack --webhook-url https://hooks.slack.com/...
+
+# Add Discord
+ks alerts add --type discord --webhook-url https://discord.com/api/webhooks/...
+
+# Add GitHub AI remediation (triggers Claude Code to open a fix PR on extreme violations)
+ks alerts add --type github \
+  --token ghp_YOUR_PAT \
+  --repo-owner YOUR_ORG \
+  --repo-name YOUR_REPO \
+  --workflow kill-switch-remediate.yml \
+  --branch main
+
+# Add email or generic webhook
+ks alerts add --type email --email you@example.com
+ks alerts add --type webhook --webhook-url https://your-service.example.com/webhook
+
+# Remove a channel by name
+ks alerts remove "PagerDuty"
+
+# Send a test alert to all channels
+ks alerts test
+```
+
 ## Commands
 
 | Command | Description |
@@ -92,14 +126,18 @@ ks shield --list
 | `ks onboard` | One-command setup: connect + shields + alerts |
 | `ks auth login` | Authenticate with API key |
 | `ks auth status` | Show auth status |
+| `ks status` | Dashboard: accounts, alerts, 30-day spend summary |
 | `ks accounts list` | List connected cloud accounts |
 | `ks accounts add` | Connect a cloud provider |
 | `ks accounts check <id>` | Run manual check on an account |
-| `ks check` | Check all accounts |
+| `ks check` | Check all accounts (shows violations with multiplier column e.g. 60x) |
 | `ks shield <preset>` | Apply a protection preset |
 | `ks rules list` | List active rules |
 | `ks alerts list` | List alert channels |
-| `ks analytics` | Cost analytics overview |
+| `ks alerts add` | Add an alert channel |
+| `ks alerts remove <name>` | Remove an alert channel by name |
+| `ks alerts test` | Send a test alert to all channels |
+| `ks analytics` | Cost analytics: spend summary, 7-day table, per-account breakdown |
 | `ks config list` | Show configuration |
 
 ## AI Agent Usage
@@ -117,7 +155,14 @@ ks onboard \
   --token CF_API_TOKEN \
   --name "Production" \
   --shields cost-runaway,ddos \
+  --alert-pagerduty KEY \
   --json
+
+# Add PagerDuty alerts
+ks alerts add --type pagerduty --routing-key KEY --json
+
+# Full status dashboard
+ks status --json
 
 # All commands support --json for machine-readable output
 ks accounts list --json
@@ -171,7 +216,7 @@ The CLI uses personal API keys (prefixed with `ks_live_`). Create one from [app.
 - [Dashboard](https://app.kill-switch.net)
 - [API Docs](https://kill-switch.net/docs)
 - [CLI Docs](https://kill-switch.net/docs/cli.html)
-- [GitHub](https://github.com/AiExpanse/kill-switch)
+- [GitHub](https://github.com/divinci-ai/kill-switch)
 
 ## License
 

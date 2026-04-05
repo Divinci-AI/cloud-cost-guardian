@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <title>CLI Reference | Kill Switch</title>
     <meta name="description" content="Kill Switch CLI — monitor cloud spending, kill runaway services from the terminal.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -58,7 +61,7 @@
             <a href="/docs">API Docs</a>
             <a href="/docs/cli.html" class="active">CLI</a>
             <a href="/docs/integration.html">Integration</a>
-            <a href="https://github.com/AiExpanse/kill-switch" class="btn-github">
+            <a href="https://github.com/divinci-ai/kill-switch" class="btn-github">
                 <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
                 GitHub
             </a>
@@ -74,7 +77,7 @@
 npm install -g @kill-switch/cli
 
 # From source
-git clone https://github.com/AiExpanse/kill-switch.git
+git clone https://github.com/divinci-ai/kill-switch.git
 cd kill-switch/packages/cli
 npm install && npm run build
 npm link  # makes `kill-switch` and `ks` available globally</code></pre>
@@ -164,6 +167,7 @@ ks onboard --help-provider runpod</code></pre>
             <tr><td><code>--alert-email</code></td><td>Email for alerts</td></tr>
             <tr><td><code>--alert-discord</code></td><td>Discord webhook URL</td></tr>
             <tr><td><code>--alert-slack</code></td><td>Slack webhook URL</td></tr>
+            <tr><td><code>--alert-pagerduty</code></td><td>PagerDuty routing key (recommended)</td></tr>
             <tr><td><code>--skip-shields</code></td><td>Skip applying protection rules</td></tr>
             <tr><td><code>--skip-alerts</code></td><td>Skip alert setup</td></tr>
             <tr><td><code>--help-provider</code></td><td>Show how to get credentials for a provider</td></tr>
@@ -260,17 +264,16 @@ kill-switch accounts add gcp \
             <p>Run monitoring checks on all connected accounts. Shows violations and actions taken.</p>
         </div>
 
-<pre><code>$ kill-switch check
-Checked 2 account(s)
+<pre><code>$ ks check
+Checked 2 account(s) — 1 violation(s)
 
-cloudflare: Production CF
-  All clear
+✓ cloudflare     Production CF
+✗ gcp            GCP Staging
 
-gcp: GCP Staging
-  Metric          Value    Threshold
-  ------          -----    ---------
-  monthlySpend    $523     $500
-  Action: scale-down</code></pre>
+Service               Metric          Current   Threshold   Over    Severity
+─────────────────────────────────────────────────────────────────────────────
+BigQuery              monthlySpend    $523      $500        1x      warning
+  Actions: scale-down</code></pre>
 
         <h2>Rules</h2>
 
@@ -321,19 +324,105 @@ kill-switch kill abort dbkill-xyz789</code></pre>
 
         <div class="cmd-group">
             <h4>kill-switch alerts list</h4>
-            <p>List configured alert channels (PagerDuty, Discord, Slack, email, webhook).</p>
+            <p>List configured alert channels with type, name, enabled status, and masked config preview.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch alerts add --type TYPE [options]</h4>
+            <p>Add an alert channel. Supported types: <code>pagerduty</code>, <code>slack</code>, <code>discord</code>, <code>email</code>, <code>webhook</code>, <code>github</code>.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>kill-switch alerts remove &lt;name&gt;</h4>
+            <p>Remove an alert channel by name.</p>
         </div>
         <div class="cmd-group">
             <h4>kill-switch alerts test</h4>
-            <p>Send a test alert to all configured channels.</p>
+            <p>Send a test alert to all configured and enabled channels.</p>
         </div>
+
+<pre><code># PagerDuty (recommended — immediate on-call paging)
+ks alerts add --type pagerduty --routing-key YOUR_ROUTING_KEY --name "On-Call"
+
+# Slack or Discord webhook
+ks alerts add --type slack --webhook-url https://hooks.slack.com/...
+ks alerts add --type discord --webhook-url https://discord.com/api/webhooks/...
+
+# GitHub AI Remediation — triggers Claude Code to open a fix PR on extreme violations
+ks alerts add --type github \
+  --token ghp_YOUR_PAT \
+  --repo-owner YOUR_ORG \
+  --repo-name YOUR_REPO \
+  --workflow kill-switch-remediate.yml \
+  --branch main
+
+# Email or generic webhook
+ks alerts add --type email --email you@example.com
+ks alerts add --type webhook --webhook-url https://your-service.example.com/webhook
+
+# Remove and test
+ks alerts remove "PagerDuty"
+ks alerts test</code></pre>
+
+        <h2>Status Dashboard</h2>
+
+        <div class="cmd-group">
+            <h4>kill-switch status</h4>
+            <p>Mini-dashboard: plan tier, connected accounts, enabled rules, alert channels, and 30-day spend summary &mdash; all in one command.</p>
+        </div>
+
+<pre><code>$ ks status
+
+Kill Switch Status
+
+  Plan:        pro
+  Accounts:    2 active / 10 max
+  Rules:       3 enabled
+  Kill seqs:   none
+  Alerts:      1 channel(s) — pagerduty
+  Spend (30d): $55.00 · $12.00 saved · 2 action(s) taken
+
+Connected Accounts:
+
+Provider      Name                       Status        Last Check
+──────────────────────────────────────────────────────────────────
+cloudflare    Production CF              active        ok
+aws           AWS Dev                    active        ok
+
+Alert Channels:
+
+Type          Name                 Enabled   Config
+──────────────────────────────────────────────────────────────────
+pagerduty     On-Call              true      ****abcd</code></pre>
 
         <h2>Analytics</h2>
 
         <div class="cmd-group">
-            <h4>kill-switch analytics --days 30</h4>
-            <p>FinOps analytics overview: daily costs, savings from kill-switch actions, violation trends.</p>
+            <h4>kill-switch analytics [--days 30]</h4>
+            <p>FinOps overview: total spend, daily average, projected monthly cost, savings from kill-switch actions, and per-account cost breakdown.</p>
         </div>
+
+<pre><code>$ ks analytics
+
+Analytics Overview
+
+  Total spend:         $123.45
+  Avg daily cost:      $4.11
+  Projected monthly:   $127.00
+  Savings estimate:    $38.20
+  Kill switch actions: 3
+
+Last 7 Days:
+
+Date          Cost (USD)   Services   Violations
+──────────────────────────────────────────────────
+2026-03-30    3.5          5          0
+2026-03-31    5.2          6          1
+
+Account Breakdown:
+
+Provider        Total Cost   Avg Daily
+──────────────────────────────────────
+cloudflare      80           2.67
+aws             43.45        1.44</code></pre>
 
         <h2>Configuration</h2>
 
@@ -384,8 +473,15 @@ ks onboard \
   --token USER_CF_API_TOKEN \
   --name "Production" \
   --shields cost-runaway,ddos,error-storm \
-  --alert-email user@example.com \
-  --json</code></pre>
+  --alert-pagerduty ROUTING_KEY \
+  --json
+
+# Step 4: Add additional alert channels as needed
+ks alerts add --type pagerduty --routing-key ROUTING_KEY --json
+ks alerts add --type slack --webhook-url https://hooks.slack.com/... --json
+
+# Step 5: Verify full status
+ks status --json</code></pre>
 
         <h3>Claude Code / CLAUDE.md Integration</h3>
         <p>Add this to your project's <code>CLAUDE.md</code> to let Claude Code manage Kill Switch for you:</p>
@@ -428,7 +524,7 @@ ks check --json | jq '.results[].violations | length'</code></pre>
         <ul>
             <li><a href="/docs">API Reference</a> (OpenAPI 3.1)</li>
             <li><a href="/docs/integration.html">Integration Guide</a> (Edge Agent, Spend Guard, Alerting)</li>
-            <li><a href="https://github.com/AiExpanse/kill-switch">GitHub Repository</a></li>
+            <li><a href="https://github.com/divinci-ai/kill-switch">GitHub Repository</a></li>
         </ul>
     </div>
 </body>

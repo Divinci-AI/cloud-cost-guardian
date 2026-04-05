@@ -26,7 +26,7 @@ ks onboard --provider cloudflare \
 ks check
 ```
 
-## Supported Providers (13)
+## Supported Providers (14)
 
 | Provider | Services Monitored | Kill Actions |
 |----------|-------------------|--------------|
@@ -43,6 +43,7 @@ ks check
 | **Snowflake** | Warehouse credits, query costs, data scanning | Scale down warehouse, suspend warehouse |
 | **Vercel** | Function invocations, bandwidth, build minutes | Scale down, disable service |
 | **Datadog** | Host count, log ingestion, custom metrics | Rotate credentials, mute monitors |
+| **Neon** | Compute hours, storage, data transfer costs | Scale down, pause project |
 
 ## Packages
 
@@ -67,7 +68,7 @@ ks check
 │  CLI (ks)  ──→  Kill Switch API (Cloud Run)                     │
 │  Dashboard ──→  ├── Monitoring Engine (5-min cron)              │
 │                 ├── Rule Engine (programmable)                   │
-│                 ├── Alerting (PD/Discord/Slack/Email)            │
+│                 ├── Alerting (PD/Slack/Discord/Email/GitHub AI)  │
 │                 ├── API Key Management                          │
 │                 ├── Forensic Snapshots                          │
 │                 └── Stripe Billing                               │
@@ -102,7 +103,7 @@ ks shield error-storm       # Scale down on sustained high error rate
 
 ```bash
 cd packages/api
-npm test                    # 350 unit + e2e tests
+npm test                    # 587 unit + e2e tests (API), 42 (CLI), 47 (SDK)
 SMOKE=1 npm test -- tests/smoke/live-api.test.ts  # 12 live API tests
 ```
 
@@ -112,8 +113,12 @@ The CLI is designed for AI coding agents (Claude Code, Cursor, Windsurf) to set 
 
 ```bash
 export KILL_SWITCH_API_KEY=ks_live_your_key
-ks onboard --provider cloudflare --account-id ID --token TOKEN --json
-ks check --json
+ks onboard --provider cloudflare --account-id ID --token TOKEN \
+  --shields cost-runaway,ddos --alert-pagerduty ROUTING_KEY --json
+ks status --json           # dashboard: accounts, alerts, 30-day spend
+ks check --json            # violations with multiplier column (e.g. 60x)
+ks alerts add --type slack --webhook-url URL --json
+ks analytics --json        # spend summary + 7-day table + per-account
 ```
 
 See [CLI docs](https://kill-switch.net/docs/cli.html) for the full reference.
