@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { outputJson, formatTable, handleError, spinner, success, warn, colors as c } from "../output.js";
+import { outputJson, formatTable, handleError, spinner, warn, colors as c } from "../output.js";
 import type { ClientFactory } from "../types.js";
 
 export function registerStatusCommand(program: Command, createClient: ClientFactory) {
@@ -13,11 +13,13 @@ export function registerStatusCommand(program: Command, createClient: ClientFact
         const client = createClient();
 
         // Fire all requests in parallel
-        const [accountInfo, accounts, rules, sequences] = await Promise.all([
+        const [accountInfo, accounts, rules, sequences, channels, analytics] = await Promise.all([
           client.billing.status().catch(() => null),
           client.accounts.list().catch(() => []),
           client.rules.list().catch(() => []),
           client.database.list().catch(() => []),
+          client.alerts.channels().catch(() => []),
+          client.analytics.overview().catch(() => null) as Promise<any>,
         ]);
 
         s?.stop();
@@ -29,6 +31,10 @@ export function registerStatusCommand(program: Command, createClient: ClientFact
             accounts: accounts.length,
             rules: rules.length,
             activeKillSequences: sequences.length,
+            alertChannels: channels.length,
+            totalSpendPeriod: analytics?.totalSpendPeriod ?? 0,
+            savingsEstimate: analytics?.savingsEstimate ?? 0,
+            killSwitchActions: analytics?.killSwitchActions ?? 0,
           });
           return;
         }
@@ -42,12 +48,12 @@ export function registerStatusCommand(program: Command, createClient: ClientFact
         console.log(`  ${c.bold("Plan:")}       ${tierColor(tier)}`);
 
         // Accounts
-        const activeAccounts = accounts.filter((a) => a.status === "active").length;
+        const activeAccounts = (accounts as any[]).filter((a) => a.status === "active").length;
         const limit = accountInfo?.limits?.cloudAccounts;
         console.log(`  ${c.bold("Accounts:")}   ${activeAccounts} active${limit ? c.dim(` / ${limit} max`) : ""}`);
 
         // Rules
-        const enabledRules = rules.filter((r) => r.enabled).length;
+        const enabledRules = (rules as any[]).filter((r) => r.enabled).length;
         console.log(`  ${c.bold("Rules:")}      ${enabledRules} enabled${rules.length > enabledRules ? c.dim(` (${rules.length} total)`) : ""}`);
 
         // Kill sequences
@@ -57,17 +63,44 @@ export function registerStatusCommand(program: Command, createClient: ClientFact
           console.log(`  ${c.bold("Kill seqs:")}  ${c.dim("none")}`);
         }
 
-        // Account details
-        if (accounts.length > 0) {
+        // Alert channels
+        if ((channels as any[]).length > 0) {
+          const enabledChannels = (channels as any[]).filter((ch: any) => ch.enabled !== false).length;
+          console.log(`  ${c.bold("Alerts:")}     ${enabledChannels} channel(s) — ${(channels as any[]).map((ch: any) => ch.type).join(", ")}`);
+        } else {
+          console.log(`  ${c.bold("Alerts:")}     ${c.yellow("none")} — run: ks alerts add --type pagerduty --routing-key KEY`);
+        }
+
+        // 30-day spend summary
+        if (analytics) {
+          const totalSpend = analytics.totalSpendPeriod ?? 0;
+          const savings = analytics.savingsEstimate ?? 0;
+          const actions = analytics.killSwitchActions ?? 0;
+          console.log(`  ${c.bold("Spend (30d):")} $${totalSpend.toFixed(2)}${savings > 0 ? c.green(` · $${savings.toFixed(2)} saved`) : ""}${actions > 0 ? c.yellow(` · ${actions} action(s) taken`) : ""}`);
+        }
+
+        // Connected accounts table
+        if ((accounts as any[]).length > 0) {
           console.log(c.bold("\nConnected Accounts:\n"));
           formatTable(accounts, [
-            { key: "provider", header: "Provider", width: 12 },
-            { key: "name", header: "Name", width: 25 },
-            { key: "status", header: "Status", width: 12 },
+            { key: "provider",       header: "Provider",   width: 12 },
+            { key: "name",           header: "Name",       width: 25 },
+            { key: "status",         header: "Status",     width: 12 },
             { key: "lastCheckStatus", header: "Last Check", width: 12 },
           ]);
         } else {
           console.log(`\n  ${c.dim("No accounts connected. Run:")} ks onboard`);
+        }
+
+        // Alert channels detail
+        if ((channels as any[]).length > 0) {
+          console.log(c.bold("\nAlert Channels:\n"));
+          formatTable(channels, [
+            { key: "type",          header: "Type",    width: 14 },
+            { key: "name",          header: "Name",    width: 20 },
+            { key: "enabled",       header: "Enabled", width: 8  },
+            { key: "configPreview", header: "Config",  width: 30 },
+          ]);
         }
 
         console.log();

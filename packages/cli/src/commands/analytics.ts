@@ -17,18 +17,43 @@ export function registerAnalyticsCommands(program: Command, createClient: Client
         if (json) {
           outputJson(data);
         } else {
-          console.log(c.bold(`Analytics (last ${opts.days} days)\n`));
-          if (data.dailyCosts) {
+          console.log(c.bold(`\nAnalytics Overview\n`));
+
+          // Summary stats
+          const totalSpend = data.totalSpendPeriod ?? 0;
+          const avgDaily = data.avgDailyCost ?? 0;
+          const projected = data.projectedMonthlyCost ?? 0;
+          const savings = data.savingsEstimate ?? 0;
+          const actions = data.killSwitchActions ?? 0;
+
+          console.log(`  ${c.bold("Total spend:")}        $${totalSpend.toFixed(2)}`);
+          console.log(`  ${c.bold("Avg daily cost:")}     $${avgDaily.toFixed(2)}`);
+          console.log(`  ${c.bold("Projected monthly:")}  $${projected.toFixed(2)}`);
+          console.log(`  ${c.bold("Savings estimate:")}   ${c.green("$" + savings.toFixed(2))}`);
+          console.log(`  ${c.bold("Kill switch actions:")} ${actions > 0 ? c.yellow(String(actions)) : c.dim("0")}`);
+
+          // Last 7 days cost table
+          if (data.dailyCosts?.length) {
+            console.log(c.bold("\nLast 7 Days:\n"));
             formatTable(data.dailyCosts.slice(-7), [
-              { key: "date", header: "Date" },
-              { key: "totalUsd", header: "Cost (USD)" },
-              { key: "violations", header: "Violations" },
-              { key: "actions", header: "Actions" },
+              { key: "date",       header: "Date",       width: 12 },
+              { key: "cost",       header: "Cost (USD)", width: 12 },
+              { key: "services",   header: "Services",   width: 10 },
+              { key: "violations", header: "Violations", width: 12 },
             ]);
           }
-          if (data.totalSavingsUsd !== undefined) {
-            console.log(`\nEstimated savings: ${c.green("$" + data.totalSavingsUsd)}`);
+
+          // Per-account breakdown
+          if (data.accountBreakdown?.length) {
+            console.log(c.bold("\nAccount Breakdown:\n"));
+            formatTable(data.accountBreakdown, [
+              { key: "provider",     header: "Provider",     width: 14 },
+              { key: "totalCost",    header: "Total Cost",   width: 12 },
+              { key: "avgDailyCost", header: "Avg Daily",    width: 12 },
+            ]);
           }
+
+          console.log();
         }
       } catch (err) {
         s?.stop();
