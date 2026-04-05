@@ -6,7 +6,7 @@
  */
 
 export type ProviderId = "cloudflare" | "gcp" | "aws" | "runpod" | "redis" | "mongodb"
-  | "openai" | "anthropic" | "xai" | "replicate" | "snowflake" | "vercel" | "datadog";
+  | "openai" | "anthropic" | "xai" | "replicate" | "snowflake" | "vercel" | "datadog" | "neon";
 
 export type RedisSubType = "redis-cloud" | "elasticache" | "self-hosted";
 export type MongoDBSubType = "atlas" | "self-hosted";
@@ -202,6 +202,12 @@ export interface ThresholdConfig {
   datadogLogIngestGBPerDay?: number;       // Max log ingestion GB per day
   datadogDailyCostUSD?: number;            // Max daily Datadog spend
 
+  // ─── Neon Thresholds ───────────────────────────────────────────────────────
+  neonComputeHoursPerMonth?: number;       // Max CU-hrs per month (free: 100)
+  neonStorageMB?: number;                  // Max storage MB (free: 512)
+  neonDataTransferGB?: number;             // Max data transfer GB (free: 5)
+  neonDailyCostUSD?: number;               // Max daily Neon spend (paid plans)
+
   // ─── Shared Thresholds ──────────────────────────────────────────────────────
   monthlySpendLimitUSD?: number;
   requestsPerMinute?: number;       // DDoS detection
@@ -267,6 +273,10 @@ export interface DecryptedCredential {
   datadogApiKey?: string;
   datadogApplicationKey?: string;
   datadogSite?: "us" | "eu";
+
+  // Neon
+  neonApiKey?: string;
+  neonProjectId?: string;  // Optional — monitor a specific project; omit to monitor all
 }
 
 // ─── Forensic Snapshot ──────────────────────────────────────────────────────

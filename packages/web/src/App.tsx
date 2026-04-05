@@ -19,6 +19,7 @@ import { ConnectReplicate } from "./pages/CloudAccounts/ConnectReplicate";
 import { ConnectSnowflake } from "./pages/CloudAccounts/ConnectSnowflake";
 import { ConnectVercel } from "./pages/CloudAccounts/ConnectVercel";
 import { ConnectDatadog } from "./pages/CloudAccounts/ConnectDatadog";
+import { ConnectNeon } from "./pages/CloudAccounts/ConnectNeon";
 import { ConnectProvider } from "./pages/CloudAccounts/ConnectProvider";
 import { AlertsHistory } from "./pages/Alerts/AlertsHistory";
 import { BillingPage } from "./pages/Billing/BillingPage";
@@ -115,6 +116,7 @@ function AuthenticatedApp() {
             <Route path="/accounts/connect/snowflake" element={<ConnectSnowflake />} />
             <Route path="/accounts/connect/vercel" element={<ConnectVercel />} />
             <Route path="/accounts/connect/datadog" element={<ConnectDatadog />} />
+            <Route path="/accounts/connect/neon" element={<ConnectNeon />} />
             <Route path="/alerts" element={<AlertsHistory />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/billing" element={<BillingPage />} />
