@@ -10,7 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "deploy": "gcloud run deploy guardian-api --source . --region us-central1 --project openai-api-4375643 --allow-unauthenticated --port 8090 --memory 1Gi --min-instances 1"
+    "deploy": "gcloud run deploy guardian-api --source . --region us-central1 --project openai-api-4375643 --allow-unauthenticated --port 8090 --memory 1Gi --min-instances 1 --set-secrets=GUARDIAN_MASTER_SECRET=KILL_SWITCH_MASTER_SECRET:latest,GUARDIAN_MONGODB_URI=KILL_SWITCH_MONGODB_URI:latest,STRIPE_API_SECRET_KEY=KILL_SWITCH_STRIPE_SECRET:latest,STRIPE_WEBHOOK_SECRET_GUARDIAN=KILL_SWITCH_STRIPE_WEBHOOK_SECRET:latest,CF_ORIGIN_SECRET=KILL_SWITCH_CF_ORIGIN_SECRET:latest,GUARDIAN_AGENT_API_KEY=KILL_SWITCH_AGENT_API_KEY:latest,GUARDIAN_POSTGRES_URL=KILL_SWITCH_POSTGRES_URL:latest,CLERK_ALLOWED_AZP=KILL_SWITCH_CLERK_ALLOWED_AZP:latest"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1019.0",
@@ -48,6 +48,7 @@
     "supertest": "^7.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0",
+    "vite": "^6.4.1",
     "vitest": "^3.2.4"
   }
 }

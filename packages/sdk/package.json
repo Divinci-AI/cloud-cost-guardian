@@ -17,18 +17,33 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^3.2.4",
-    "@types/node": "^22.0.0"
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=18"
   },
-  "files": ["dist", "README.md"],
-  "keywords": ["cloud", "kill-switch", "cost-monitoring", "cloudflare", "aws", "gcp", "runpod", "finops", "sdk", "api-client"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "cloud",
+    "kill-switch",
+    "cost-monitoring",
+    "cloudflare",
+    "aws",
+    "gcp",
+    "runpod",
+    "finops",
+    "sdk",
+    "api-client"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/AiExpanse/kill-switch",
+    "url": "https://github.com/divinci-ai/kill-switch",
     "directory": "packages/sdk"
   },
   "homepage": "https://kill-switch.net",
