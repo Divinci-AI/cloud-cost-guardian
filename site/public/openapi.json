@@ -4,7 +4,7 @@
     "title": "Kill Switch API",
     "version": "0.1.0",
     "description": "Monitor cloud spending, auto-kill runaway services, and protect your infrastructure. Born from a $91K Cloudflare bill.",
-    "contact": { "name": "Divinci AI", "url": "https://divinci.ai", "email": "support@divinci.ai" },
+    "contact": { "name": "Kill Switch", "url": "https://kill-switch.net", "email": "admin@kill-switch.net" },
     "license": { "name": "MIT", "url": "https://opensource.org/licenses/MIT" }
   },
   "servers": [
