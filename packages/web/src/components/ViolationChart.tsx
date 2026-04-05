@@ -79,7 +79,7 @@ export function ViolationChart({ violations, compact = false }: { violations: st
       })}
       {!compact && (
         <p style={{ color: "#9ca3af", fontSize: "11px", margin: "10px 0 0" }}>
-          Kill Switch may have auto-disconnected the offending service.
+          Check the Activity page to see what actions Kill Switch took.
         </p>
       )}
     </div>

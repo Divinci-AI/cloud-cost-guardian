@@ -52,9 +52,9 @@ export function registerStatusCommand(program: Command, createClient: ClientFact
         const limit = accountInfo?.limits?.cloudAccounts;
         console.log(`  ${c.bold("Accounts:")}   ${activeAccounts} active${limit ? c.dim(` / ${limit} max`) : ""}`);
 
-        // Rules
+        // Rules (programmatic kill rules — account-level thresholds are set per account)
         const enabledRules = (rules as any[]).filter((r) => r.enabled).length;
-        console.log(`  ${c.bold("Rules:")}      ${enabledRules} enabled${rules.length > enabledRules ? c.dim(` (${rules.length} total)`) : ""}`);
+        console.log(`  ${c.bold("Kill rules:")} ${enabledRules} enabled${rules.length > enabledRules ? c.dim(` (${rules.length} total)`) : ""}${enabledRules === 0 ? c.dim("  · thresholds set per account") : ""}`);
 
         // Kill sequences
         if (sequences.length > 0) {

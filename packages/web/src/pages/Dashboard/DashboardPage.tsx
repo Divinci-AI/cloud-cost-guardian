@@ -175,14 +175,17 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [days, setDays] = useState(30);
+  const [hasPagerDuty, setHasPagerDuty] = useState(false);
 
   useEffect(() => {
     Promise.all([
       api.listCloudAccounts().catch(() => ({ accounts: [] })),
       api.getAnalyticsOverview(days).catch(() => null),
-    ]).then(([accountsData, analyticsData]) => {
+      api.listAlertChannels().catch(() => ({ channels: [] })),
+    ]).then(([accountsData, analyticsData, channelsData]) => {
       setAccounts(accountsData.accounts || []);
       setAnalytics(analyticsData);
+      setHasPagerDuty((channelsData.channels || []).some((c: any) => c.type === "pagerduty" && c.enabled !== false));
     }).finally(() => setLoading(false));
   }, [days, orgVersion]);
 
@@ -344,8 +347,8 @@ export function DashboardPage() {
             />
           </div>
 
-          {/* ─── PagerDuty nudge — shown only when kill switch has fired ── */}
-          {analytics.killSwitchActions > 0 && (
+          {/* ─── PagerDuty nudge — shown only when kill switch has fired and PD not yet configured ── */}
+          {analytics.killSwitchActions > 0 && !hasPagerDuty && (
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
               padding: "10px 16px", marginBottom: "20px",
