@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#cc2222"/>
+      <stop offset="100%" stop-color="#661111"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#ff4444" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#661111" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="248" fill="#0d0d1a" stroke="#333" stroke-width="8"/>
+
+  <!-- Red button face -->
+  <circle cx="256" cy="256" r="200" fill="url(#bg)" stroke="#4a0e0e" stroke-width="6"/>
+
+  <!-- Subtle highlight -->
+  <ellipse cx="256" cy="210" rx="100" ry="50" fill="rgba(255,255,255,0.07)"/>
+
+  <!-- Inner glow -->
+  <circle cx="256" cy="256" r="200" fill="url(#glow)"/>
+
+  <!-- Power icon — vertical line -->
+  <line x1="256" y1="170" x2="256" y2="240" stroke="white" stroke-width="28" stroke-linecap="round"/>
+
+  <!-- Power icon — arc -->
+  <path d="M 190 200 A 95 95 0 1 0 322 200" stroke="white" stroke-width="28" fill="none" stroke-linecap="round"/>
+</svg>
