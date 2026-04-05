@@ -74,7 +74,7 @@ export function ConnectAWS() {
   return (
     <div style={{ maxWidth: "560px" }}>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect AWS</h1>
-      <p style={{ color: "#6b7280", marginBottom: "32px", fontSize: "14px" }}>
+      <p style={{ color: "#9ca3af", marginBottom: "32px", fontSize: "14px" }}>
         Provide IAM credentials with read access to EC2, Lambda, RDS, ECS, EKS, S3, SageMaker, and Cost Explorer.
       </p>
 
@@ -100,13 +100,13 @@ export function ConnectAWS() {
           <select style={{ ...inputStyle, cursor: "pointer" }} value={awsRegion} onChange={e => setAwsRegion(e.target.value)}>
             {AWS_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>Primary region to monitor. Multi-region resources (S3, Cost Explorer) are monitored globally.</p>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>Primary region to monitor. Multi-region resources (S3, Cost Explorer) are monitored globally.</p>
         </div>
 
         <div>
           <label style={labelStyle}>IAM Role ARN (optional)</label>
           <input style={inputStyle} placeholder="arn:aws:iam::123456789012:role/KillSwitchRole" value={roleArn} onChange={e => setRoleArn(e.target.value)} />
-          <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>
             For cross-account monitoring. The role must trust the credentials above and have the required permissions.
           </p>
         </div>

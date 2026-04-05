@@ -73,7 +73,7 @@ export function ConnectApiKey({
   return (
     <div style={{ maxWidth: "560px" }}>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect {providerName}</h1>
-      <p style={{ color: "#6b7280", marginBottom: "24px", fontSize: "14px" }}>{description}</p>
+      <p style={{ color: "#9ca3af", marginBottom: "24px", fontSize: "14px" }}>{description}</p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <div>
@@ -83,7 +83,7 @@ export function ConnectApiKey({
         <div>
           <label style={labelStyle}>{keyLabel}</label>
           <input style={{ ...inputStyle, fontFamily: "monospace" }} type="password" placeholder={keyPlaceholder} value={apiKey} onChange={e => setApiKey(e.target.value)} />
-          <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>{keyHint}</p>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>{keyHint}</p>
         </div>
 
         {extraFields?.map(f => (

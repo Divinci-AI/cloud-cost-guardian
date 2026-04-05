@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ViolationChart } from "../../components/ViolationChart";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell,
+  ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell, LabelList,
 } from "recharts";
 import { api } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
@@ -16,6 +17,7 @@ interface CloudAccount {
   status: string;
   lastCheckAt?: number;
   lastCheckStatus?: string;
+  lastCheckError?: string;
   lastViolations?: string[];
 }
 
@@ -60,7 +62,7 @@ const statusColor = (status?: string) => {
   if (status === "violation") return "#ff6b6b";
   if (status === "error") return "#ffa07a";
   if (status === "ok") return "#5ce2e7";
-  return "#6b7280";
+  return "#9ca3af";
 };
 
 const timeAgo = (ts?: number) => {
@@ -100,9 +102,9 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
       flex: 1,
       minWidth: "200px",
     }}>
-      <p style={{ color: "#6b7280", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px" }}>{label}</p>
+      <p style={{ color: "#9ca3af", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px" }}>{label}</p>
       <p style={{ color: accent || "#fff", fontSize: "28px", fontWeight: "700", fontFamily: "Outfit, sans-serif", margin: 0 }}>{value}</p>
-      {sub && <p style={{ color: "#6b7280", fontSize: "12px", margin: "4px 0 0" }}>{sub}</p>}
+      {sub && <p style={{ color: "#9ca3af", fontSize: "12px", margin: "4px 0 0" }}>{sub}</p>}
     </div>
   );
 }
@@ -127,12 +129,39 @@ function ChartTooltip({ active, payload }: any) {
       ) : (
         <>
           <p style={{ color: "#5ce2e7", margin: "2px 0" }}>Cost: {fmtFull(data.cost)}</p>
-          <p style={{ color: "#6b7280", margin: "2px 0" }}>Services: {data.services}</p>
+          <p style={{ color: "#9ca3af", margin: "2px 0" }}>Services: {data.services}</p>
           {data.violations > 0 && (
             <p style={{ color: "#ff6b6b", margin: "2px 0" }}>Violations: {data.violations}</p>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function AccountTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const data = payload[0].payload;
+  const providerColor = data.provider === "cloudflare" ? "#f6821f" : data.provider === "gcp" ? "#4285f4" : "#ff9900";
+  return (
+    <div style={{
+      background: "#1a1f3a",
+      border: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: "8px",
+      padding: "12px 16px",
+      fontSize: "13px",
+      minWidth: "170px",
+    }}>
+      <p style={{ color: "#fff", fontWeight: "600", margin: "0 0 6px", fontFamily: "Outfit, sans-serif" }}>{label}</p>
+      <p style={{ color: providerColor, margin: "0 0 8px", fontSize: "11px", textTransform: "uppercase" as const, fontWeight: "600", letterSpacing: "0.5px" }}>
+        {providerLabel(data.provider)}
+      </p>
+      <p style={{ color: "#5ce2e7", margin: "0 0 4px", fontSize: "20px", fontWeight: "700", fontFamily: "Outfit, sans-serif" }}>
+        {fmtFull(data.totalCost)}
+      </p>
+      <p style={{ color: "#9ca3af", margin: 0, fontSize: "11px" }}>
+        {fmtFull(data.avgDailyCost)}/day avg
+      </p>
     </div>
   );
 }
@@ -176,7 +205,7 @@ export function DashboardPage() {
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", padding: "80px" }}>
-        <p style={{ color: "#6b7280" }}>Loading dashboard...</p>
+        <p style={{ color: "#9ca3af" }}>Loading dashboard...</p>
       </div>
     );
   }
@@ -227,7 +256,7 @@ export function DashboardPage() {
           <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "28px", fontWeight: "700", color: "#fff", margin: 0 }}>
             Cost Dashboard
           </h1>
-          <p style={{ color: "#6b7280", marginTop: "4px", fontSize: "14px" }}>
+          <p style={{ color: "#9ca3af", marginTop: "4px", fontSize: "14px" }}>
             {accounts.length} cloud account{accounts.length !== 1 ? "s" : ""} monitored
           </p>
         </div>
@@ -315,6 +344,32 @@ export function DashboardPage() {
             />
           </div>
 
+          {/* ─── PagerDuty nudge — shown only when kill switch has fired ── */}
+          {analytics.killSwitchActions > 0 && (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 16px", marginBottom: "20px",
+              background: "rgba(194, 88, 0, 0.07)",
+              border: "1px solid rgba(194, 88, 0, 0.25)",
+              borderRadius: "8px",
+              fontSize: "13px",
+            }}>
+              <span style={{ color: "#c4c5ca" }}>
+                🔔 Kill Switch stopped{" "}
+                <strong style={{ color: "#fff" }}>
+                  {analytics.killSwitchActions} runaway service{analytics.killSwitchActions !== 1 ? "s" : ""}
+                </strong>.
+                {" "}Were you paged?
+              </span>
+              <Link
+                to="/settings"
+                style={{ color: "#c25800", fontWeight: "600", textDecoration: "none", whiteSpace: "nowrap", marginLeft: "16px" }}
+              >
+                Connect PagerDuty →
+              </Link>
+            </div>
+          )}
+
           {/* ─── Cost Trend Chart ──────────────────────────────────────── */}
           <div style={{
             background: "rgba(255,255,255,0.03)",
@@ -356,13 +411,13 @@ export function DashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis
                   dataKey="dateLabel"
-                  stroke="#6b7280"
+                  stroke="#9ca3af"
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
-                  stroke="#6b7280"
+                  stroke="#9ca3af"
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
@@ -372,9 +427,9 @@ export function DashboardPage() {
                 {/* Average line */}
                 <ReferenceLine
                   y={analytics.avgDailyCost}
-                  stroke="#6b7280"
+                  stroke="#9ca3af"
                   strokeDasharray="4 4"
-                  label={{ value: `avg ${fmt(analytics.avgDailyCost)}`, position: "right", fill: "#6b7280", fontSize: 11 }}
+                  label={{ value: `avg ${fmt(analytics.avgDailyCost)}`, position: "right", fill: "#9ca3af", fontSize: 11 }}
                 />
                 {/* Anomaly markers */}
                 {Array.from(anomalies).map(date => (
@@ -393,7 +448,7 @@ export function DashboardPage() {
                   stroke="#5ce2e7"
                   strokeWidth={2}
                   fill="url(#costGradient)"
-                  dot={false}
+                  dot={chartData.length <= 3 ? { r: 4, fill: "#5ce2e7", strokeWidth: 0 } : false}
                   activeDot={{ r: 4, fill: "#5ce2e7" }}
                 />
                 {/* Forecast area */}
@@ -410,10 +465,10 @@ export function DashboardPage() {
               </AreaChart>
             </ResponsiveContainer>
 
-            <div style={{ display: "flex", gap: "24px", justifyContent: "center", marginTop: "12px", fontSize: "12px", color: "#6b7280" }}>
+            <div style={{ display: "flex", gap: "24px", justifyContent: "center", marginTop: "12px", fontSize: "12px", color: "#9ca3af" }}>
               <span><span style={{ display: "inline-block", width: "12px", height: "3px", background: "#5ce2e7", borderRadius: "2px", marginRight: "6px", verticalAlign: "middle" }} />Actual</span>
               <span><span style={{ display: "inline-block", width: "12px", height: "3px", background: "#c25800", borderRadius: "2px", marginRight: "6px", verticalAlign: "middle", borderTop: "1px dashed #c25800" }} />Forecast</span>
-              <span><span style={{ display: "inline-block", width: "12px", height: "3px", background: "#6b7280", borderRadius: "2px", marginRight: "6px", verticalAlign: "middle" }} />Average</span>
+              <span><span style={{ display: "inline-block", width: "12px", height: "3px", background: "#9ca3af", borderRadius: "2px", marginRight: "6px", verticalAlign: "middle" }} />Average</span>
               {anomalies.size > 0 && (
                 <span><span style={{ display: "inline-block", width: "8px", height: "8px", background: "rgba(255,107,107,0.3)", border: "1px solid #ff6b6b", borderRadius: "2px", marginRight: "6px", verticalAlign: "middle" }} />Anomaly</span>
               )}
@@ -435,7 +490,7 @@ export function DashboardPage() {
               <p style={{ color: "#fff", fontSize: "16px", fontWeight: "600", margin: "0 0 4px", fontFamily: "Outfit, sans-serif" }}>
                 On track to spend {fmtFull(analytics.projectedMonthlyCost)} this month
               </p>
-              <p style={{ color: "#6b7280", fontSize: "13px", margin: 0 }}>
+              <p style={{ color: "#9ca3af", fontSize: "13px", margin: 0 }}>
                 Based on {fmtFull(analytics.avgDailyCost)}/day average over {analytics.dailyCosts.length} day{analytics.dailyCosts.length !== 1 ? "s" : ""} of data
               </p>
             </div>
@@ -444,7 +499,7 @@ export function DashboardPage() {
                 <p style={{ color: "#4ade80", fontSize: "14px", fontWeight: "600", margin: "0 0 2px" }}>
                   {fmtFull(analytics.savingsEstimate)} saved
                 </p>
-                <p style={{ color: "#6b7280", fontSize: "12px", margin: 0 }}>by Kill Switch actions</p>
+                <p style={{ color: "#9ca3af", fontSize: "12px", margin: 0 }}>by Kill Switch actions</p>
               </div>
             )}
           </div>
@@ -469,19 +524,17 @@ export function DashboardPage() {
                     label: `${providerLabel(a.provider)} — ${fmtFull(a.totalCost)}`,
                   }))}
                   layout="vertical"
-                  margin={{ top: 0, right: 20, bottom: 0, left: 120 }}
+                  margin={{ top: 0, right: 90, bottom: 0, left: 120 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                  <XAxis type="number" stroke="#6b7280" fontSize={11} tickFormatter={(v: number) => fmt(v)} />
-                  <YAxis type="category" dataKey="name" stroke="#6b7280" fontSize={12} width={110} />
-                  <Tooltip
-                    formatter={(value: number) => [fmtFull(value), "Total Spend"]}
-                    contentStyle={{ background: "#1a1f3a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "8px", fontSize: "13px" }}
-                  />
+                  <XAxis type="number" stroke="#9ca3af" fontSize={11} tickFormatter={(v: number) => fmt(v)} />
+                  <YAxis type="category" dataKey="name" stroke="#9ca3af" fontSize={12} width={110} />
+                  <Tooltip content={<AccountTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
                   <Bar dataKey="totalCost" radius={[0, 4, 4, 0]}>
                     {analytics.accountBreakdown.map((entry, i) => (
                       <Cell key={i} fill={entry.provider === "cloudflare" ? "#f6821f" : entry.provider === "gcp" ? "#4285f4" : "#ff9900"} fillOpacity={0.8} />
                     ))}
+                    <LabelList dataKey="totalCost" position="right" formatter={(v: number) => fmtFull(v)} style={{ fill: "#9ca3af", fontSize: 11 }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -503,7 +556,7 @@ export function DashboardPage() {
           <h2 style={{ fontFamily: "Outfit, sans-serif", color: "#fff", marginBottom: "8px", fontSize: "22px" }}>
             Connect your first cloud account
           </h2>
-          <p style={{ color: "#6b7280", marginBottom: "28px", maxWidth: "440px", margin: "0 auto 28px", fontSize: "15px", lineHeight: "1.6" }}>
+          <p style={{ color: "#9ca3af", marginBottom: "28px", maxWidth: "440px", margin: "0 auto 28px", fontSize: "15px", lineHeight: "1.6" }}>
             Kill Switch monitors your cloud spending and auto-kills runaway services before the bill arrives.
           </p>
           <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap", marginBottom: "28px" }}>
@@ -547,7 +600,7 @@ export function DashboardPage() {
           <h2 style={{ fontFamily: "Outfit, sans-serif", color: "#fff", marginBottom: "8px" }}>
             No cost data yet
           </h2>
-          <p style={{ color: "#6b7280", marginBottom: "20px" }}>
+          <p style={{ color: "#9ca3af", marginBottom: "20px" }}>
             Cost data will appear here after your first monitoring check.
           </p>
           <button
@@ -574,7 +627,7 @@ export function DashboardPage() {
                 style={{
                   padding: "20px 24px",
                   background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.06)",
+                  border: `1px solid ${account.lastCheckStatus === "error" ? "rgba(255,160,122,0.25)" : "rgba(255,255,255,0.06)"}`,
                   borderRadius: "12px",
                   borderLeft: `3px solid ${statusColor(account.lastCheckStatus)}`,
                 }}
@@ -593,20 +646,41 @@ export function DashboardPage() {
                     {account.lastCheckStatus || "pending"}
                   </span>
                 </div>
-                <div style={{ display: "flex", gap: "16px", fontSize: "13px", color: "#6b7280" }}>
+                <div style={{ display: "flex", gap: "16px", fontSize: "13px", color: "#9ca3af" }}>
                   <span>{providerLabel(account.provider)}</span>
                   <span>Checked: {timeAgo(account.lastCheckAt)}</span>
                 </div>
+                {account.lastCheckStatus === "error" && account.lastCheckError && (
+                  <div style={{
+                    marginTop: "10px",
+                    padding: "10px 12px",
+                    background: "rgba(255,160,122,0.08)",
+                    border: "1px solid rgba(255,160,122,0.2)",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                  }}>
+                    <p style={{ color: "#ffa07a", margin: "0 0 6px", fontWeight: "600" }}>Check failed</p>
+                    <p style={{ color: "#d4846a", margin: "0 0 8px", lineHeight: "1.5", wordBreak: "break-word" }}>{account.lastCheckError}</p>
+                    <Link
+                      to={`/accounts`}
+                      style={{ color: "#ffa07a", fontSize: "12px", textDecoration: "underline" }}
+                    >
+                      Update credentials →
+                    </Link>
+                  </div>
+                )}
                 {account.lastViolations && account.lastViolations.length > 0 && (
                   <div style={{
                     marginTop: "10px",
                     padding: "8px 12px",
                     background: "rgba(255,107,107,0.08)",
+                    border: "1px solid rgba(255,107,107,0.15)",
                     borderRadius: "6px",
-                    fontSize: "12px",
-                    color: "#ff6b6b",
                   }}>
-                    {account.lastViolations.map((v, i) => <div key={i}>{v}</div>)}
+                    <p style={{ color: "#ff6b6b", fontSize: "11px", fontWeight: "600", margin: "0 0 4px" }}>
+                      Violations <span style={{ color: "#fbbf24" }}>▎</span> = limit
+                    </p>
+                    <ViolationChart violations={account.lastViolations} compact />
                   </div>
                 )}
               </div>

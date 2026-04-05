@@ -98,11 +98,26 @@ export function BillingPage() {
         </div>
       )}
 
+      {/* Upgrade required banner for free-tier users */}
+      {status?.tier === "free" && (
+        <div style={{
+          padding: "16px 20px", borderRadius: "10px", marginBottom: "24px",
+          background: "rgba(194,88,0,0.08)", border: "1px solid rgba(194,88,0,0.25)",
+          display: "flex", alignItems: "center", gap: "12px",
+        }}>
+          <span style={{ fontSize: "20px" }}>&#9889;</span>
+          <div>
+            <div style={{ color: "#e06800", fontWeight: "600", fontSize: "15px" }}>Choose a plan to get started</div>
+            <div style={{ color: "#8b8fa3", fontSize: "13px" }}>Pick a plan below to activate monitoring and protect your cloud infrastructure.</div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
         <div>
           <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "28px", fontWeight: "700", color: "#fff", margin: 0 }}>Billing</h1>
-          <p style={{ color: "#6b7280", marginTop: "4px" }}>
-            Current plan: <span style={{ color: "#5ce2e7", fontWeight: "600" }}>{status?.tier?.toUpperCase()}</span>
+          <p style={{ color: "#9ca3af", marginTop: "4px" }}>
+            Current plan: <span style={{ color: status?.tier === "free" ? "#9ca3af" : "#5ce2e7", fontWeight: "600" }}>{status?.tier === "free" ? "No active plan" : status?.tier?.toUpperCase()}</span>
           </p>
         </div>
         {status?.subscription && (
@@ -114,7 +129,7 @@ export function BillingPage() {
 
       {/* Billing toggle */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: "32px", gap: "8px", alignItems: "center" }}>
-        <span style={{ color: !annual ? "#fff" : "#6b7280", fontWeight: "600", fontSize: "14px" }}>Monthly</span>
+        <span style={{ color: !annual ? "#fff" : "#9ca3af", fontWeight: "600", fontSize: "14px" }}>Monthly</span>
         <button onClick={() => setAnnual(!annual)} style={{
           width: "48px", height: "26px", borderRadius: "13px", border: "none", cursor: "pointer",
           background: annual ? "#5ce2e7" : "rgba(255,255,255,0.15)", position: "relative", transition: "background 0.2s",
@@ -124,7 +139,7 @@ export function BillingPage() {
             position: "absolute", top: "3px", left: annual ? "25px" : "3px", transition: "left 0.2s",
           }} />
         </button>
-        <span style={{ color: annual ? "#fff" : "#6b7280", fontWeight: "600", fontSize: "14px" }}>Annual <span style={{ color: "#5ce2e7" }}>(-17%)</span></span>
+        <span style={{ color: annual ? "#fff" : "#9ca3af", fontWeight: "600", fontSize: "14px" }}>Annual <span style={{ color: "#5ce2e7" }}>(-17%)</span></span>
       </div>
 
       {/* Plan cards */}
@@ -158,7 +173,7 @@ export function BillingPage() {
                 ) : (
                   <>
                     <span style={{ fontFamily: "Outfit, sans-serif", fontSize: "32px", fontWeight: "800", color: "#fff" }}>${displayPrice}</span>
-                    <span style={{ color: "#6b7280", fontSize: "14px" }}>/mo</span>
+                    <span style={{ color: "#9ca3af", fontSize: "14px" }}>/mo</span>
                     {annual && <div style={{ fontSize: "12px", color: "#5ce2e7" }}>Billed ${price}/year</div>}
                   </>
                 )}
@@ -170,7 +185,7 @@ export function BillingPage() {
                   </li>
                 ))}
               </ul>
-              {isCurrent ? (
+              {isCurrent && plan.tier !== "free" ? (
                 <div style={{ textAlign: "center", padding: "10px", color: "#5ce2e7", fontWeight: "600", fontSize: "14px" }}>Current Plan</div>
               ) : planKey ? (
                 <button onClick={() => handleCheckout(planKey)} style={{
@@ -181,7 +196,7 @@ export function BillingPage() {
                   {plan.tier === "pro" ? "Upgrade to Pro" : `Upgrade to ${plan.name}`}
                 </button>
               ) : plan.contactUs ? (
-                <a href="mailto:support@divinci.ai" style={{
+                <a href="mailto:admin@kill-switch.net" style={{
                   display: "block", textAlign: "center", padding: "10px", borderRadius: "8px",
                   border: "1px solid rgba(255,255,255,0.15)", color: "#fff", textDecoration: "none", fontSize: "14px",
                 }}>

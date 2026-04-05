@@ -92,13 +92,20 @@ const providers = [
     color: "#632ca6",
     available: true,
   },
+  {
+    id: "neon",
+    name: "Neon",
+    description: "Monitor PostgreSQL compute hours, storage, and data transfer. Protects free tier and paid plan limits.",
+    color: "#00e699",
+    available: true,
+  },
 ];
 
 export function ConnectProvider() {
   return (
     <div>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect Cloud Provider</h1>
-      <p style={{ color: "#6b7280", marginBottom: "32px", fontSize: "14px" }}>
+      <p style={{ color: "#9ca3af", marginBottom: "32px", fontSize: "14px" }}>
         Choose a cloud provider to monitor and protect against runaway costs.
       </p>
 
@@ -119,7 +126,7 @@ export function ConnectProvider() {
             <h3 style={{ color: "#fff", fontFamily: "Outfit, sans-serif", margin: "0 0 8px", fontSize: "18px" }}>
               {p.name}
             </h3>
-            <p style={{ color: "#6b7280", fontSize: "13px", margin: "0 0 20px", lineHeight: "1.5" }}>
+            <p style={{ color: "#9ca3af", fontSize: "13px", margin: "0 0 20px", lineHeight: "1.5" }}>
               {p.description}
             </p>
             {p.available ? (
@@ -140,7 +147,7 @@ export function ConnectProvider() {
                 Connect
               </Link>
             ) : (
-              <span style={{ fontSize: "13px", color: "#6b7280", fontStyle: "italic" }}>Coming soon</span>
+              <span style={{ fontSize: "13px", color: "#9ca3af", fontStyle: "italic" }}>Coming soon</span>
             )}
           </div>
         ))}

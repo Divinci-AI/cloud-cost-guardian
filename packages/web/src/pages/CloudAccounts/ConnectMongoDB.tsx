@@ -85,7 +85,7 @@ export function ConnectMongoDB() {
   return (
     <div style={{ maxWidth: "560px" }}>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect MongoDB</h1>
-      <p style={{ color: "#6b7280", marginBottom: "24px", fontSize: "14px" }}>
+      <p style={{ color: "#9ca3af", marginBottom: "24px", fontSize: "14px" }}>
         Monitor MongoDB clusters for storage growth, connection overload, and cost runaway.
       </p>
 
@@ -108,7 +108,7 @@ export function ConnectMongoDB() {
           <div><label style={labelStyle}>Private Key</label><input style={inputStyle} type="password" placeholder="Atlas API private key" value={atlasPrivateKey} onChange={e => setAtlasPrivateKey(e.target.value)} /></div>
           <div><label style={labelStyle}>Project ID</label><input style={inputStyle} placeholder="Atlas project ID (from URL or settings)" value={atlasProjectId} onChange={e => setAtlasProjectId(e.target.value)} /></div>
           <div><label style={labelStyle}>Cluster Name (optional)</label><input style={inputStyle} placeholder="e.g., Cluster0 (leave empty for all)" value={clusterName} onChange={e => setClusterName(e.target.value)} /></div>
-          <p style={{ fontSize: "12px", color: "#6b7280", margin: "-8px 0 0" }}>
+          <p style={{ fontSize: "12px", color: "#9ca3af", margin: "-8px 0 0" }}>
             Create API keys at <span style={{ color: "#47c97a" }}>cloud.mongodb.com &gt; Organization &gt; Access Manager &gt; API Keys</span>
           </p>
         </>)}

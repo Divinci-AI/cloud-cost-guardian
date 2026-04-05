@@ -59,7 +59,7 @@ export function ConnectGCP() {
   return (
     <div style={{ maxWidth: "560px" }}>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect Google Cloud</h1>
-      <p style={{ color: "#6b7280", marginBottom: "32px", fontSize: "14px" }}>
+      <p style={{ color: "#9ca3af", marginBottom: "32px", fontSize: "14px" }}>
         Provide your GCP Project ID and a Service Account key JSON with the required roles.
       </p>
 
@@ -77,7 +77,7 @@ export function ConnectGCP() {
         <div>
           <label style={labelStyle}>Region</label>
           <input style={inputStyle} placeholder="us-central1" value={region} onChange={e => setRegion(e.target.value)} />
-          <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>Primary region for Cloud Run and Cloud Functions monitoring.</p>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>Primary region for Cloud Run and Cloud Functions monitoring.</p>
         </div>
 
         <div>
@@ -88,7 +88,7 @@ export function ConnectGCP() {
             value={serviceAccountJson}
             onChange={e => setServiceAccountJson(e.target.value)}
           />
-          <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>
             Required IAM roles: Cloud Run Viewer/Admin, Compute Viewer/Instance Admin, Container Cluster Viewer, BigQuery User, Service Usage Admin, Billing Project Manager
           </p>
         </div>

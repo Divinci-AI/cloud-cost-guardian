@@ -96,6 +96,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  updateCloudAccountCredentials: (id: string, credential: any) =>
+    guardianFetch<any>(`/cloud-accounts/${id}/credentials`, {
+      method: "PATCH",
+      body: JSON.stringify({ credential }),
+    }),
   deleteCloudAccount: (id: string) =>
     guardianFetch<any>(`/cloud-accounts/${id}`, { method: "DELETE" }),
   checkCloudAccount: (id: string) =>

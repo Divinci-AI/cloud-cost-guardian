@@ -58,7 +58,7 @@ export function ConnectRunPod() {
   return (
     <div style={{ maxWidth: "560px" }}>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect RunPod</h1>
-      <p style={{ color: "#6b7280", marginBottom: "32px", fontSize: "14px" }}>
+      <p style={{ color: "#9ca3af", marginBottom: "32px", fontSize: "14px" }}>
         Provide your RunPod API key to monitor GPU pods, serverless endpoints, and network volumes.
       </p>
 
@@ -72,7 +72,7 @@ export function ConnectRunPod() {
           <label style={labelStyle}>RunPod API Key</label>
           <input style={{ ...inputStyle, fontFamily: "monospace" }} type="password" placeholder="Paste your RunPod API key"
             value={apiKey} onChange={e => setApiKey(e.target.value)} />
-          <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>
             Create at <span style={{ color: "#a78bfa" }}>runpod.io/console/user/settings</span> under "API Keys".
           </p>
         </div>

@@ -57,7 +57,7 @@ export function ConnectCloudflare() {
   return (
     <div style={{ maxWidth: "560px" }}>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect Cloudflare</h1>
-      <p style={{ color: "#6b7280", marginBottom: "32px", fontSize: "14px" }}>
+      <p style={{ color: "#9ca3af", marginBottom: "32px", fontSize: "14px" }}>
         Provide your Cloudflare Account ID and an API Token with Analytics:Read and Workers Scripts:Edit permissions.
       </p>
 
@@ -70,13 +70,13 @@ export function ConnectCloudflare() {
         <div>
           <label style={labelStyle}>Cloudflare Account ID</label>
           <input style={inputStyle} placeholder="e.g., 14a6fa23390363382f378b5bd4a0f849" value={accountId} onChange={e => setAccountId(e.target.value)} />
-          <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>Found in your Cloudflare Dashboard URL or Workers overview.</p>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>Found in your Cloudflare Dashboard URL or Workers overview.</p>
         </div>
 
         <div>
           <label style={labelStyle}>API Token</label>
           <input style={{ ...inputStyle, fontFamily: "monospace" }} type="password" placeholder="Paste your API token" value={apiToken} onChange={e => setApiToken(e.target.value)} />
-          <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>
             Required permissions: Account Analytics (Read), Workers Scripts (Edit), Workers Routes (Edit)
           </p>
         </div>

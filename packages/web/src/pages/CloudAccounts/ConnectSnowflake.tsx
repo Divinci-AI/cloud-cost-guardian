@@ -45,10 +45,10 @@ export function ConnectSnowflake() {
   return (
     <div style={{ maxWidth: "560px" }}>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect Snowflake</h1>
-      <p style={{ color: "#6b7280", marginBottom: "24px", fontSize: "14px" }}>Monitor warehouse credits, query costs, and data scanning.</p>
+      <p style={{ color: "#9ca3af", marginBottom: "24px", fontSize: "14px" }}>Monitor warehouse credits, query costs, and data scanning.</p>
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <div><label style={labelStyle}>Account Name</label><input style={inputStyle} placeholder="e.g., Production Snowflake" value={name} onChange={e => setName(e.target.value)} /></div>
-        <div><label style={labelStyle}>Snowflake Account</label><input style={inputStyle} placeholder="xy12345.us-east-1" value={accountName} onChange={e => setAccountName(e.target.value)} /><p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>Found in your Snowflake URL: https://&lt;account&gt;.snowflakecomputing.com</p></div>
+        <div><label style={labelStyle}>Snowflake Account</label><input style={inputStyle} placeholder="xy12345.us-east-1" value={accountName} onChange={e => setAccountName(e.target.value)} /><p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>Found in your Snowflake URL: https://&lt;account&gt;.snowflakecomputing.com</p></div>
         <div><label style={labelStyle}>Username</label><input style={inputStyle} placeholder="Snowflake username" value={username} onChange={e => setUsername(e.target.value)} /></div>
         <div><label style={labelStyle}>Password</label><input style={inputStyle} type="password" placeholder="Snowflake password" value={password} onChange={e => setPassword(e.target.value)} /></div>
         <div><label style={labelStyle}>Warehouse (optional)</label><input style={inputStyle} placeholder="COMPUTE_WH" value={warehouseName} onChange={e => setWarehouseName(e.target.value)} /></div>

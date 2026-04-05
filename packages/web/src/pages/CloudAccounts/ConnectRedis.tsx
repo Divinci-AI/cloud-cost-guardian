@@ -93,7 +93,7 @@ export function ConnectRedis() {
   return (
     <div style={{ maxWidth: "560px" }}>
       <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>Connect Redis</h1>
-      <p style={{ color: "#6b7280", marginBottom: "24px", fontSize: "14px" }}>
+      <p style={{ color: "#9ca3af", marginBottom: "24px", fontSize: "14px" }}>
         Monitor Redis instances for memory spikes, connection overload, and cost runaway.
       </p>
 
