@@ -31,6 +31,11 @@ import { getUsageHistory, getAlertHistory, getAnalyticsOverview } from "./global
 export function createApp() {
   const app = express();
 
+  // Safety: abort if dev auth bypass is accidentally enabled in production
+  if (process.env.GUARDIAN_DEV_AUTH_BYPASS === "true" && process.env.NODE_ENV === "production") {
+    throw new Error("FATAL: GUARDIAN_DEV_AUTH_BYPASS must not be set in production");
+  }
+
   // Trust proxy — 1 hop (Cloud Run sits behind Google's load balancer)
   app.set("trust proxy", 1);
 
@@ -66,22 +71,27 @@ export function createApp() {
   // Origin verification — block direct access to Cloud Run, require CF proxy
   if (process.env.NODE_ENV === "production") {
     const cfSecret = process.env.CF_ORIGIN_SECRET;
-    if (cfSecret) {
-      const cfSecretBuf = Buffer.from(cfSecret);
-      app.use((req, res, next) => {
-        if (req.path === "/" && req.method === "GET") return next();
-        const provided = (req.headers["x-origin-secret"] as string) || "";
-        if (provided.length !== cfSecret.length ||
-            !timingSafeEqual(Buffer.from(provided), cfSecretBuf)) {
-          console.error(`[guardian] Blocked direct access from ${req.ip} to ${req.path}`);
-          return res.status(403).json({ error: "Forbidden" });
-        }
-        next();
-      });
+    if (!cfSecret) {
+      throw new Error("FATAL: CF_ORIGIN_SECRET must be set in production");
     }
+    const cfSecretBuf = Buffer.from(cfSecret);
+    app.use((req, res, next) => {
+      if (req.path === "/" && req.method === "GET") return next();
+      const provided = (req.headers["x-origin-secret"] as string) || "";
+      if (provided.length !== cfSecret.length ||
+          !timingSafeEqual(Buffer.from(provided), cfSecretBuf)) {
+        console.error(`[guardian] Blocked direct access from ${req.ip} to ${req.path}`);
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      next();
+    });
   }
 
-  app.use(express.json({ limit: "1mb" }));
+  // Skip JSON parsing for Stripe webhook (needs raw body for signature verification)
+  app.use((req, res, next) => {
+    if (req.path === "/billing/webhook") return next();
+    express.json({ limit: "1mb" })(req, res, next);
+  });
 
   // Rate limiting
   if (process.env.NODE_ENV !== "test") {
@@ -144,25 +154,21 @@ export function createApp() {
     });
   });
 
-  // Public billing plans
-  app.get("/billing/plans", (_req, res) => {
-    res.json({
-      plans: [
-        { tier: "free", name: "Free", price: 0, monthlyPrice: 0, features: ["1 cloud account", "6-hour checks", "1 alert channel"] },
-        { tier: "pro", name: "Pro", monthlyPrice: 29, annualPrice: 290, features: ["3 cloud accounts", "5-minute checks", "All channels", "Dashboard"] },
-        { tier: "team", name: "Team", monthlyPrice: 99, annualPrice: 990, features: ["10 cloud accounts", "Team roles", "Audit log", "API"] },
-        { tier: "enterprise", name: "Enterprise", monthlyPrice: null, features: ["Unlimited", "SSO", "SLA"], contactUs: true },
-      ],
-    });
-  });
-
   // Auth middleware for protected routes
   const authStack = [requireAuth, resolveOrg];
   app.use("/cloud-accounts", ...authStack);
   app.use("/alerts", ...authStack);
   app.use("/rules", ...authStack);
   app.use("/database", ...authStack);
-  app.use("/billing", ...authStack);
+  // Billing auth: skip public routes (plans + webhook)
+  app.use("/billing", (req, _res, next) => {
+    if (req.path === "/plans" && req.method === "GET") return next();
+    if (req.path === "/webhook" && req.method === "POST") return next();
+    requireAuth(req as any, _res, (err?: any) => {
+      if (err) return next(err);
+      resolveOrg(req as any, _res, next);
+    });
+  });
   app.use("/team", ...authStack);
   app.use("/auth", ...authStack);
   app.use("/activity", ...authStack);

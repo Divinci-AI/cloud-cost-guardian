@@ -39,11 +39,6 @@ billingRouter.get("/plans", (_req, res) => {
   res.json({
     plans: [
       {
-        tier: "free", name: "Free", price: 0,
-        features: ["1 cloud account", "6-hour check interval", "1 alert channel", "Open source kill switch"],
-        limits: TIER_LIMITS.free,
-      },
-      {
         tier: "pro", name: "Pro", monthlyPrice: 29, annualPrice: 290,
         priceIds: { monthly: PRICES.guardian_pro_monthly.priceId, annual: PRICES.guardian_pro_annual.priceId },
         features: ["3 cloud accounts", "5-minute checks", "All alert channels", "Dashboard", "Anomaly detection", "Cost forecasting"],
@@ -86,7 +81,6 @@ billingRouter.get("/status", requirePermission("billing:read"), async (req, res,
     res.json({
       tier: account.tier,
       limits: TIER_LIMITS[account.tier],
-      stripeCustomerId: account.stripeCustomerId,
       subscription: subscription ? {
         id: subscription.id,
         status: subscription.status,
@@ -116,13 +110,17 @@ billingRouter.post("/checkout", requirePermission("billing:manage"), async (req,
     const plan = PRICES[planKey];
     if (!plan) return res.status(400).json({ error: `Unknown plan: ${planKey}. Options: ${Object.keys(PRICES).join(", ")}` });
 
-    // Validate redirect URLs if provided (must be HTTPS in production)
+    // Validate redirect URLs — restrict to allowed domains to prevent open redirect
+    const ALLOWED_REDIRECT_HOSTS = ["app.kill-switch.net", "kill-switch.net", "localhost", "127.0.0.1"];
     for (const [name, url] of Object.entries({ successUrl, cancelUrl })) {
       if (url && typeof url === "string") {
         try {
           const parsed = new URL(url);
           if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") {
             return res.status(400).json({ error: `${name} must use HTTPS` });
+          }
+          if (!ALLOWED_REDIRECT_HOSTS.includes(parsed.hostname)) {
+            return res.status(400).json({ error: `${name} must redirect to an allowed domain` });
           }
         } catch {
           return res.status(400).json({ error: `Invalid ${name} URL` });
@@ -176,6 +174,10 @@ billingRouter.post("/portal", requirePermission("billing:manage"), async (req, r
         if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") {
           return res.status(400).json({ error: "returnUrl must use HTTPS" });
         }
+        const ALLOWED_HOSTS = ["app.kill-switch.net", "kill-switch.net", "localhost", "127.0.0.1"];
+        if (!ALLOWED_HOSTS.includes(parsed.hostname)) {
+          return res.status(400).json({ error: "returnUrl must redirect to an allowed domain" });
+        }
       } catch {
         return res.status(400).json({ error: "Invalid returnUrl" });
       }
@@ -216,9 +218,33 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const accountId = session.metadata?.guardianAccountId;
-        const tier = (session.metadata?.tier || "pro") as GuardianTier;
 
-        if (accountId) {
+        // Derive tier from the subscription's price ID instead of trusting metadata
+        const VALID_PAID_TIERS = new Set(Object.values(PRICES).map(p => p.tier));
+        let tier: GuardianTier = "pro"; // safe default
+        if (session.subscription) {
+          try {
+            const sub = await stripe!.subscriptions.retrieve(session.subscription as string);
+            const priceId = sub.items.data[0]?.price?.id;
+            const matchedPlan = Object.values(PRICES).find(p => p.priceId === priceId);
+            if (matchedPlan) {
+              tier = matchedPlan.tier;
+            }
+          } catch {
+            // Fall back to metadata if subscription lookup fails
+            const metaTier = session.metadata?.tier as GuardianTier | undefined;
+            if (metaTier && VALID_PAID_TIERS.has(metaTier)) {
+              tier = metaTier;
+            }
+          }
+        } else {
+          const metaTier = session.metadata?.tier as GuardianTier | undefined;
+          if (metaTier && VALID_PAID_TIERS.has(metaTier)) {
+            tier = metaTier;
+          }
+        }
+
+        if (accountId && TIER_LIMITS[tier]) {
           await GuardianAccountModel.findByIdAndUpdate(accountId, {
             tier,
             stripeCustomerId: session.customer as string,
@@ -261,6 +287,7 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
     }
   } catch (err: any) {
     console.error("[guardian] Webhook handler error:", err.message);
+    return res.status(500).send("Webhook handler error");
   }
 
   res.json({ received: true });
@@ -281,9 +308,10 @@ export function enforceTierLimits(resource: "cloudAccounts" | "alertChannels") {
         const { CloudAccountModel } = await import("../../models/cloud-account/schema.js");
         const count = await CloudAccountModel.countDocuments({ guardianAccountId: account._id });
         if (count >= limits.cloudAccounts) {
+          const tierLabel = account.tier === "free" ? "Your current" : account.tier;
           return res.status(403).json({
-            error: `${account.tier} plan allows ${limits.cloudAccounts} cloud account(s). Upgrade to add more.`,
-            currentTier: account.tier,
+            error: `${tierLabel} plan allows ${limits.cloudAccounts} cloud account(s). Upgrade to add more.`,
+            currentTier: account.tier === "free" ? "none" : account.tier,
             limit: limits.cloudAccounts,
             current: count,
           });

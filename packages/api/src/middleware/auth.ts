@@ -8,7 +8,17 @@
 import type { Request, Response, NextFunction } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const CLERK_ISSUER = process.env.CLERK_ISSUER || "https://moving-herring-47.clerk.accounts.dev";
+const CLERK_ISSUER = process.env.CLERK_ISSUER;
+if (!CLERK_ISSUER) {
+  throw new Error("CLERK_ISSUER environment variable is required");
+}
+
+// Allowed authorized-party origins — tokens whose azp isn't in this list are rejected.
+// Clerk sets azp to the frontend origin that requested the token.
+const CLERK_ALLOWED_AZP = (process.env.CLERK_ALLOWED_AZP || "https://app.kill-switch.net")
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean);
 
 const JWKS = createRemoteJWKSet(new URL(`${CLERK_ISSUER}/.well-known/jwks.json`));
 
@@ -79,6 +89,14 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: CLERK_ISSUER,
     });
+
+    // Validate azp (authorized party) — Clerk sets this to the requesting frontend origin.
+    // This prevents tokens issued for other apps on the same Clerk instance from being accepted.
+    const azp = (payload as any).azp as string | undefined;
+    if (azp && !CLERK_ALLOWED_AZP.includes(azp)) {
+      res.status(401).json({ error: "Token not authorized for this service" });
+      return;
+    }
 
     req.userId = payload.sub;
     req.auth = {
