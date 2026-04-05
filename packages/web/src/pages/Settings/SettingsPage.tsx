@@ -517,7 +517,80 @@ export function SettingsPage() {
         </div>
 
         {channels.length === 0 && !showAddChannel && (
-          <p style={{ color: "#9ca3af", fontSize: "14px" }}>No alert channels configured. Add one to get notified when thresholds are breached.</p>
+          <div style={{ marginBottom: "8px" }}>
+            <p style={{ color: "#9ca3af", fontSize: "14px", marginBottom: "16px" }}>
+              No alert channels configured yet. Add one to get notified the moment a threshold is breached.
+            </p>
+            {/* Integration suggestion cards */}
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              {/* PagerDuty — featured */}
+              <button
+                onClick={() => { setNewChannelType("pagerduty"); setShowAddChannel(true); }}
+                style={{
+                  flex: "1", minWidth: "200px", textAlign: "left", cursor: "pointer",
+                  padding: "16px 18px",
+                  background: "rgba(194, 88, 0, 0.08)",
+                  border: "1px solid rgba(194, 88, 0, 0.35)",
+                  borderRadius: "10px",
+                  color: "inherit",
+                  transition: "border-color 0.15s",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "16px" }}>🔔</span>
+                  <span style={{ color: "#fff", fontWeight: "700", fontSize: "14px" }}>PagerDuty</span>
+                  <span style={{
+                    fontSize: "10px", fontWeight: "700", letterSpacing: "0.4px",
+                    background: "rgba(194,88,0,0.2)", color: "#c25800",
+                    padding: "2px 7px", borderRadius: "4px",
+                  }}>RECOMMENDED</span>
+                </div>
+                <p style={{ color: "#9ca3af", fontSize: "12px", margin: 0, lineHeight: "1.4" }}>
+                  Wake up your on-call team the moment Kill Switch fires.
+                </p>
+              </button>
+              {/* Slack */}
+              <button
+                onClick={() => { setNewChannelType("slack"); setShowAddChannel(true); }}
+                style={{
+                  flex: "1", minWidth: "160px", textAlign: "left", cursor: "pointer",
+                  padding: "16px 18px",
+                  background: "rgba(255,255,255,0.02)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: "10px",
+                  color: "inherit",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "16px" }}>💬</span>
+                  <span style={{ color: "#fff", fontWeight: "600", fontSize: "14px" }}>Slack</span>
+                </div>
+                <p style={{ color: "#9ca3af", fontSize: "12px", margin: 0, lineHeight: "1.4" }}>
+                  Post alerts to a channel automatically.
+                </p>
+              </button>
+              {/* Discord */}
+              <button
+                onClick={() => { setNewChannelType("discord"); setShowAddChannel(true); }}
+                style={{
+                  flex: "1", minWidth: "160px", textAlign: "left", cursor: "pointer",
+                  padding: "16px 18px",
+                  background: "rgba(255,255,255,0.02)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: "10px",
+                  color: "inherit",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "16px" }}>🎮</span>
+                  <span style={{ color: "#fff", fontWeight: "600", fontSize: "14px" }}>Discord</span>
+                </div>
+                <p style={{ color: "#9ca3af", fontSize: "12px", margin: 0, lineHeight: "1.4" }}>
+                  Send alerts to your server's ops channel.
+                </p>
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Existing channels */}
@@ -692,6 +765,45 @@ jobs:
                       value={newChannelValue}
                       onChange={e => setNewChannelValue(e.target.value)}
                     />
+
+                    {/* PagerDuty helper */}
+                    {newChannelType === "pagerduty" && (
+                      <div style={{ marginTop: "10px" }}>
+                        <p style={{ fontSize: "12px", color: "#9ca3af", margin: "0 0 8px" }}>
+                          Find your routing key in PagerDuty under{" "}
+                          <strong style={{ color: "#c4c5ca" }}>Services → [your service] → Integrations → Events API v2</strong>.
+                        </p>
+                        <div style={{
+                          padding: "10px 14px",
+                          background: "rgba(92,226,231,0.04)",
+                          border: "1px solid rgba(92,226,231,0.12)",
+                          borderRadius: "6px",
+                        }}>
+                          <p style={{ fontSize: "11px", color: "#9ca3af", margin: "0 0 6px", fontWeight: "600", letterSpacing: "0.3px" }}>
+                            OR — let Claude Code set it up for you:
+                          </p>
+                          <code style={{ fontSize: "12px", color: "#5ce2e7", display: "block", fontFamily: "monospace" }}>
+                            ks alerts add --type pagerduty --routing-key YOUR_KEY
+                          </code>
+                          <p style={{ fontSize: "11px", color: "#4b5563", margin: "6px 0 0" }}>
+                            Just tell Claude Code your routing key and it'll run this command automatically.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Slack / Discord helper */}
+                    {(newChannelType === "slack" || newChannelType === "discord") && (
+                      <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "6px" }}>
+                        {newChannelType === "slack"
+                          ? "Create an Incoming Webhook at api.slack.com/apps → your app → Incoming Webhooks."
+                          : "Create a webhook in Discord → channel settings → Integrations → Webhooks."}
+                        {" "}Or run:{" "}
+                        <code style={{ color: "#5ce2e7", fontFamily: "monospace" }}>
+                          ks alerts add --type {newChannelType} --webhook-url URL
+                        </code>
+                      </p>
+                    )}
                   </div>
                   <button onClick={handleAddChannel} disabled={!newChannelValue}
                     style={{ ...btnStyle, background: "#c25800", border: "none", opacity: newChannelValue ? 1 : 0.5, alignSelf: "flex-start" }}>

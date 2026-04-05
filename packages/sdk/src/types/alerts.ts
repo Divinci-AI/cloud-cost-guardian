@@ -2,13 +2,22 @@
  * Alert types
  */
 
-export type AlertChannelType = "pagerduty" | "discord" | "slack" | "email" | "webhook";
+export type AlertChannelType = "pagerduty" | "discord" | "slack" | "email" | "webhook" | "github";
 
 export interface AlertChannel {
   type: AlertChannelType;
   name: string;
   enabled: boolean;
-  config: Record<string, string>;
+  config: {
+    routingKey?: string;
+    webhookUrl?: string;
+    email?: string;
+    githubToken?: string;
+    repoOwner?: string;
+    repoName?: string;
+    workflowFile?: string;
+    branchRef?: string;
+  };
   configPreview?: string | null;
 }
 
