@@ -9,15 +9,20 @@ import type { AlertChannel } from "../models/guardian-account/schema.js";
 
 type Severity = "critical" | "error" | "warning" | "info";
 
+const GITHUB_API_HOST = "api.github.com";
+
 /**
  * SSRF Protection: Validate webhook URLs are safe to call.
  * Blocks private/internal IPs and non-HTTPS URLs.
+ * Explicitly allows api.github.com for the remediation channel.
  */
 function isUrlSafe(urlString: string): boolean {
   try {
     const url = new URL(urlString);
     // Only allow HTTPS
     if (url.protocol !== "https:") return false;
+    // Explicitly allow GitHub API
+    if (url.hostname === GITHUB_API_HOST) return true;
     // Block known internal hostnames
     const blocked = ["localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]", "metadata.google.internal"];
     if (blocked.includes(url.hostname)) return false;
@@ -61,6 +66,8 @@ export async function sendAlerts(
         return alertSlack(channel, summary, severity, details);
       case "webhook":
         return alertWebhook(channel, summary, severity, details);
+      case "github":
+        return alertGitHub(channel, summary, severity, details);
       case "email":
         // TODO: implement email alerting (SendGrid/Resend)
         console.warn("[guardian] Email alerting not yet implemented");
@@ -149,4 +156,69 @@ async function alertWebhook(channel: AlertChannel, summary: string, severity: Se
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ summary, severity, details, timestamp: new Date().toISOString(), source: "kill-switch" }),
   });
+}
+
+/**
+ * GitHub Remediation Channel
+ *
+ * Triggers a workflow_dispatch on the user's repository so Claude Code can
+ * analyze the codebase and open a PR fixing the root cause of the violation.
+ *
+ * Required PAT scopes: repo + workflow
+ * (Fine-grained: Actions:write, Contents:write, Pull-requests:write)
+ */
+async function alertGitHub(channel: AlertChannel, summary: string, severity: Severity, details: Record<string, unknown>): Promise<void> {
+  const { githubToken, repoOwner, repoName, workflowFile, branchRef = "main" } = channel.config;
+  if (!githubToken || !repoOwner || !repoName || !workflowFile) {
+    console.warn("[guardian] GitHub remediation channel misconfigured — skipping");
+    return;
+  }
+
+  // Build structured violation list from details
+  const violations = (details.violations as any[] | undefined) ?? [];
+  const violationsSummary = violations.map((v: any) => ({
+    serviceName: String(v.serviceName ?? ""),
+    metricName: String(v.metricName ?? ""),
+    currentValue: v.currentValue,
+    threshold: v.threshold,
+    multiplier: v.threshold > 0 ? `${Math.round(v.currentValue / v.threshold)}x` : "N/A",
+    severity: v.severity,
+  }));
+
+  // Dedup key scoped to cloud account + calendar day so callers can guard
+  // against duplicate runs if the same violation fires across multiple checks.
+  const today = new Date().toISOString().split("T")[0];
+  const cloudAccountId = String(details.cloudAccountId ?? details.accountName ?? "unknown");
+  const dedupKey = `${cloudAccountId}:${today}`;
+
+  // GitHub Actions workflow_dispatch inputs must all be strings
+  const inputs: Record<string, string> = {
+    provider:             String(details.provider ?? ""),
+    account_name:         String(details.accountName ?? ""),
+    severity,
+    violation_count:      String(violations.length),
+    violations_json:      JSON.stringify(violationsSummary),
+    kill_switch_action:   String((details.actionsTaken as string[] | undefined)?.[0] ?? "none"),
+    dedup_key:            dedupKey,
+  };
+
+  const url = `https://${GITHUB_API_HOST}/repos/${repoOwner}/${repoName}/actions/workflows/${workflowFile}/dispatches`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": `Bearer ${githubToken}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ref: branchRef, inputs }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[guardian] GitHub remediation dispatch failed: ${res.status} ${body}`);
+  } else {
+    console.error(`[guardian] GitHub remediation triggered: ${repoOwner}/${repoName} @ ${workflowFile} (dedup: ${dedupKey})`);
+  }
 }

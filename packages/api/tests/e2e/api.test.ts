@@ -10,6 +10,8 @@ import request from "supertest";
 import { createApp } from "../../src/app.js";
 import type { Express } from "express";
 
+vi.hoisted(() => { process.env.CLERK_ISSUER = "https://test.clerk.accounts.dev"; });
+
 // Mock all external dependencies
 vi.mock("mongoose", () => {
   const docs = new Map();
@@ -347,6 +349,63 @@ describe("E2E: Alert Channels", () => {
       .send({ channels: "not-an-array" });
     expect([400, 404]).toContain(res.status);
   });
+
+  it("PUT /alerts/channels accepts github channel type with all required fields", async () => {
+    const res = await request(app)
+      .put("/alerts/channels")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({
+        channels: [
+          {
+            type: "github",
+            name: "Auto-Remediation",
+            config: {
+              githubToken: "ghp_test1234",
+              repoOwner: "acme-corp",
+              repoName: "my-app",
+              workflowFile: "kill-switch-remediate.yml",
+              branchRef: "main",
+            },
+            enabled: true,
+          },
+        ],
+      });
+    // 200 on success, 404 if mock account not seeded — either way not a validation rejection
+    expect(res.status).not.toBe(400);
+    expect(res.status).not.toBe(401);
+    expect(res.status).not.toBe(422);
+  });
+
+  it("GET /alerts/channels returns owner/repo as configPreview for github channels", async () => {
+    const { GuardianAccountModel } = await import("../../src/models/guardian-account/schema.js");
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValueOnce({
+      alertChannels: [
+        {
+          type: "github",
+          name: "Auto-Remediation",
+          enabled: true,
+          config: {
+            githubToken: "ghp_supersecrettoken",
+            repoOwner: "acme-corp",
+            repoName: "my-app",
+            workflowFile: "kill-switch-remediate.yml",
+            branchRef: "main",
+          },
+        },
+      ],
+    } as any);
+
+    const res = await request(app)
+      .get("/alerts/channels")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user");
+
+    expect(res.status).toBe(200);
+    const githubChannel = res.body.channels.find((c: any) => c.type === "github");
+    expect(githubChannel).toBeDefined();
+    // configPreview should show owner/repo — NOT the raw token
+    expect(githubChannel.configPreview).toBe("acme-corp/my-app");
+    expect(githubChannel.configPreview).not.toContain("ghp_supersecrettoken");
+  });
 });
 
 describe("E2E: Kill Switch Rules", () => {
@@ -585,15 +644,95 @@ describe("E2E: Billing", () => {
     const res = await request(app).get("/billing/plans");
     expect(res.status).toBe(200);
     expect(res.body.plans).toBeDefined();
-    expect(res.body.plans.length).toBeGreaterThanOrEqual(4);
+    expect(res.body.plans.length).toBeGreaterThanOrEqual(3);
 
     const free = res.body.plans.find((p: any) => p.tier === "free");
-    expect(free).toBeDefined();
-    expect(free.price).toBe(0);
+    expect(free).toBeUndefined();
 
     const pro = res.body.plans.find((p: any) => p.tier === "pro");
     expect(pro).toBeDefined();
     expect(pro.monthlyPrice).toBe(29);
+  });
+
+  it("GET /billing/plans includes correct features per tier", async () => {
+    const res = await request(app).get("/billing/plans");
+    expect(res.status).toBe(200);
+
+    const team = res.body.plans.find((p: any) => p.tier === "team");
+    expect(team).toBeDefined();
+    expect(team.monthlyPrice).toBe(99);
+    expect(team.annualPrice).toBe(990);
+    expect(team.features).toContain("Team roles");
+    expect(team.features).toContain("Audit log");
+    expect(team.limits.cloudAccounts).toBe(10);
+    expect(team.limits.checkIntervalMinutes).toBe(5);
+
+    const enterprise = res.body.plans.find((p: any) => p.tier === "enterprise");
+    expect(enterprise).toBeDefined();
+    expect(enterprise.contactUs).toBe(true);
+    expect(enterprise.features).toContain("SSO/SAML");
+    expect(enterprise.limits.cloudAccounts).toBe(100);
+  });
+
+  it("GET /billing/plans includes Stripe price IDs for paid tiers", async () => {
+    const res = await request(app).get("/billing/plans");
+    const pro = res.body.plans.find((p: any) => p.tier === "pro");
+    expect(pro.priceIds).toBeDefined();
+    expect(pro.priceIds.monthly).toBeTruthy();
+    expect(pro.priceIds.annual).toBeTruthy();
+
+    const team = res.body.plans.find((p: any) => p.tier === "team");
+    expect(team.priceIds).toBeDefined();
+    expect(team.priceIds.monthly).toBeTruthy();
+    expect(team.priceIds.annual).toBeTruthy();
+
+    const free = res.body.plans.find((p: any) => p.tier === "free");
+    expect(free).toBeUndefined();
+  });
+
+  it("POST /billing/checkout returns 503 when Stripe not configured", async () => {
+    const res = await request(app)
+      .post("/billing/checkout")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({ planKey: "guardian_pro_monthly" });
+    // With mocked Stripe (empty class), should get 503
+    expect(res.status).toBe(503);
+  });
+
+  it("POST /billing/checkout rejects missing planKey", async () => {
+    const res = await request(app)
+      .post("/billing/checkout")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({});
+    expect([400, 503]).toContain(res.status);
+  });
+
+  it("POST /billing/checkout rejects unknown plan", async () => {
+    const res = await request(app)
+      .post("/billing/checkout")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({ planKey: "nonexistent_plan" });
+    expect([400, 503]).toContain(res.status);
+  });
+
+  it("POST /billing/portal returns 503 when Stripe not configured", async () => {
+    const res = await request(app)
+      .post("/billing/portal")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
+      .send({});
+    expect(res.status).toBe(503);
+  });
+
+  it("POST /billing/webhook returns 503 when Stripe not configured", async () => {
+    const res = await request(app)
+      .post("/billing/webhook")
+      .set("Content-Type", "application/json")
+      .send(JSON.stringify({ type: "checkout.session.completed" }));
+    expect(res.status).toBe(503);
   });
 });
 

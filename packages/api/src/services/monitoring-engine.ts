@@ -137,6 +137,7 @@ async function checkSingleAccount(cloudAccount: any): Promise<CheckResult> {
         await sendAlerts(guardianAccount.alertChannels, summary, "critical", {
           provider: cloudAccount.provider,
           accountName: cloudAccount.name,
+          cloudAccountId: cloudAccount._id.toString(),
           violations: usage.violations,
           actionsTaken: result.actionsTaken,
           totalEstimatedDailyCost: usage.totalEstimatedDailyCostUSD,

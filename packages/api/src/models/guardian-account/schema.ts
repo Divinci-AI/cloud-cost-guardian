@@ -5,12 +5,17 @@ export type GuardianTier = "free" | "pro" | "team" | "enterprise";
 export type OrgType = "personal" | "organization";
 
 export interface AlertChannel {
-  type: "pagerduty" | "discord" | "slack" | "email" | "webhook";
+  type: "pagerduty" | "discord" | "slack" | "email" | "webhook" | "github";
   name: string;
   config: {
     routingKey?: string;    // PagerDuty
     webhookUrl?: string;    // Discord, Slack, webhook
     email?: string;         // Email
+    githubToken?: string;   // GitHub PAT (repo + workflow scopes)
+    repoOwner?: string;     // GitHub org or user (e.g. "acme-corp")
+    repoName?: string;      // Repository name (e.g. "my-app")
+    workflowFile?: string;  // Workflow filename (e.g. "kill-switch-remediate.yml")
+    branchRef?: string;     // Branch to dispatch on (default: "main")
   };
   enabled: boolean;
 }
@@ -37,7 +42,7 @@ export interface GuardianAccountProps {
 export type GuardianAccountDocument = GuardianAccountProps & Document;
 
 const alertChannelSchema = new Schema<AlertChannel>({
-  type: { type: String, required: true, enum: ["pagerduty", "discord", "slack", "email", "webhook"] },
+  type: { type: String, required: true, enum: ["pagerduty", "discord", "slack", "email", "webhook", "github"] },
   name: { type: String, required: true },
   config: { type: Schema.Types.Mixed, required: true },
   enabled: { type: Boolean, default: true },

@@ -358,6 +358,55 @@ describe("Monitoring Engine", () => {
     expect(results[0].status).toBe("ok");
   });
 
+  it("passes cloudAccountId in sendAlerts details for GitHub remediation dedup", async () => {
+    const mockProvider = {
+      id: "cloudflare",
+      name: "Cloudflare",
+      checkUsage: vi.fn().mockResolvedValue({
+        provider: "cloudflare",
+        accountId: "test",
+        checkedAt: Date.now(),
+        services: [],
+        totalEstimatedDailyCostUSD: 0,
+        violations: [{
+          serviceName: "d1-chunks-abc",
+          metricName: "D1 Rows Read",
+          currentValue: 302_100_000,
+          threshold: 5_000_000,
+          unit: "rows",
+          severity: "critical",
+        }],
+      }),
+      executeKillSwitch: vi.fn().mockResolvedValue({ success: true, action: "disconnect", serviceName: "d1-chunks-abc", details: "Disconnected" }),
+      validateCredential: vi.fn(),
+      getDefaultThresholds: vi.fn(),
+    };
+
+    vi.mocked(CloudAccountModel.find).mockResolvedValue([
+      { _id: "acc-db-id-999", provider: "cloudflare", credentialId: "cred1", thresholds: {}, protectedServices: [], autoDisconnect: true, autoDelete: false, guardianAccountId: "ga1", name: "zombay-cf" },
+    ] as any);
+
+    vi.mocked(getCredential).mockResolvedValue({ provider: "cloudflare", apiToken: "tok", accountId: "aid" });
+    vi.mocked(getProvider).mockReturnValue(mockProvider);
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValue({
+      alertChannels: [{ type: "github", name: "Auto-Fix", config: { githubToken: "ghp_x", repoOwner: "acme", repoName: "app", workflowFile: "fix.yml", branchRef: "main" }, enabled: true }],
+    } as any);
+    vi.mocked(CloudAccountModel.findByIdAndUpdate).mockResolvedValue(null);
+
+    await runCheckCycle();
+
+    expect(sendAlerts).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(String),
+      "critical",
+      expect.objectContaining({
+        cloudAccountId: "acc-db-id-999",  // must be the MongoDB _id string, not the account name
+        accountName: "zombay-cf",
+        provider: "cloudflare",
+      })
+    );
+  });
+
   it("uses auto-delete for critical violations when configured", async () => {
     const mockProvider = {
       id: "cloudflare",

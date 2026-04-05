@@ -33,6 +33,7 @@ alertRouter.get("/channels", requirePermission("alerts:read"), async (req, res, 
         configPreview: c.config.email
           || (c.config.webhookUrl ? c.config.webhookUrl.substring(0, 40) + "..." : null)
           || (c.config.routingKey ? "****" + c.config.routingKey.slice(-4) : null)
+          || (c.config.repoOwner && c.config.repoName ? `${c.config.repoOwner}/${c.config.repoName}` : null)
           || null,
       })),
     });

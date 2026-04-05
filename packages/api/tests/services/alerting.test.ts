@@ -147,6 +147,170 @@ describe("Alerting Service", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  describe("GitHub Remediation Channel", () => {
+    const githubChannel = (): AlertChannel => ({
+      type: "github",
+      name: "Auto-Remediation",
+      config: {
+        githubToken: "ghp_test1234567890",
+        repoOwner: "acme-corp",
+        repoName: "my-app",
+        workflowFile: "kill-switch-remediate.yml",
+        branchRef: "main",
+      },
+      enabled: true,
+    });
+
+    const violations = [
+      { serviceName: "d1-chunks-abc", metricName: "D1 Rows Read", currentValue: 302_100_000, threshold: 5_000_000, unit: "rows", severity: "critical" },
+      { serviceName: "d1-chunks-def", metricName: "D1 Rows Read", currentValue: 315_200_000, threshold: 5_000_000, unit: "rows", severity: "critical" },
+    ];
+
+    it("dispatches workflow_dispatch to the correct GitHub API URL", async () => {
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: ["Disconnected d1-chunks-abc"],
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.github.com/repos/acme-corp/my-app/actions/workflows/kill-switch-remediate.yml/dispatches",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    it("sends correct Authorization header and GitHub API version", async () => {
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: [],
+      });
+
+      const [, opts] = mockFetch.mock.calls[0];
+      expect(opts.headers["Authorization"]).toBe("Bearer ghp_test1234567890");
+      expect(opts.headers["X-GitHub-Api-Version"]).toBe("2022-11-28");
+      expect(opts.headers["Accept"]).toBe("application/vnd.github+json");
+    });
+
+    it("dispatches on the configured branchRef, not hardcoded main", async () => {
+      const channel = githubChannel();
+      channel.config.branchRef = "develop";
+
+      await sendAlerts([channel], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: [],
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.ref).toBe("develop");
+    });
+
+    it("defaults to main when branchRef is not set", async () => {
+      const channel = githubChannel();
+      delete channel.config.branchRef;
+
+      await sendAlerts([channel], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: [],
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.ref).toBe("main");
+    });
+
+    it("passes all violation context as string inputs", async () => {
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: ["Disconnected d1-chunks-abc"],
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const inputs = body.inputs;
+
+      expect(inputs.provider).toBe("cloudflare");
+      expect(inputs.account_name).toBe("zombay-cf");
+      expect(inputs.severity).toBe("critical");
+      expect(inputs.violation_count).toBe("2");
+      expect(inputs.kill_switch_action).toBe("Disconnected d1-chunks-abc");
+
+      // All inputs must be strings (GitHub Actions requirement)
+      for (const [key, val] of Object.entries(inputs)) {
+        expect(typeof val).toBe("string", `input "${key}" must be a string`);
+      }
+    });
+
+    it("calculates multiplier correctly in violations_json (60x overage)", async () => {
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: [],
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const parsed = JSON.parse(body.inputs.violations_json);
+
+      expect(parsed[0].multiplier).toBe("60x"); // 302_100_000 / 5_000_000 = 60.42 → "60x"
+      expect(parsed[1].multiplier).toBe("63x"); // 315_200_000 / 5_000_000 = 63.04 → "63x"
+      expect(parsed[0].serviceName).toBe("d1-chunks-abc");
+      expect(parsed[0].metricName).toBe("D1 Rows Read");
+    });
+
+    it("scopes dedup_key to cloudAccountId and calendar date", async () => {
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: [],
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const today = new Date().toISOString().split("T")[0];
+      expect(body.inputs.dedup_key).toBe(`acc-123:${today}`);
+    });
+
+    it("falls back to accountName in dedup_key when cloudAccountId is absent", async () => {
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf",
+        violations, actionsTaken: [],
+        // No cloudAccountId
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const today = new Date().toISOString().split("T")[0];
+      expect(body.inputs.dedup_key).toBe(`zombay-cf:${today}`);
+    });
+
+    it("skips dispatch and logs warning when required config fields are missing", async () => {
+      const incomplete: AlertChannel = {
+        type: "github",
+        name: "Broken",
+        config: { githubToken: "tok" }, // missing repoOwner, repoName, workflowFile
+        enabled: true,
+      };
+
+      await sendAlerts([incomplete], "alert", "critical", { violations: [] });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("logs error but does not throw when GitHub API returns non-200", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 422, text: async () => '{"message":"Reference not found"}' });
+
+      await expect(
+        sendAlerts([githubChannel()], "D1 overage", "critical", {
+          provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+          violations, actionsTaken: [],
+        })
+      ).resolves.not.toThrow();
+    });
+
+    it("handles empty violations array gracefully (e.g. test alert)", async () => {
+      await sendAlerts([githubChannel()], "Test alert", "info", {
+        test: true, message: "Integration check", cloudAccountId: "acc-123",
+        violations: [],
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.inputs.violation_count).toBe("0");
+      expect(body.inputs.violations_json).toBe("[]");
+    });
+  });
+
   it("uses correct color codes for Discord severity", async () => {
     const makeChannel = (): AlertChannel[] => [{
       type: "discord",

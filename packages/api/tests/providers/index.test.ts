@@ -38,9 +38,9 @@ describe("Provider Registry", () => {
   });
 
   describe("getAllProviders", () => {
-    it("returns all thirteen providers", () => {
+    it("returns all fourteen providers", () => {
       const providers = getAllProviders();
-      expect(providers).toHaveLength(13);
+      expect(providers).toHaveLength(14);
 
       const ids = providers.map(p => p.id);
       expect(ids).toContain("cloudflare");

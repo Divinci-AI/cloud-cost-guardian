@@ -6,7 +6,16 @@ import { useOrg } from "../../context/OrgContext";
 interface AlertChannel {
   type: string;
   name: string;
-  config: { routingKey?: string; webhookUrl?: string; email?: string };
+  config: {
+    routingKey?: string;
+    webhookUrl?: string;
+    email?: string;
+    githubToken?: string;
+    repoOwner?: string;
+    repoName?: string;
+    workflowFile?: string;
+    branchRef?: string;
+  };
   enabled: boolean;
   configPreview?: string;
 }
@@ -53,10 +62,18 @@ export function SettingsPage() {
 
   // Alert channel form
   const [channels, setChannels] = useState<AlertChannel[]>([]);
-  const [newChannelType, setNewChannelType] = useState<"email" | "discord" | "slack" | "pagerduty" | "webhook">("email");
+  const [newChannelType, setNewChannelType] = useState<"email" | "discord" | "slack" | "pagerduty" | "webhook" | "github">("email");
   const [newChannelName, setNewChannelName] = useState("");
   const [newChannelValue, setNewChannelValue] = useState("");
   const [showAddChannel, setShowAddChannel] = useState(false);
+
+  // GitHub remediation channel extra fields
+  const [ghToken, setGhToken] = useState("");
+  const [ghOwner, setGhOwner] = useState("");
+  const [ghRepo, setGhRepo] = useState("");
+  const [ghWorkflow, setGhWorkflow] = useState("kill-switch-remediate.yml");
+  const [ghBranch, setGhBranch] = useState("main");
+  const [showGhTemplate, setShowGhTemplate] = useState(false);
 
   // Team state
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
@@ -117,11 +134,22 @@ export function SettingsPage() {
   };
 
   const handleAddChannel = async () => {
-    const configKey = newChannelType === "email" ? "email" : newChannelType === "pagerduty" ? "routingKey" : "webhookUrl";
+    let config: AlertChannel["config"];
+    if (newChannelType === "github") {
+      if (!ghToken || !ghOwner || !ghRepo || !ghWorkflow) {
+        flash("All GitHub fields are required", "error");
+        return;
+      }
+      config = { githubToken: ghToken, repoOwner: ghOwner, repoName: ghRepo, workflowFile: ghWorkflow, branchRef: ghBranch || "main" };
+    } else {
+      const configKey = newChannelType === "email" ? "email" : newChannelType === "pagerduty" ? "routingKey" : "webhookUrl";
+      config = { [configKey]: newChannelValue };
+    }
+
     const channel: AlertChannel = {
       type: newChannelType,
       name: newChannelName || newChannelType.charAt(0).toUpperCase() + newChannelType.slice(1),
-      config: { [configKey]: newChannelValue },
+      config,
       enabled: true,
     };
     const updated = [...channels, channel];
@@ -131,6 +159,7 @@ export function SettingsPage() {
       setShowAddChannel(false);
       setNewChannelName("");
       setNewChannelValue("");
+      setGhToken(""); setGhOwner(""); setGhRepo(""); setGhWorkflow("kill-switch-remediate.yml"); setGhBranch("main");
       flash("Alert channel added");
     } catch (e: any) {
       flash(e.message, "error");
@@ -196,11 +225,11 @@ export function SettingsPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <div>
             <label style={labelStyle}>Email</label>
-            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{user?.primaryEmailAddress?.emailAddress}</div>
+            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#9ca3af", cursor: "not-allowed" }}>{user?.primaryEmailAddress?.emailAddress}</div>
           </div>
           <div>
             <label style={labelStyle}>Name</label>
-            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{user?.fullName || "—"}</div>
+            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#9ca3af", cursor: "not-allowed" }}>{user?.fullName || "—"}</div>
           </div>
           <div>
             <label style={labelStyle}>Account Tier</label>
@@ -210,12 +239,12 @@ export function SettingsPage() {
           </div>
           <div>
             <label style={labelStyle}>Member Since</label>
-            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>
+            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#9ca3af", cursor: "not-allowed" }}>
               {account?.createdAt ? new Date(account.createdAt).toLocaleDateString() : "—"}
             </div>
           </div>
         </div>
-        <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px" }}>
+        <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "12px" }}>
           Profile details are managed by your identity provider.
         </p>
       </div>
@@ -244,7 +273,7 @@ export function SettingsPage() {
                   placeholder="Organization name"
                 />
               ) : (
-                <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{orgName}</div>
+                <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#9ca3af", cursor: "not-allowed" }}>{orgName}</div>
               )}
             </div>
             <div>
@@ -257,12 +286,12 @@ export function SettingsPage() {
                   placeholder="org-slug"
                 />
               ) : (
-                <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{orgSlug}</div>
+                <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#9ca3af", cursor: "not-allowed" }}>{orgSlug}</div>
               )}
             </div>
             <div>
               <label style={labelStyle}>Type</label>
-              <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280" }}>
+              <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#9ca3af" }}>
                 {activeOrg.type === "organization" ? "Organization" : "Personal Workspace"}
               </div>
             </div>
@@ -333,12 +362,12 @@ export function SettingsPage() {
             </button>
             <div>
               <div style={{ fontSize: "14px", color: "#fff", fontWeight: "500" }}>Daily Cost Report</div>
-              <div style={{ fontSize: "12px", color: "#6b7280" }}>Receive a summary of cloud spending every morning</div>
+              <div style={{ fontSize: "12px", color: "#9ca3af" }}>Receive a summary of cloud spending every morning</div>
             </div>
           </div>
           <div>
             <label style={labelStyle}>Check Interval</label>
-            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>
+            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#9ca3af", cursor: "not-allowed" }}>
               Every {account?.settings?.checkIntervalMinutes || 360} minutes
               {account?.tier === "free" && <span style={{ color: "#c25800", marginLeft: "8px" }}>(upgrade for 5-min checks)</span>}
             </div>
@@ -354,7 +383,7 @@ export function SettingsPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <div>
             <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "18px", fontWeight: "600", color: "#fff", margin: 0 }}>API Keys</h2>
-            <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "4px" }}>For the CLI (<code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 5px", borderRadius: "3px", fontSize: "11px" }}>ks</code>) and API access</p>
+            <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>For the CLI (<code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 5px", borderRadius: "3px", fontSize: "11px" }}>ks</code>) and API access</p>
           </div>
           <button onClick={() => { setShowCreateKey(!showCreateKey); setCreatedKey(null); }} style={{ ...btnStyle, background: showCreateKey ? "rgba(255,107,107,0.1)" : "rgba(255,255,255,0.08)" }}>
             {showCreateKey ? "Cancel" : "Create API Key"}
@@ -385,7 +414,7 @@ export function SettingsPage() {
                 Copy
               </button>
             </div>
-            <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>
+            <div style={{ fontSize: "12px", color: "#9ca3af", marginTop: "8px" }}>
               Use with: <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 5px", borderRadius: "3px", fontSize: "11px" }}>ks auth login --api-key {createdKey.substring(0, 16)}...</code>
             </div>
           </div>
@@ -422,7 +451,7 @@ export function SettingsPage() {
 
         {/* Existing keys */}
         {apiKeys.length === 0 && !showCreateKey && (
-          <p style={{ color: "#6b7280", fontSize: "14px" }}>No API keys yet. Create one to use the CLI or integrate with your tools.</p>
+          <p style={{ color: "#9ca3af", fontSize: "14px" }}>No API keys yet. Create one to use the CLI or integrate with your tools.</p>
         )}
         {apiKeys.map((k, i) => (
           <div key={k._id || i} style={{
@@ -432,7 +461,7 @@ export function SettingsPage() {
           }}>
             <div>
               <span style={{ color: "#fff", fontSize: "14px", fontWeight: "500" }}>{k.name}</span>
-              <span style={{ color: "#6b7280", fontSize: "12px", marginLeft: "8px", fontFamily: "JetBrains Mono, monospace" }}>{k.keyPrefix}...</span>
+              <span style={{ color: "#9ca3af", fontSize: "12px", marginLeft: "8px", fontFamily: "JetBrains Mono, monospace" }}>{k.keyPrefix}...</span>
               {k.lastUsedAt && <span style={{ color: "#4b5563", fontSize: "11px", marginLeft: "8px" }}>Last used {new Date(k.lastUsedAt).toLocaleDateString()}</span>}
             </div>
             <div style={{ display: "flex", gap: "8px" }}>
@@ -463,7 +492,7 @@ export function SettingsPage() {
                     flash(e.message, "error");
                   }
                 }}
-                style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "13px", padding: "4px 8px" }}
+                style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "13px", padding: "4px 8px" }}
                 title="Revoke key"
               >
                 Revoke
@@ -488,7 +517,7 @@ export function SettingsPage() {
         </div>
 
         {channels.length === 0 && !showAddChannel && (
-          <p style={{ color: "#6b7280", fontSize: "14px" }}>No alert channels configured. Add one to get notified when thresholds are breached.</p>
+          <p style={{ color: "#9ca3af", fontSize: "14px" }}>No alert channels configured. Add one to get notified when thresholds are breached.</p>
         )}
 
         {/* Existing channels */}
@@ -513,12 +542,12 @@ export function SettingsPage() {
               </button>
               <div>
                 <span style={{ color: "#fff", fontSize: "14px", fontWeight: "500" }}>{ch.name}</span>
-                <span style={{ color: "#6b7280", fontSize: "12px", marginLeft: "8px" }}>{ch.type}</span>
+                <span style={{ color: "#9ca3af", fontSize: "12px", marginLeft: "8px" }}>{ch.type}</span>
                 {ch.configPreview && <div style={{ fontSize: "11px", color: "#4b5563", marginTop: "2px", fontFamily: "monospace" }}>{ch.configPreview}</div>}
               </div>
             </div>
             <button onClick={() => handleRemoveChannel(i)}
-              style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "16px", padding: "4px 8px" }}
+              style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "16px", padding: "4px 8px" }}
               title="Remove channel"
             >
               &#10005;
@@ -530,7 +559,7 @@ export function SettingsPage() {
         {showAddChannel && (
           <div style={{ marginTop: "16px", padding: "20px", background: "rgba(255,255,255,0.02)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)" }}>
             <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-              {(["email", "discord", "slack", "pagerduty", "webhook"] as const).map(type => (
+              {(["email", "discord", "slack", "pagerduty", "webhook", "github"] as const).map(type => (
                 <button key={type} onClick={() => setNewChannelType(type)}
                   style={{
                     padding: "6px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: "600", cursor: "pointer",
@@ -538,29 +567,138 @@ export function SettingsPage() {
                     border: newChannelType === type ? "1px solid rgba(92,226,231,0.3)" : "1px solid rgba(255,255,255,0.1)",
                     color: newChannelType === type ? "#5ce2e7" : "#c4c5ca",
                   }}>
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                  {type === "github" ? "GitHub (AI Fix)" : type.charAt(0).toUpperCase() + type.slice(1)}
                 </button>
               ))}
             </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div>
                 <label style={labelStyle}>Channel Name</label>
-                <input style={inputStyle} placeholder="e.g., Ops Team Discord" value={newChannelName} onChange={e => setNewChannelName(e.target.value)} />
+                <input style={inputStyle} placeholder="e.g., Auto-Remediation" value={newChannelName} onChange={e => setNewChannelName(e.target.value)} />
               </div>
-              <div>
-                <label style={labelStyle}>{channelTypeLabel[newChannelType] || "Value"}</label>
-                <input
-                  style={inputStyle}
-                  type={newChannelType === "email" ? "email" : "text"}
-                  placeholder={newChannelType === "email" ? "alerts@yourteam.com" : newChannelType === "pagerduty" ? "Routing key" : "https://hooks..."}
-                  value={newChannelValue}
-                  onChange={e => setNewChannelValue(e.target.value)}
-                />
-              </div>
-              <button onClick={handleAddChannel} disabled={!newChannelValue}
-                style={{ ...btnStyle, background: "#c25800", border: "none", opacity: newChannelValue ? 1 : 0.5, alignSelf: "flex-start" }}>
-                Add Channel
-              </button>
+
+              {newChannelType === "github" ? (
+                <>
+                  {/* GitHub PAT */}
+                  <div>
+                    <label style={labelStyle}>GitHub Personal Access Token</label>
+                    <input
+                      style={inputStyle} type="password" placeholder="github_pat_..."
+                      value={ghToken} onChange={e => setGhToken(e.target.value)}
+                    />
+                    <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>
+                      Required scopes: <code style={{ color: "#5ce2e7" }}>repo</code> + <code style={{ color: "#5ce2e7" }}>workflow</code>
+                      {" "}(or fine-grained: Actions:write, Contents:write, Pull-requests:write)
+                    </p>
+                  </div>
+                  {/* Repo owner + name side by side */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={labelStyle}>Repo Owner</label>
+                      <input style={inputStyle} placeholder="acme-corp" value={ghOwner} onChange={e => setGhOwner(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Repo Name</label>
+                      <input style={inputStyle} placeholder="my-app" value={ghRepo} onChange={e => setGhRepo(e.target.value)} />
+                    </div>
+                  </div>
+                  {/* Workflow file + branch side by side */}
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+                    <div>
+                      <label style={labelStyle}>Workflow File</label>
+                      <input
+                        style={inputStyle} placeholder="kill-switch-remediate.yml"
+                        value={ghWorkflow} onChange={e => setGhWorkflow(e.target.value)}
+                      />
+                      <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>
+                        Filename inside <code style={{ color: "#5ce2e7" }}>.github/workflows/</code>
+                      </p>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Branch</label>
+                      <input
+                        style={inputStyle} placeholder="main"
+                        value={ghBranch} onChange={e => setGhBranch(e.target.value)}
+                      />
+                      <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "4px" }}>
+                        e.g. <code style={{ color: "#5ce2e7" }}>main</code> or <code style={{ color: "#5ce2e7" }}>master</code>
+                      </p>
+                    </div>
+                  </div>
+                  {/* Workflow template accordion */}
+                  <div style={{ background: "rgba(92,226,231,0.04)", border: "1px solid rgba(92,226,231,0.15)", borderRadius: "8px", overflow: "hidden" }}>
+                    <button
+                      onClick={() => setShowGhTemplate(!showGhTemplate)}
+                      style={{ width: "100%", textAlign: "left", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", color: "#5ce2e7", fontSize: "13px", fontWeight: "600" }}>
+                      {showGhTemplate ? "▼" : "▶"} Copy workflow template to add to your repo
+                    </button>
+                    {showGhTemplate && (
+                      <pre style={{
+                        margin: 0, padding: "0 16px 16px", fontSize: "11px", lineHeight: "1.6",
+                        color: "#c4c5ca", overflowX: "auto", whiteSpace: "pre",
+                      }}>{`# .github/workflows/kill-switch-remediate.yml
+name: Kill Switch Remediation
+on:
+  workflow_dispatch:
+    inputs:
+      provider:           { required: true }
+      account_name:       { required: true }
+      severity:           { required: true }
+      violation_count:    { required: true }
+      violations_json:    { required: true }
+      kill_switch_action: { required: true }
+      dedup_key:          { required: true }
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: \${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Kill Switch detected \${{ inputs.violation_count }} violation(s) on
+            "\${{ inputs.account_name }}" (\${{ inputs.provider }}, severity: \${{ inputs.severity }}).
+            Kill Switch already took action: \${{ inputs.kill_switch_action }}
+
+            Violations: \${{ inputs.violations_json }}
+
+            Analyze this codebase and open a PR to fix the root cause.
+            Look for: inefficient queries, N+1 patterns, missing caching,
+            or security gaps enabling unauthorized usage spikes.
+          allowed_tools: "Bash,Read,Edit,Write,Glob,Grep"`}</pre>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleAddChannel}
+                    disabled={!ghToken || !ghOwner || !ghRepo || !ghWorkflow}
+                    style={{ ...btnStyle, background: "#c25800", border: "none", opacity: (ghToken && ghOwner && ghRepo && ghWorkflow) ? 1 : 0.5, alignSelf: "flex-start" }}>
+                    Add GitHub Channel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label style={labelStyle}>{channelTypeLabel[newChannelType] || "Value"}</label>
+                    <input
+                      style={inputStyle}
+                      type={newChannelType === "email" ? "email" : "text"}
+                      placeholder={newChannelType === "email" ? "alerts@yourteam.com" : newChannelType === "pagerduty" ? "Routing key" : "https://hooks..."}
+                      value={newChannelValue}
+                      onChange={e => setNewChannelValue(e.target.value)}
+                    />
+                  </div>
+                  <button onClick={handleAddChannel} disabled={!newChannelValue}
+                    style={{ ...btnStyle, background: "#c25800", border: "none", opacity: newChannelValue ? 1 : 0.5, alignSelf: "flex-start" }}>
+                    Add Channel
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -610,7 +748,7 @@ export function SettingsPage() {
                   Send Invite
                 </button>
               </div>
-              <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "8px" }}>
+              <p style={{ fontSize: "12px", color: "#9ca3af", marginTop: "8px" }}>
                 Invitations expire after 7 days. The recipient must have or create a Kill Switch account to join.
               </p>
             </div>
@@ -634,7 +772,7 @@ export function SettingsPage() {
                 </div>
                 <div>
                   <div style={{ color: "#fff", fontSize: "14px", fontWeight: "500" }}>{m.email}</div>
-                  <div style={{ fontSize: "12px", color: "#6b7280" }}>
+                  <div style={{ fontSize: "12px", color: "#9ca3af" }}>
                     {m.role.charAt(0).toUpperCase() + m.role.slice(1)}
                     {m.isOwner && " (Account Owner)"}
                     {m.joinedAt && !m.isOwner && ` \u00B7 Joined ${new Date(m.joinedAt).toLocaleDateString()}`}
@@ -671,7 +809,7 @@ export function SettingsPage() {
                         }
                       }
                     }}
-                    style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "16px", padding: "4px 8px" }}
+                    style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "16px", padding: "4px 8px" }}
                     title="Remove member"
                   >
                     &#10005;
@@ -684,7 +822,7 @@ export function SettingsPage() {
           {/* Pending invitations */}
           {teamInvitations.length > 0 && (
             <div style={{ marginTop: "16px" }}>
-              <div style={{ fontSize: "13px", fontWeight: "600", color: "#6b7280", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "1px" }}>
+              <div style={{ fontSize: "13px", fontWeight: "600", color: "#9ca3af", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "1px" }}>
                 Pending Invitations
               </div>
               {teamInvitations.map((inv, i) => (
@@ -695,7 +833,7 @@ export function SettingsPage() {
                 }}>
                   <div>
                     <span style={{ color: "#ffa07a", fontSize: "14px" }}>{inv.email}</span>
-                    <span style={{ color: "#6b7280", fontSize: "12px", marginLeft: "8px" }}>
+                    <span style={{ color: "#9ca3af", fontSize: "12px", marginLeft: "8px" }}>
                       {inv.role} &middot; Expires {new Date(inv.expiresAt).toLocaleDateString()}
                     </span>
                   </div>
@@ -709,7 +847,7 @@ export function SettingsPage() {
                         flash(err.message, "error");
                       }
                     }}
-                    style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "13px", padding: "4px 8px" }}
+                    style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "13px", padding: "4px 8px" }}
                     title="Revoke invitation"
                   >
                     Revoke
@@ -720,7 +858,7 @@ export function SettingsPage() {
           )}
 
           {teamMembers.length <= 1 && teamInvitations.length === 0 && !showInviteForm && (
-            <p style={{ color: "#6b7280", fontSize: "14px" }}>No team members yet. Invite your first teammate to collaborate on cloud monitoring.</p>
+            <p style={{ color: "#9ca3af", fontSize: "14px" }}>No team members yet. Invite your first teammate to collaborate on cloud monitoring.</p>
           )}
         </div>
       )}
@@ -729,7 +867,7 @@ export function SettingsPage() {
       {account?.tier !== "team" && account?.tier !== "enterprise" && (
         <div style={{ ...sectionStyle, borderColor: "rgba(194,88,0,0.2)" }}>
           <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "18px", fontWeight: "600", color: "#fff", marginBottom: "8px" }}>Team</h2>
-          <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "16px" }}>
+          <p style={{ color: "#9ca3af", fontSize: "14px", marginBottom: "16px" }}>
             Invite team members, assign roles, and collaborate on cloud monitoring.
             Available on the Team and Enterprise plans.
           </p>
@@ -742,7 +880,7 @@ export function SettingsPage() {
       {/* ── Danger Zone ────────────────────────────────── */}
       <div style={{ ...sectionStyle, borderColor: "rgba(255,107,107,0.2)" }}>
         <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "18px", fontWeight: "600", color: "#ff6b6b", marginBottom: "8px" }}>Danger Zone</h2>
-        <p style={{ color: "#6b7280", fontSize: "13px", marginBottom: "16px" }}>
+        <p style={{ color: "#9ca3af", fontSize: "13px", marginBottom: "16px" }}>
           These actions are irreversible. Proceed with caution.
         </p>
         <button
