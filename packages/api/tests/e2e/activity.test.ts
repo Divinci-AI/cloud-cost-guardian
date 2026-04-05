@@ -9,6 +9,8 @@ import request from "supertest";
 import { createApp } from "../../src/app.js";
 import type { Express } from "express";
 
+vi.hoisted(() => { process.env.CLERK_ISSUER = "https://test.clerk.accounts.dev"; });
+
 // Mock everything needed for the app to start
 vi.mock("mongoose", () => {
   const store = new Map();

@@ -11,6 +11,8 @@ import type { Express } from "express";
 
 // ─── Mocks (same pattern as team.test.ts) ─────────────────────────────────
 
+vi.hoisted(() => { process.env.CLERK_ISSUER = "https://test.clerk.accounts.dev"; });
+
 const { mockStores, mockIdCounter, mockGetStore, mockMatchesQuery } = vi.hoisted(() => {
   const mockStores: Record<string, Map<string, any>> = {};
   const mockIdCounter = { v: 1 };

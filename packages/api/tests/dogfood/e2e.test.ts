@@ -14,6 +14,9 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import type { Express } from "express";
+
+vi.hoisted(() => { process.env.CLERK_ISSUER = "https://test.clerk.accounts.dev"; });
+
 import {
   DOGFOOD_THRESHOLDS,
   PROTECTED_WORKERS,
