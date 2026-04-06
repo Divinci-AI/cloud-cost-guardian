@@ -10,11 +10,13 @@
 
 import { CloudAccountModel } from "../models/cloud-account/schema.js";
 import { GuardianAccountModel } from "../models/guardian-account/schema.js";
+import { KillSwitchRuleModel } from "../models/kill-switch-rule/schema.js";
 import { getCredential } from "../models/encrypted-credential/schema.js";
 import { getProvider } from "../providers/index.js";
 import { sendAlerts } from "./alerting.js";
 import { recordUsageSnapshot, recordAlert } from "../globals/index.js";
 import { captureSnapshot } from "./forensics.js";
+import { evaluateRules } from "./rule-engine.js";
 import type { UsageResult, Violation, KillAction, ProviderId } from "../providers/types.js";
 
 function getDefaultKillAction(provider: ProviderId): KillAction {
@@ -43,6 +45,7 @@ export interface CheckResult {
   status: "ok" | "violation" | "error";
   violations: Violation[];
   actionsTaken: string[];
+  ruleActionsTaken: string[];
   forensicSnapshotIds: string[];
   usage: UsageResult | null;
   error?: string;
@@ -121,6 +124,7 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
     status: "ok",
     violations: [],
     actionsTaken: [],
+    ruleActionsTaken: [],
     forensicSnapshotIds: [],
     usage: null,
   };
@@ -140,6 +144,49 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
     // Run usage check
     const usage = await provider.checkUsage(credential, cloudAccount.thresholds);
     result.usage = usage;
+
+    // Evaluate custom kill switch rules against usage data
+    try {
+      const ruleDocs = await KillSwitchRuleModel.find({ guardianAccountId: cloudAccount.guardianAccountId }).lean();
+      if (ruleDocs.length > 0) {
+        const ruleResults = evaluateRules(ruleDocs as any, usage);
+        for (const ruleResult of ruleResults) {
+          if (!ruleResult.triggered) continue;
+          // Update lastFiredAt on the rule
+          await KillSwitchRuleModel.updateOne(
+            { guardianAccountId: cloudAccount.guardianAccountId, id: ruleResult.ruleId },
+            { lastFiredAt: Date.now() }
+          );
+          for (const action of ruleResult.actionsToExecute) {
+            if (action.requiresApproval) {
+              result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: ${action.type} on ${action.target} — awaiting approval`);
+              continue;
+            }
+            if (action.type === "snapshot") {
+              captureSnapshot(credential, action.target, `rule:${ruleResult.ruleId}`, cloudAccount._id.toString())
+                .then(snap => result.forensicSnapshotIds.push(snap.id))
+                .catch(err => console.warn(`[guardian] Rule forensic snapshot failed:`, err.message));
+              result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: snapshot captured`);
+              continue;
+            }
+            try {
+              const killResult = await provider.executeKillSwitch(credential, action.target, action.type as KillAction);
+              result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: ${killResult.details}`);
+            } catch (err: any) {
+              console.warn(`[guardian] Rule action failed (${ruleResult.ruleId}/${action.type}):`, err.message);
+              result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: ${action.type} failed — ${err.message}`);
+            }
+          }
+        }
+        const triggeredRules = ruleResults.filter(r => r.triggered);
+        if (triggeredRules.length > 0) {
+          console.error(`[guardian] ${triggeredRules.length} rule(s) triggered for ${cloudAccount.name}`);
+        }
+      }
+    } catch (ruleErr: any) {
+      // Rule evaluation failures must not abort the main check
+      console.warn("[guardian] Rule evaluation failed:", ruleErr.message);
+    }
 
     if (usage.violations.length > 0) {
       result.status = "violation";

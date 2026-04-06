@@ -14,27 +14,21 @@ import { Router } from "express";
 import { PRESET_RULES } from "../../services/rule-engine.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { logActivity } from "../../services/activity-logger.js";
+import { KillSwitchRuleModel } from "../../models/kill-switch-rule/schema.js";
 import type { KillSwitchRule } from "../../providers/types.js";
 
 export const rulesRouter = Router();
 
-// In-memory rule storage for MVP (move to MongoDB later)
-const ruleStore = new Map<string, Map<string, KillSwitchRule>>();
-
-function getAccountRules(accountId: string): Map<string, KillSwitchRule> {
-  if (!ruleStore.has(accountId)) {
-    ruleStore.set(accountId, new Map());
-  }
-  return ruleStore.get(accountId)!;
-}
-
 /**
  * GET /rules — List all rules for the account
  */
-rulesRouter.get("/", requirePermission("rules:read"), (req, res) => {
-  const accountId = (req as any).guardianAccountId;
-  const rules = Array.from(getAccountRules(accountId).values());
-  res.json({ rules });
+rulesRouter.get("/", requirePermission("rules:read"), async (req, res, next) => {
+  try {
+    const accountId = (req as any).guardianAccountId;
+    const docs = await KillSwitchRuleModel.find({ guardianAccountId: accountId }).lean();
+    const rules: KillSwitchRule[] = docs.map(docToRule);
+    res.json({ rules });
+  } catch (e) { next(e); }
 });
 
 /**
@@ -43,14 +37,14 @@ rulesRouter.get("/", requirePermission("rules:read"), (req, res) => {
 rulesRouter.get("/presets", (_req, res) => {
   res.json({
     presets: [
-      { id: "ddos", name: "DDoS Protection", description: "Kill services getting excessive request volume", category: "security" },
-      { id: "brute-force", name: "Brute Force Protection", description: "Rotate credentials on mass auth failures", category: "security" },
-      { id: "cost-runaway", name: "Cost Runaway Protection", description: "Disconnect workers exceeding daily cost limit", category: "cost" },
-      { id: "error-storm", name: "Error Storm Protection", description: "Scale down on sustained high error rate", category: "reliability" },
-      { id: "exfiltration", name: "Data Exfiltration Detection", description: "Isolate services with unusual egress", category: "security" },
-      { id: "gpu-runaway", name: "GPU Instance Runaway", description: "Stop unexpected GPU instances (crypto mining, leaked keys)", category: "cost" },
-      { id: "lambda-loop", name: "Lambda Recursive Loop", description: "Throttle Lambda functions with runaway concurrency", category: "cost" },
-      { id: "aws-cost-runaway", name: "AWS Daily Cost Runaway", description: "Emergency stop when daily AWS spend spikes", category: "cost" },
+      { id: "ddos",             name: "DDoS Protection",             description: "Kill services getting excessive request volume",                         category: "security" },
+      { id: "brute-force",      name: "Brute Force Protection",      description: "Rotate credentials on mass auth failures",                               category: "security" },
+      { id: "cost-runaway",     name: "Cost Runaway Protection",     description: "Disconnect workers exceeding daily cost limit",                          category: "cost" },
+      { id: "error-storm",      name: "Error Storm Protection",      description: "Scale down on sustained high error rate",                                category: "reliability" },
+      { id: "exfiltration",     name: "Data Exfiltration Detection", description: "Isolate services with unusual egress",                                   category: "security" },
+      { id: "gpu-runaway",      name: "GPU Instance Runaway",        description: "Stop unexpected GPU instances (crypto mining, leaked keys)",             category: "cost" },
+      { id: "lambda-loop",      name: "Lambda Recursive Loop",       description: "Throttle Lambda functions with runaway concurrency",                     category: "cost" },
+      { id: "aws-cost-runaway", name: "AWS Daily Cost Runaway",      description: "Emergency stop when daily AWS spend spikes",                             category: "cost" },
     ],
   });
 });
@@ -58,167 +52,158 @@ rulesRouter.get("/presets", (_req, res) => {
 /**
  * POST /rules/presets/:presetId — Apply a preset rule with optional customization
  */
-rulesRouter.post("/presets/:presetId", requirePermission("rules:write"), (req, res) => {
-  const accountId = (req as any).guardianAccountId;
-  const { presetId } = req.params;
-  const customValues = req.body; // Optional threshold overrides
+rulesRouter.post("/presets/:presetId", requirePermission("rules:write"), async (req, res, next) => {
+  try {
+    const accountId = (req as any).guardianAccountId;
+    const { presetId } = req.params;
+    const customValues = req.body;
 
-  let rule: KillSwitchRule;
+    let rule: KillSwitchRule;
+    switch (presetId) {
+      case "ddos":             rule = PRESET_RULES.ddosProtection(customValues?.requestsPerMinute); break;
+      case "brute-force":      rule = PRESET_RULES.bruteForceProtection(customValues?.failuresPerMinute); break;
+      case "cost-runaway":     rule = PRESET_RULES.costRunaway(customValues?.dailyCostUSD); break;
+      case "error-storm":      rule = PRESET_RULES.errorStorm(customValues?.errorRatePercent); break;
+      case "exfiltration":     rule = PRESET_RULES.dataExfiltration(customValues?.egressGBPerHour); break;
+      case "gpu-runaway":      rule = PRESET_RULES.gpuRunaway(customValues?.maxGPUInstances); break;
+      case "lambda-loop":      rule = PRESET_RULES.lambdaLoop(customValues?.maxConcurrency); break;
+      case "aws-cost-runaway": rule = PRESET_RULES.awsCostRunaway(customValues?.dailyCostUSD); break;
+      default: return res.status(404).json({ error: `Unknown preset: ${presetId}` });
+    }
 
-  switch (presetId) {
-    case "ddos":
-      rule = PRESET_RULES.ddosProtection(customValues?.requestsPerMinute);
-      break;
-    case "brute-force":
-      rule = PRESET_RULES.bruteForceProtection(customValues?.failuresPerMinute);
-      break;
-    case "cost-runaway":
-      rule = PRESET_RULES.costRunaway(customValues?.dailyCostUSD);
-      break;
-    case "error-storm":
-      rule = PRESET_RULES.errorStorm(customValues?.errorRatePercent);
-      break;
-    case "exfiltration":
-      rule = PRESET_RULES.dataExfiltration(customValues?.egressGBPerHour);
-      break;
-    case "gpu-runaway":
-      rule = PRESET_RULES.gpuRunaway(customValues?.maxGPUInstances);
-      break;
-    case "lambda-loop":
-      rule = PRESET_RULES.lambdaLoop(customValues?.maxConcurrency);
-      break;
-    case "aws-cost-runaway":
-      rule = PRESET_RULES.awsCostRunaway(customValues?.dailyCostUSD);
-      break;
-    default:
-      return res.status(404).json({ error: `Unknown preset: ${presetId}` });
-  }
+    await KillSwitchRuleModel.findOneAndUpdate(
+      { guardianAccountId: accountId, id: rule.id },
+      { ...rule, guardianAccountId: accountId },
+      { upsert: true, new: true }
+    );
 
-  getAccountRules(accountId).set(rule.id, rule);
+    logActivity({
+      orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "rule.create", resourceType: "rule", resourceId: rule.id,
+      details: { preset: presetId, name: rule.name }, ipAddress: req.ip,
+    });
 
-  logActivity({
-    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
-    action: "rule.create", resourceType: "rule", resourceId: rule.id,
-    details: { preset: presetId, name: rule.name }, ipAddress: req.ip,
-  });
-
-  res.status(201).json({ rule });
+    res.status(201).json({ rule });
+  } catch (e) { next(e); }
 });
 
 /**
  * POST /rules — Create a custom rule
  */
-rulesRouter.post("/", requirePermission("rules:write"), (req, res) => {
-  const accountId = (req as any).guardianAccountId;
-  const rule = req.body as KillSwitchRule;
+rulesRouter.post("/", requirePermission("rules:write"), async (req, res, next) => {
+  try {
+    const accountId = (req as any).guardianAccountId;
+    const rule = req.body as KillSwitchRule;
 
-  if (!rule.id || !rule.name || !rule.conditions?.length || !rule.actions?.length) {
-    return res.status(400).json({ error: "Rule must have id, name, conditions, and actions" });
-  }
+    if (!rule.id || !rule.name || !rule.conditions?.length || !rule.actions?.length) {
+      return res.status(400).json({ error: "Rule must have id, name, conditions, and actions" });
+    }
 
-  getAccountRules(accountId).set(rule.id, rule);
+    await KillSwitchRuleModel.findOneAndUpdate(
+      { guardianAccountId: accountId, id: rule.id },
+      { ...rule, guardianAccountId: accountId },
+      { upsert: true, new: true }
+    );
 
-  logActivity({
-    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
-    action: "rule.create", resourceType: "rule", resourceId: rule.id,
-    details: { name: rule.name }, ipAddress: req.ip,
-  });
+    logActivity({
+      orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "rule.create", resourceType: "rule", resourceId: rule.id,
+      details: { name: rule.name }, ipAddress: req.ip,
+    });
 
-  res.status(201).json({ rule });
+    res.status(201).json({ rule });
+  } catch (e) { next(e); }
 });
 
 /**
  * PUT /rules/:ruleId — Update a rule
  */
-rulesRouter.put("/:ruleId", requirePermission("rules:write"), (req, res) => {
-  const accountId = (req as any).guardianAccountId;
-  const rules = getAccountRules(accountId);
-  const existing = rules.get(req.params.ruleId);
+rulesRouter.put("/:ruleId", requirePermission("rules:write"), async (req, res, next) => {
+  try {
+    const accountId = (req as any).guardianAccountId;
+    const existing = await KillSwitchRuleModel.findOne({ guardianAccountId: accountId, id: req.params.ruleId });
 
-  if (!existing) {
-    return res.status(404).json({ error: "Rule not found" });
-  }
+    if (!existing) {
+      return res.status(404).json({ error: "Rule not found" });
+    }
 
-  const updated = { ...existing, ...req.body, id: existing.id };
-  rules.set(updated.id, updated);
+    const updated = await KillSwitchRuleModel.findOneAndUpdate(
+      { guardianAccountId: accountId, id: req.params.ruleId },
+      { ...req.body, id: existing.id, updatedAt: Date.now() },
+      { new: true }
+    );
 
-  logActivity({
-    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
-    action: "rule.update", resourceType: "rule", resourceId: updated.id,
-    details: { name: updated.name }, ipAddress: req.ip,
-  });
+    logActivity({
+      orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "rule.update", resourceType: "rule", resourceId: req.params.ruleId,
+      details: { name: updated?.name }, ipAddress: req.ip,
+    });
 
-  res.json({ rule: updated });
+    res.json({ rule: docToRule(updated!.toObject()) });
+  } catch (e) { next(e); }
 });
 
 /**
  * DELETE /rules/:ruleId — Delete a rule
  */
-rulesRouter.delete("/:ruleId", requirePermission("rules:delete"), (req, res) => {
-  const accountId = (req as any).guardianAccountId;
-  const deleted = getAccountRules(accountId).delete(req.params.ruleId);
+rulesRouter.delete("/:ruleId", requirePermission("rules:delete"), async (req, res, next) => {
+  try {
+    const accountId = (req as any).guardianAccountId;
+    const result = await KillSwitchRuleModel.deleteOne({ guardianAccountId: accountId, id: req.params.ruleId });
 
-  logActivity({
-    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
-    action: "rule.delete", resourceType: "rule", resourceId: req.params.ruleId,
-    ipAddress: req.ip,
-  });
+    logActivity({
+      orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "rule.delete", resourceType: "rule", resourceId: req.params.ruleId,
+      ipAddress: req.ip,
+    });
 
-  res.json({ deleted });
+    res.json({ deleted: result.deletedCount > 0 });
+  } catch (e) { next(e); }
 });
 
 /**
  * POST /rules/:ruleId/toggle — Enable/disable a rule
  */
-rulesRouter.post("/:ruleId/toggle", requirePermission("rules:write"), (req, res) => {
-  const accountId = (req as any).guardianAccountId;
-  const rule = getAccountRules(accountId).get(req.params.ruleId);
+rulesRouter.post("/:ruleId/toggle", requirePermission("rules:write"), async (req, res, next) => {
+  try {
+    const accountId = (req as any).guardianAccountId;
+    const rule = await KillSwitchRuleModel.findOne({ guardianAccountId: accountId, id: req.params.ruleId });
 
-  if (!rule) {
-    return res.status(404).json({ error: "Rule not found" });
-  }
+    if (!rule) {
+      return res.status(404).json({ error: "Rule not found" });
+    }
 
-  rule.enabled = !rule.enabled;
+    rule.enabled = !rule.enabled;
+    await rule.save();
 
-  logActivity({
-    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
-    action: "rule.toggle", resourceType: "rule", resourceId: req.params.ruleId,
-    details: { enabled: rule.enabled }, ipAddress: req.ip,
-  });
+    logActivity({
+      orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "rule.toggle", resourceType: "rule", resourceId: req.params.ruleId,
+      details: { enabled: rule.enabled }, ipAddress: req.ip,
+    });
 
-  res.json({ rule });
+    res.json({ rule: docToRule(rule.toObject()) });
+  } catch (e) { next(e); }
 });
 
 /**
  * POST /agent/trigger — Agent-initiated kill switch
- *
- * Called by an AI security agent that detected an anomaly.
- * Accepts a description of the threat and recommended actions.
- * Can create a temporary rule or execute immediate actions.
  */
 rulesRouter.post("/agent/trigger", requirePermission("kill_switch:trigger"), async (req, res, next) => {
   try {
     const accountId = (req as any).guardianAccountId;
-    const {
-      agentId,
-      threatDescription,
-      severity,
-      recommendedActions,
-      evidence,
-      autoExecute = false,
-    } = req.body;
+    const { agentId, threatDescription, severity, recommendedActions, evidence, autoExecute = false } = req.body;
 
     if (!threatDescription || !recommendedActions) {
       return res.status(400).json({ error: "Missing threatDescription or recommendedActions" });
     }
 
-    // Create an ephemeral rule from the agent's recommendation
     const rule: KillSwitchRule = {
       id: `agent-${Date.now()}`,
       name: `Agent Detection: ${threatDescription.substring(0, 50)}`,
       enabled: autoExecute,
       trigger: "agent",
-      conditions: [], // Agent already evaluated conditions
+      conditions: [],
       conditionLogic: "any",
       actions: recommendedActions.map((action: any) => ({
         type: action.type || "disconnect",
@@ -230,7 +215,7 @@ rulesRouter.post("/agent/trigger", requirePermission("kill_switch:trigger"), asy
       forensicsEnabled: true,
     };
 
-    getAccountRules(accountId).set(rule.id, rule);
+    await KillSwitchRuleModel.create({ ...rule, guardianAccountId: accountId });
 
     logActivity({
       orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
@@ -247,7 +232,11 @@ rulesRouter.post("/agent/trigger", requirePermission("kill_switch:trigger"), asy
       rule,
       evidence,
     });
-  } catch (e) {
-    next(e);
-  }
+  } catch (e) { next(e); }
 });
+
+/** Strip MongoDB internals from rule documents */
+function docToRule(doc: any): KillSwitchRule {
+  const { _id, __v, guardianAccountId, createdAt, updatedAt, ...rule } = doc;
+  return rule as KillSwitchRule;
+}

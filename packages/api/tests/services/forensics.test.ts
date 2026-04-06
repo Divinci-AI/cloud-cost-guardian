@@ -1,4 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("jose", () => ({
+  importPKCS8: vi.fn().mockResolvedValue({}),
+  SignJWT: vi.fn().mockImplementation(() => ({
+    setProtectedHeader: vi.fn().mockReturnThis(),
+    setIssuer: vi.fn().mockReturnThis(),
+    setAudience: vi.fn().mockReturnThis(),
+    setIssuedAt: vi.fn().mockReturnThis(),
+    setExpirationTime: vi.fn().mockReturnThis(),
+    sign: vi.fn().mockResolvedValue("mock.jwt.token"),
+  })),
+}));
+
 import { captureSnapshot } from "../../src/services/forensics.js";
 import type { DecryptedCredential } from "../../src/providers/types.js";
 
@@ -119,12 +132,21 @@ describe("Forensic Snapshot Service", () => {
     it("handles GCP provider", async () => {
       const cred: DecryptedCredential = {
         provider: "gcp",
-        serviceAccountJson: JSON.stringify({ access_token: "fake-token" }),
+        serviceAccountJson: JSON.stringify({
+          client_email: "sa@my-project.iam.gserviceaccount.com",
+          private_key: "-----BEGIN PRIVATE KEY-----\nMOCK\n-----END PRIVATE KEY-----\n",
+        }),
         projectId: "my-project",
         region: "us-central1",
       };
 
       mockFetch
+        // OAuth2 token exchange
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: "ya29.mock-access-token" }),
+        })
+        // Cloud Run service config
         .mockResolvedValueOnce({
           ok: true,
           text: async () => JSON.stringify({

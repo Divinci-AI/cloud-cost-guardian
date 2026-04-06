@@ -15,6 +15,7 @@
  */
 
 import { createHash } from "crypto";
+import { importPKCS8, SignJWT } from "jose";
 import type { ForensicSnapshot, DecryptedCredential, ProviderId } from "../providers/types.js";
 
 let snapshotCounter = 0;
@@ -130,8 +131,16 @@ async function captureGCPSnapshot(
   if (!serviceAccountJson || !projectId) return {};
 
   const sa = JSON.parse(serviceAccountJson);
-  const accessToken = sa.access_token;
-  if (!accessToken) return {};
+  if (!sa.client_email || !sa.private_key) return {};
+
+  // Exchange service account credentials for a short-lived OAuth2 access token
+  let accessToken: string;
+  try {
+    accessToken = await getGCPAccessToken(sa.client_email, sa.private_key);
+  } catch (e: any) {
+    console.warn("[guardian] GCP forensics: OAuth2 token exchange failed:", e.message);
+    return {};
+  }
 
   const gcpRegion = region || "us-central1";
   const data: Partial<ForensicSnapshot["data"]> = {};
@@ -192,6 +201,44 @@ async function captureGCPSnapshot(
   }
 
   return data;
+}
+
+/**
+ * Exchange a GCP service account JSON key for a short-lived OAuth2 access token.
+ * Uses the JWT Bearer Token flow (RFC 7523) required by Google APIs.
+ */
+async function getGCPAccessToken(clientEmail: string, privateKeyPem: string): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const privateKey = await importPKCS8(privateKeyPem, "RS256");
+
+  const jwt = await new SignJWT({
+    scope: "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/logging.read",
+  })
+    .setProtectedHeader({ alg: "RS256" })
+    .setIssuer(clientEmail)
+    .setAudience("https://oauth2.googleapis.com/token")
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .sign(privateKey);
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`GCP token exchange failed (${res.status}): ${body.slice(0, 200)}`);
+  }
+
+  const tokenResponse = await res.json() as Record<string, unknown>;
+  const access_token = tokenResponse["access_token"] as string | undefined;
+  if (!access_token) throw new Error("GCP token exchange returned no access_token");
+  return access_token;
 }
 
 /**

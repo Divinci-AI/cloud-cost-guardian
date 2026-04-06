@@ -32,6 +32,21 @@ vi.mock("../../src/globals/index.js", () => ({
   recordAlert: vi.fn(),
 }));
 
+vi.mock("../../src/models/kill-switch-rule/schema.js", () => ({
+  KillSwitchRuleModel: {
+    find: vi.fn().mockReturnValue({ lean: vi.fn().mockResolvedValue([]) }),
+    updateOne: vi.fn().mockResolvedValue({}),
+  },
+}));
+
+vi.mock("../../src/services/rule-engine.js", () => ({
+  evaluateRules: vi.fn().mockReturnValue([]),
+}));
+
+vi.mock("../../src/services/forensics.js", () => ({
+  captureSnapshot: vi.fn().mockResolvedValue({ id: "snap-test" }),
+}));
+
 import { runCheckCycle } from "../../src/services/monitoring-engine.js";
 import { CloudAccountModel } from "../../src/models/cloud-account/schema.js";
 import { GuardianAccountModel } from "../../src/models/guardian-account/schema.js";

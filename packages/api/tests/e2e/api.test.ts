@@ -25,23 +25,48 @@ vi.mock("mongoose", () => {
   const createMockModel = (name: string) => {
     const model: any = {
       create: vi.fn(async (data: any) => {
-        const doc = { _id: `${name}-${idCounter++}`, ...data, save: vi.fn() };
+        const doc: any = { _id: `${name}-${idCounter++}`, ...data };
+        doc.save = vi.fn(async () => doc);
+        doc.toObject = () => { const { save, toObject, ...rest } = doc; return rest; };
         docs.set(doc._id, doc);
         return doc;
       }),
-      find: vi.fn(async (query: any) => {
-        return Array.from(docs.values()).filter(d => {
+      find: vi.fn((query: any) => {
+        const results = Array.from(docs.values()).filter(d => {
           if (query?.guardianAccountId) return d.guardianAccountId === query.guardianAccountId;
           if (query?.status) return d.status === query.status;
           return true;
         });
+        // Return chainable query object with .lean() support
+        const chainable: any = { lean: vi.fn(async () => results) };
+        chainable.then = (resolve: any, reject: any) => Promise.resolve(results).then(resolve, reject);
+        return chainable;
       }),
       findById: vi.fn(async (id: string) => docs.get(id) || null),
       findOne: vi.fn(async (query: any) => {
         return Array.from(docs.values()).find(d => {
+          if (query?.guardianAccountId && query?.id) return d.guardianAccountId === query.guardianAccountId && d.id === query.id;
           if (query?.ownerUserId) return d.ownerUserId === query.ownerUserId;
           return false;
         }) || null;
+      }),
+      findOneAndUpdate: vi.fn(async (query: any, update: any, opts?: any) => {
+        const existing = Array.from(docs.values()).find(d =>
+          (!query.guardianAccountId || d.guardianAccountId === query.guardianAccountId) &&
+          (!query.id || d.id === query.id)
+        );
+        if (existing) {
+          Object.assign(existing, update.$set || update);
+          return { ...existing, toObject: () => ({ ...existing }) };
+        }
+        if (opts?.upsert) {
+          const doc: any = { _id: `${name}-${idCounter++}`, ...update };
+          doc.save = vi.fn(async () => doc);
+          doc.toObject = () => { const { save, toObject, ...rest } = doc; return rest; };
+          docs.set(doc._id, doc);
+          return doc;
+        }
+        return null;
       }),
       findByIdAndUpdate: vi.fn(async (id: string, update: any, opts?: any) => {
         const doc = docs.get(id);
@@ -54,6 +79,15 @@ vi.mock("mongoose", () => {
         docs.delete(id);
         return doc;
       }),
+      deleteOne: vi.fn(async (query: any) => {
+        const entry = Array.from(docs.entries()).find(([, d]) =>
+          (!query.guardianAccountId || d.guardianAccountId === query.guardianAccountId) &&
+          (!query.id || d.id === query.id)
+        );
+        if (entry) { docs.delete(entry[0]); return { deletedCount: 1 }; }
+        return { deletedCount: 0 };
+      }),
+      updateOne: vi.fn(async () => ({ modifiedCount: 1 })),
       countDocuments: vi.fn(async () => docs.size),
     };
     return model;
