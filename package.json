@@ -23,6 +23,9 @@
     "deploy:agent": "cd packages/agent && env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID npm run deploy",
     "deploy:web": "cd packages/web && VITE_API_URL=https://api.kill-switch.net VITE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsua2lsbC1zd2l0Y2gubmV0JA env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID npm run deploy",
     "deploy:site": "cd site && env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID wrangler deploy",
-    "dogfood": "tsx packages/api/src/dogfood/setup.ts"
+    "dogfood": "tsx packages/api/src/dogfood/setup.ts",
+    "deploy:advisor": "cd packages/advisor && env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID npm run deploy",
+    "advisor:dev": "cd packages/advisor && npm run dev",
+    "advisor:trigger": "cd packages/advisor && npm run trigger"
   }
 }
