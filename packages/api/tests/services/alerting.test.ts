@@ -309,6 +309,92 @@ describe("Alerting Service", () => {
       expect(body.inputs.violation_count).toBe("0");
       expect(body.inputs.violations_json).toBe("[]");
     });
+
+    it("disabled GitHub channel is not dispatched", async () => {
+      const channel = githubChannel();
+      channel.enabled = false;
+
+      await sendAlerts([channel], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: [],
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("GitHub channel fires alongside PagerDuty in the same sendAlerts call", async () => {
+      const pdChannel: AlertChannel = {
+        type: "pagerduty",
+        name: "On-Call",
+        config: { routingKey: "pd-routing-key" },
+        enabled: true,
+      };
+      mockFetch.mockResolvedValue({ ok: true, text: async () => "{}" });
+
+      await sendAlerts([pdChannel, githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: ["Disconnected d1-chunks-abc"],
+      });
+
+      // Both channels should have fired — fetch called twice
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const urls = mockFetch.mock.calls.map((c: any[]) => c[0]);
+      expect(urls).toContain("https://events.pagerduty.com/v2/enqueue");
+      expect(urls).toContain(
+        "https://api.github.com/repos/acme-corp/my-app/actions/workflows/kill-switch-remediate.yml/dispatches"
+      );
+    });
+
+    it("uses N/A multiplier when threshold is zero", async () => {
+      const zeroThresholdViolations = [
+        { serviceName: "svc:x", metricName: "Cost", currentValue: 50, threshold: 0, unit: "USD", severity: "warning" },
+      ];
+
+      await sendAlerts([githubChannel()], "Cost alert", "warning", {
+        provider: "neon", accountName: "neon-db", cloudAccountId: "acc-999",
+        violations: zeroThresholdViolations, actionsTaken: [],
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      const parsed = JSON.parse(body.inputs.violations_json);
+      expect(parsed[0].multiplier).toBe("N/A");
+    });
+
+    it("violations_json input is always parseable JSON", async () => {
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: [],
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(() => JSON.parse(body.inputs.violations_json)).not.toThrow();
+    });
+
+    it("success path does not log to console.error", async () => {
+      const errorSpy = vi.spyOn(console, "error");
+
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: ["Disconnected d1-chunks-abc"],
+      });
+
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    it("SSRF — GitHub API host is explicitly allowed through isUrlSafe", async () => {
+      // Verify the fetch call goes through on the correct GitHub API host.
+      // If isUrlSafe blocked api.github.com, no fetch would be made.
+      await sendAlerts([githubChannel()], "D1 overage", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", cloudAccountId: "acc-123",
+        violations, actionsTaken: [],
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("https://api.github.com/"),
+        expect.any(Object)
+      );
+    });
   });
 
   it("uses correct color codes for Discord severity", async () => {

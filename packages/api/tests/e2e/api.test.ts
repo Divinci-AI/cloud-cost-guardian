@@ -5,10 +5,15 @@
  * Covers: auth, accounts, cloud accounts, alerts, rules, billing, kill switches.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import type { Express } from "express";
+
+// Mock global fetch so outbound HTTP calls (GitHub dispatch, PagerDuty, etc.)
+// don't hit real external services during e2e tests.
+const mockFetch = vi.fn();
+vi.stubGlobal("fetch", mockFetch);
 
 vi.hoisted(() => { process.env.CLERK_ISSUER = "https://test.clerk.accounts.dev"; });
 
@@ -179,6 +184,12 @@ beforeAll(() => {
   process.env.ENVIRONMENT = "local";
   process.env.GUARDIAN_DEV_AUTH_BYPASS = "true";
   app = createApp();
+});
+
+beforeEach(() => {
+  mockFetch.mockReset();
+  // Default: external calls succeed silently
+  mockFetch.mockResolvedValue({ ok: true, text: async () => "{}", json: async () => ({}) });
 });
 
 describe("E2E: Public Endpoints", () => {
@@ -405,6 +416,103 @@ describe("E2E: Alert Channels", () => {
     // configPreview should show owner/repo — NOT the raw token
     expect(githubChannel.configPreview).toBe("acme-corp/my-app");
     expect(githubChannel.configPreview).not.toContain("ghp_supersecrettoken");
+  });
+
+  it("GET /alerts/channels never exposes githubToken in response", async () => {
+    const { GuardianAccountModel } = await import("../../src/models/guardian-account/schema.js");
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValueOnce({
+      alertChannels: [
+        {
+          type: "github",
+          name: "Auto-Remediation",
+          enabled: true,
+          config: {
+            githubToken: "ghp_verysecrettoken12345",
+            repoOwner: "my-org",
+            repoName: "my-app",
+            workflowFile: "kill-switch-remediate.yml",
+            branchRef: "main",
+          },
+        },
+      ],
+    } as any);
+
+    const res = await request(app)
+      .get("/alerts/channels")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user");
+
+    expect(res.status).toBe(200);
+    // The entire response body must never contain the raw token
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain("ghp_verysecrettoken12345");
+    // Non-secret config fields must still be returned
+    expect(res.body.channels[0].config.repoOwner).toBe("my-org");
+    expect(res.body.channels[0].config.repoName).toBe("my-app");
+    expect(res.body.channels[0].config.workflowFile).toBe("kill-switch-remediate.yml");
+    expect(res.body.channels[0].config.branchRef).toBe("main");
+  });
+
+  it("POST /alerts/test with GitHub channel dispatches to GitHub API", async () => {
+    const { GuardianAccountModel } = await import("../../src/models/guardian-account/schema.js");
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValueOnce({
+      alertChannels: [
+        {
+          type: "github",
+          name: "Auto-Remediation",
+          enabled: true,
+          config: {
+            githubToken: "ghp_testtoken",
+            repoOwner: "acme-corp",
+            repoName: "my-app",
+            workflowFile: "kill-switch-remediate.yml",
+            branchRef: "main",
+          },
+        },
+      ],
+    } as any);
+
+    // Mock the GitHub Actions dispatch endpoint returning 204 No Content (success)
+    mockFetch.mockResolvedValueOnce({ ok: true, text: async () => "" });
+
+    const res = await request(app)
+      .post("/alerts/test")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user");
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("sent");
+    expect(res.body.channelsSent).toBe(1);
+
+    // Verify it actually called the GitHub dispatch API
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://api.github.com/repos/acme-corp/my-app/actions/workflows/kill-switch-remediate.yml/dispatches",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Authorization": "Bearer ghp_testtoken",
+          "X-GitHub-Api-Version": "2022-11-28",
+        }),
+      })
+    );
+
+    // Test alert sends violation_count "0" and empty violations_json
+    const dispatchBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(dispatchBody.ref).toBe("main");
+    expect(dispatchBody.inputs.violation_count).toBe("0");
+    expect(dispatchBody.inputs.violations_json).toBe("[]");
+  });
+
+  it("POST /alerts/test returns 400 when no channels configured", async () => {
+    const { GuardianAccountModel } = await import("../../src/models/guardian-account/schema.js");
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValueOnce({
+      alertChannels: [],
+    } as any);
+
+    const res = await request(app)
+      .post("/alerts/test")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user");
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/no alert channels/i);
   });
 });
 

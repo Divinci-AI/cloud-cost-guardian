@@ -1,0 +1,157 @@
+# kill-switch-remediate.example.yml
+#
+# Copy this file to .github/workflows/kill-switch-remediate.yml in your own repo.
+#
+# What this does:
+#   Kill Switch detects a cost/usage threshold violation, immediately kills the
+#   runaway service, then dispatches this workflow with structured violation data.
+#   Claude Code analyzes your codebase and opens a PR fixing the root cause —
+#   N+1 queries, missing caches, runaway loops, security gaps, etc.
+#
+# Setup:
+#   1. Copy this file to your repo at .github/workflows/kill-switch-remediate.yml
+#   2. Add secret ANTHROPIC_API_KEY to your repo (Settings → Secrets → Actions)
+#   3. In Kill Switch Settings, add a GitHub alert channel with:
+#        - Personal Access Token with scopes: repo + workflow
+#          (or fine-grained: Actions:write, Contents:write, Pull-requests:write)
+#        - Repo owner & name pointing to THIS repo
+#        - Workflow file: kill-switch-remediate.yml
+#        - Branch: main (or your default branch)
+#
+# Required PAT scopes:
+#   Classic:      repo, workflow
+#   Fine-grained: Actions (read/write), Contents (read/write), Pull requests (read/write)
+
+name: Kill Switch — AI Remediation
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Cloud provider that triggered the violation (cloudflare, gcp, aws, runpod, neon, …)"
+        required: true
+        type: string
+      account_name:
+        description: "Human-readable name of the cloud account"
+        required: true
+        type: string
+      severity:
+        description: "Violation severity (critical, error, warning)"
+        required: true
+        type: string
+      violation_count:
+        description: "Number of threshold violations detected"
+        required: true
+        type: string
+      violations_json:
+        description: "JSON array of violation objects with serviceName, metricName, currentValue, threshold, multiplier, severity"
+        required: true
+        type: string
+      kill_switch_action:
+        description: "Action Kill Switch already took to stop the bleeding (e.g. 'Disconnected d1-chunks-abc')"
+        required: true
+        type: string
+      dedup_key:
+        description: "Deduplication key (accountId:YYYY-MM-DD) — prevents duplicate runs on the same day"
+        required: true
+        type: string
+
+# Prevent duplicate remediation runs for the same account+day.
+# If a second dispatch fires while one is already running, skip it — don't cancel.
+concurrency:
+  group: kill-switch-remediate-${{ inputs.dedup_key }}
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    name: "AI Remediation (${{ inputs.severity }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write        # push fix branch
+      pull-requests: write   # open PR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Summarize violation context
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          ACCOUNT_NAME: ${{ inputs.account_name }}
+          SEVERITY: ${{ inputs.severity }}
+          VIOLATION_COUNT: ${{ inputs.violation_count }}
+          KILL_SWITCH_ACTION: ${{ inputs.kill_switch_action }}
+          DEDUP_KEY: ${{ inputs.dedup_key }}
+          VIOLATIONS_JSON: ${{ inputs.violations_json }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "## Kill Switch Violation Report"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Provider | \`$PROVIDER\` |"
+            echo "| Account | \`$ACCOUNT_NAME\` |"
+            echo "| Severity | \`$SEVERITY\` |"
+            echo "| Violations | $VIOLATION_COUNT |"
+            echo "| Kill Switch Action | $KILL_SWITCH_ACTION |"
+            echo "| Dedup Key | \`$DEDUP_KEY\` |"
+            echo "| Run | [$RUN_URL]($RUN_URL) |"
+            echo ""
+            echo "### Violations"
+            echo '```json'
+            echo "$VIOLATIONS_JSON"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run Claude Code — analyze and open fix PR
+        uses: anthropics/claude-code-action@beta
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          ACCOUNT_NAME: ${{ inputs.account_name }}
+          SEVERITY: ${{ inputs.severity }}
+          VIOLATION_COUNT: ${{ inputs.violation_count }}
+          VIOLATIONS_JSON: ${{ inputs.violations_json }}
+          KILL_SWITCH_ACTION: ${{ inputs.kill_switch_action }}
+          DEDUP_KEY: ${{ inputs.dedup_key }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: "Bash,Read,Edit,Write,Glob,Grep"
+          prompt: |
+            Kill Switch detected $VIOLATION_COUNT threshold violation(s) on
+            "$ACCOUNT_NAME" ($PROVIDER, severity: $SEVERITY).
+
+            Kill Switch already took the emergency action: $KILL_SWITCH_ACTION
+
+            Violation details (JSON):
+            $VIOLATIONS_JSON
+
+            Workflow run: $RUN_URL
+
+            Your job is to find and fix the ROOT CAUSE in this codebase so the
+            violation does not happen again. Do NOT just raise thresholds.
+
+            Investigate based on the provider and metric:
+            - D1/database read spikes → N+1 queries, missing indexes, full-table scans,
+              runaway background jobs, missing pagination.
+            - Worker/CPU/request spikes → infinite loops, unbounded recursion,
+              missing rate limiting, hot endpoints with no caching.
+            - Storage spikes → missing TTLs, unbounded writes, log accumulation.
+            - API token/cost spikes → retry loops without backoff, missing deduplication,
+              expensive AI API calls without result caching.
+            - GPU/compute spikes → unconstrained job queues, missing spot-instance limits,
+              runaway training loops.
+
+            Steps:
+            1. Read the violation details above — understand which service and metric fired.
+            2. Search the codebase for code that touches that service/metric.
+            3. Identify the root cause (look at recent commits too: git log --oneline -20).
+            4. Create a fix branch: fix/kill-switch-$DEDUP_KEY
+            5. Apply the minimal correct fix (don't over-engineer).
+            6. Open a pull request with:
+               - Title: "fix: <root cause> causing $ACCOUNT_NAME $SEVERITY violation"
+               - Body: what you found, what you changed, how to verify it works
+               - Include a link to this workflow run: $RUN_URL

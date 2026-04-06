@@ -219,6 +219,6 @@ async function alertGitHub(channel: AlertChannel, summary: string, severity: Sev
     const body = await res.text().catch(() => "");
     console.error(`[guardian] GitHub remediation dispatch failed: ${res.status} ${body}`);
   } else {
-    console.error(`[guardian] GitHub remediation triggered: ${repoOwner}/${repoName} @ ${workflowFile} (dedup: ${dedupKey})`);
+    console.log(`[guardian] GitHub remediation triggered: ${repoOwner}/${repoName} @ ${workflowFile} (dedup: ${dedupKey})`);
   }
 }
