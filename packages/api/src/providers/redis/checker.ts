@@ -428,6 +428,26 @@ export const redisProvider: CloudProvider = {
           });
           return { success: true, action, serviceName, details: "Scaled Redis Cloud database to minimum 25MB" };
         }
+        if (creds.subType === "elasticache") {
+          const { ElastiCacheClient, DescribeCacheClustersCommand, ModifyReplicationGroupCommand } = await import("@aws-sdk/client-elasticache");
+          const ec = new ElastiCacheClient({
+            region: creds.awsRegion!, credentials: { accessKeyId: creds.awsAccessKeyId!, secretAccessKey: creds.awsSecretAccessKey! },
+          });
+          // Describe the cluster to find its replication group
+          const descResult = await ec.send(new DescribeCacheClustersCommand({ CacheClusterId: creds.clusterId }));
+          const cluster = descResult.CacheClusters?.[0];
+          const rgId = cluster?.ReplicationGroupId;
+          if (!rgId) {
+            return { success: false, action, serviceName, details: "ElastiCache scale-down requires a replication group (standalone clusters are already minimum size)" };
+          }
+          // Reduce to primary-only (0 replicas) — keeps data, eliminates read replica cost
+          await ec.send(new ModifyReplicationGroupCommand({
+            ReplicationGroupId: rgId,
+            NumCacheClusters: 1,  // primary only
+            ApplyImmediately: true,
+          }));
+          return { success: true, action, serviceName, details: `ElastiCache replication group ${rgId} scaled to primary-only (replicas removed)` };
+        }
         return { success: false, action, serviceName, details: `scale-down not implemented for ${creds.subType}` };
       }
       case "pause-cluster": {

@@ -2,7 +2,7 @@
  * Vercel Provider
  *
  * Monitors Vercel usage: function invocations, bandwidth, builds.
- * Kill actions: scale-down (set function concurrency), disable-service.
+ * Kill actions: scale-down (cancel all BUILDING/QUEUED deployments).
  */
 
 import type { CloudProvider, ServiceUsage } from "../types.js";
@@ -67,12 +67,45 @@ export const vercelProvider: CloudProvider = {
   },
 
   async executeKillSwitch(credential, serviceName, action) {
-    if (action === "scale-down") {
-      return { success: false, action, serviceName, details: "Function concurrency scaling requires manual action in the Vercel dashboard. Visit https://vercel.com/dashboard" };
+    const token = credential.vercelApiToken!;
+    const teamId = credential.vercelTeamId;
+    const headers = { ...authHeaders(token), "Content-Type": "application/json" };
+
+    if (action === "scale-down" || action === "disconnect") {
+      try {
+        // List all BUILDING and QUEUED deployments
+        const listPath = buildPath("/v6/deployments?state=BUILDING,QUEUED&limit=50", teamId);
+        const { deployments = [] } = await providerFetch(VERCEL_BASE, listPath, headers, "Vercel");
+
+        const cancellable = deployments.filter((d: any) => d.state === "BUILDING" || d.state === "QUEUED");
+        if (cancellable.length === 0) {
+          return { success: true, action, serviceName, details: "No active builds to cancel" };
+        }
+
+        const outcomes = await Promise.allSettled(
+          cancellable.map((d: any) =>
+            fetch(`${VERCEL_BASE}/v12/deployments/${d.uid}/cancel${teamId ? `?teamId=${teamId}` : ""}`, {
+              method: "PATCH", headers,
+            })
+          )
+        );
+
+        const cancelled = outcomes.filter(o => o.status === "fulfilled" && (o as PromiseFulfilledResult<Response>).value.ok).length;
+        const failed = cancellable.length - cancelled;
+        return {
+          success: cancelled > 0 || cancellable.length === 0,
+          action, serviceName,
+          details: `Cancelled ${cancelled} build(s)${failed > 0 ? `, ${failed} failed` : ""}`,
+        };
+      } catch (err: any) {
+        return { success: false, action, serviceName, details: `Failed to cancel builds: ${err.message}` };
+      }
     }
-    if (action === "disable-service") {
-      return { success: false, action, serviceName, details: "Service disabling requires manual action in the Vercel dashboard. Visit https://vercel.com/dashboard" };
+
+    if (action === "rotate-creds") {
+      return { success: false, action, serviceName, details: "Token rotation requires manual action. Manage tokens at https://vercel.com/account/tokens" };
     }
+
     return { success: false, action, serviceName, details: `Action ${action} not supported for Vercel` };
   },
 

@@ -355,6 +355,23 @@ export function createApp() {
         GuardianAccountModel.deleteMany({ ownerUserId: userId }),
       ]);
 
+      // Delete the Clerk user so they can't sign back in with the same account.
+      // Non-fatal: if CLERK_SECRET_KEY is absent (e.g. local dev), skip silently.
+      try {
+        const clerkSecret = process.env.CLERK_SECRET_KEY;
+        if (clerkSecret) {
+          const clerkRes = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${clerkSecret}` },
+          });
+          if (!clerkRes.ok) {
+            console.warn(`[guardian] Clerk user deletion failed for ${userId}: ${clerkRes.status}`);
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
+
       res.json({ deleted: true });
     } catch (e) { next(e); }
   });
