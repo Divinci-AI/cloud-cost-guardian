@@ -27,7 +27,7 @@ function getDefaultKillAction(provider: ProviderId): KillAction {
     case "openai":     return "rotate-creds";
     case "anthropic":  return "rotate-creds";
     case "xai":        return "rotate-creds";
-    case "replicate":  return "rotate-creds";
+    case "replicate":  return "scale-down";  // cancels all running/queued predictions
     case "snowflake":  return "scale-down";
     case "vercel":     return "scale-down";
     case "datadog":    return "rotate-creds";

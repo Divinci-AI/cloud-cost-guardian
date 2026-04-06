@@ -2,7 +2,7 @@
  * Replicate Provider
  *
  * Monitors Replicate usage: predictions, GPU hours, and costs.
- * Kill actions: rotate-creds (manual).
+ * Kill actions: cancel-predictions (cancel all running/queued), rotate-creds (manual).
  */
 
 import type { CloudProvider, ServiceUsage } from "../types.js";
@@ -62,9 +62,49 @@ export const replicateProvider: CloudProvider = {
   },
 
   async executeKillSwitch(credential, serviceName, action) {
+    const token = credential.replicateApiToken!;
+    const headers = authHeaders(token);
+
+    // Cancel all running and queued predictions
+    if (action === "scale-down" || action === "disconnect" || action === "stop-pod") {
+      try {
+        // Fetch up to 100 predictions; cancel those in a cancellable state
+        const result = await providerFetch(REPLICATE_BASE, "/predictions?order=desc&limit=100", headers, "Replicate");
+        const cancellable = (result.results || []).filter(
+          (p: any) => p.status === "starting" || p.status === "processing"
+        );
+
+        if (cancellable.length === 0) {
+          return { success: true, action, serviceName, details: "No running predictions to cancel" };
+        }
+
+        const outcomes = await Promise.allSettled(
+          cancellable.map((p: any) =>
+            fetch(`${REPLICATE_BASE}/predictions/${p.id}/cancel`, {
+              method: "POST",
+              headers: { ...headers, "Content-Type": "application/json" },
+            })
+          )
+        );
+
+        const cancelled = outcomes.filter(o => o.status === "fulfilled" && (o as PromiseFulfilledResult<Response>).value.ok).length;
+        const failed = cancellable.length - cancelled;
+
+        return {
+          success: cancelled > 0 || cancellable.length === 0,
+          action,
+          serviceName,
+          details: `Cancelled ${cancelled} prediction(s)${failed > 0 ? `, ${failed} failed` : ""}`,
+        };
+      } catch (err: any) {
+        return { success: false, action, serviceName, details: `Failed to cancel predictions: ${err.message}` };
+      }
+    }
+
     if (action === "rotate-creds") {
       return { success: false, action, serviceName, details: "API token rotation requires manual action. Revoke tokens at https://replicate.com/account/api-tokens" };
     }
+
     return { success: false, action, serviceName, details: `Action ${action} not supported for Replicate` };
   },
 
