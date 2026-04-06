@@ -127,6 +127,7 @@ export interface ThresholdConfig {
 
   // ─── GCP Cost Thresholds ────────────────────────────────────────────────────
   gcpBudgetPercent?: number;
+  gcpDailyCostUSD?: number;                // Max total GCP daily spend (USD)
   computeInstanceCount?: number;           // Max Compute Engine instances
   computeGPUCount?: number;                // Max GPU accelerators
   gkeNodeCount?: number;                   // Max GKE nodes across all pools

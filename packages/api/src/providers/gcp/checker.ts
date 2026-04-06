@@ -599,7 +599,19 @@ export const gcpProvider: CloudProvider = {
     }
 
     const monthlyLimit = thresholds.monthlySpendLimitUSD;
+    const dailyLimit = thresholds.gcpDailyCostUSD;
     const totalDailyCost = services.reduce((sum, s) => sum + s.estimatedDailyCostUSD, 0);
+
+    if (dailyLimit && totalDailyCost > dailyLimit) {
+      violations.push({
+        serviceName: "all-services",
+        metricName: "Daily Cost",
+        currentValue: Math.round(totalDailyCost * 100) / 100,
+        threshold: dailyLimit,
+        unit: "USD",
+        severity: totalDailyCost > dailyLimit * 2 ? "critical" : "warning",
+      });
+    }
 
     if (monthlyLimit) {
       const projectedMonthlyCost = totalDailyCost * 30;
@@ -705,6 +717,7 @@ export const gcpProvider: CloudProvider = {
   getDefaultThresholds(): ThresholdConfig {
     return {
       monthlySpendLimitUSD: 500,
+      gcpDailyCostUSD: 25,        // Alert when daily GCP spend exceeds $25
       requestsPerMinute: 50000,
       errorRatePercent: 50,
       computeInstanceCount: 10,
