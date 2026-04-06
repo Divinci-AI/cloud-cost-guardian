@@ -71,6 +71,8 @@ jobs:
     permissions:
       contents: write        # push fix branch
       pull-requests: write   # open PR
+      issues: write          # read/update issues
+      actions: read          # read CI logs so Claude can inspect test failures
 
     steps:
       - name: Checkout repository
@@ -107,7 +109,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run Claude Code — analyze and open fix PR
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         env:
           PROVIDER: ${{ inputs.provider }}
           ACCOUNT_NAME: ${{ inputs.account_name }}
@@ -119,7 +121,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: "Bash,Read,Edit,Write,Glob,Grep"
+          claude_args: "--allowedTools Edit,Read,Write,Bash,Glob,Grep --max-turns 30"
           prompt: |
             Kill Switch detected $VIOLATION_COUNT threshold violation(s) on
             "$ACCOUNT_NAME" ($PROVIDER, severity: $SEVERITY).

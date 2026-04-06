@@ -711,7 +711,7 @@ export function SettingsPage() {
                         margin: 0, padding: "0 16px 16px", fontSize: "11px", lineHeight: "1.6",
                         color: "#c4c5ca", overflowX: "auto", whiteSpace: "pre",
                       }}>{`# .github/workflows/kill-switch-remediate.yml
-name: Kill Switch Remediation
+name: Kill Switch — AI Remediation
 on:
   workflow_dispatch:
     inputs:
@@ -723,28 +723,45 @@ on:
       kill_switch_action: { required: true }
       dedup_key:          { required: true }
 
+# Prevents duplicate runs for the same account+day
+concurrency:
+  group: kill-switch-remediate-\${{ inputs.dedup_key }}
+  cancel-in-progress: false
+
 jobs:
   remediate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
+      issues: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
-      - uses: anthropics/claude-code-action@beta
+      - uses: anthropics/claude-code-action@v1
+        env:
+          PROVIDER: \${{ inputs.provider }}
+          ACCOUNT_NAME: \${{ inputs.account_name }}
+          SEVERITY: \${{ inputs.severity }}
+          VIOLATION_COUNT: \${{ inputs.violation_count }}
+          VIOLATIONS_JSON: \${{ inputs.violations_json }}
+          KILL_SWITCH_ACTION: \${{ inputs.kill_switch_action }}
+          DEDUP_KEY: \${{ inputs.dedup_key }}
         with:
           anthropic_api_key: \${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--allowedTools Edit,Read,Write,Bash,Glob,Grep --max-turns 30"
           prompt: |
-            Kill Switch detected \${{ inputs.violation_count }} violation(s) on
-            "\${{ inputs.account_name }}" (\${{ inputs.provider }}, severity: \${{ inputs.severity }}).
-            Kill Switch already took action: \${{ inputs.kill_switch_action }}
+            Kill Switch detected $VIOLATION_COUNT violation(s) on
+            "$ACCOUNT_NAME" ($PROVIDER, severity: $SEVERITY).
+            Kill Switch already took action: $KILL_SWITCH_ACTION
 
-            Violations: \${{ inputs.violations_json }}
+            Violations: $VIOLATIONS_JSON
 
-            Analyze this codebase and open a PR to fix the root cause.
-            Look for: inefficient queries, N+1 patterns, missing caching,
-            or security gaps enabling unauthorized usage spikes.
-          allowed_tools: "Bash,Read,Edit,Write,Glob,Grep"`}</pre>
+            Find the ROOT CAUSE and open a PR to fix it.
+            Look for: N+1 queries, missing indexes, unbounded loops,
+            missing caching, or security gaps causing the spike.
+            Branch: fix/kill-switch-$DEDUP_KEY`}</pre>
                     )}
                   </div>
                   <button
