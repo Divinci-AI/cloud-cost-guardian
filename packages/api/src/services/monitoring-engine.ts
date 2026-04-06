@@ -58,13 +58,41 @@ export async function runCheckCycle(guardianAccountId?: string): Promise<CheckRe
     return [];
   }
 
-  console.error(`[guardian] Checking ${activeAccounts.length} cloud account(s)...`);
+  // Filter to accounts whose checkIntervalMinutes has elapsed since lastCheckAt.
+  // When guardianAccountId is explicitly provided (manual /check endpoint), skip the filter.
+  let dueAccounts = activeAccounts;
+  if (!guardianAccountId) {
+    const now = Date.now();
+    // Batch-load guardian accounts to avoid N+1
+    const orgIds = [...new Set(activeAccounts.map(a => a.guardianAccountId))];
+    const orgs = await GuardianAccountModel.find({ _id: { $in: orgIds } }, "settings");
+    const orgIntervalMs: Record<string, number> = {};
+    for (const org of orgs) {
+      const minutes = (org as any).settings?.checkIntervalMinutes ?? 360;
+      orgIntervalMs[(org as any)._id.toString()] = minutes * 60 * 1000;
+    }
+    dueAccounts = activeAccounts.filter(a => {
+      const intervalMs = orgIntervalMs[a.guardianAccountId] ?? (360 * 60 * 1000);
+      const lastCheck = (a as any).lastCheckAt ?? 0;
+      return now - lastCheck >= intervalMs;
+    });
+    if (dueAccounts.length < activeAccounts.length) {
+      console.error(`[guardian] ${activeAccounts.length - dueAccounts.length} account(s) skipped (not due yet)`);
+    }
+  }
+
+  if (dueAccounts.length === 0) {
+    console.error("[guardian] No accounts due for check");
+    return [];
+  }
+
+  console.error(`[guardian] Checking ${dueAccounts.length} cloud account(s)...`);
 
   // Run checks concurrently (max 5 at a time to avoid thundering herd)
   const CONCURRENCY = 5;
   const results: CheckResult[] = [];
-  for (let i = 0; i < activeAccounts.length; i += CONCURRENCY) {
-    const batch = activeAccounts.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < dueAccounts.length; i += CONCURRENCY) {
+    const batch = dueAccounts.slice(i, i + CONCURRENCY);
     const settled = await Promise.allSettled(batch.map(a => checkSingleAccount(a)));
     for (const outcome of settled) {
       if (outcome.status === "fulfilled") {

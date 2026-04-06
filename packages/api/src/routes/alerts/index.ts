@@ -9,6 +9,7 @@ import { GuardianAccountModel } from "../../models/guardian-account/schema.js";
 import { sendAlerts } from "../../services/alerting.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { logActivity } from "../../services/activity-logger.js";
+import { enforceTierLimits, TIER_LIMITS } from "../billing/index.js";
 
 export const alertRouter = Router();
 
@@ -63,23 +64,32 @@ alertRouter.put("/channels", requirePermission("alerts:write"), async (req, res,
       return res.status(400).json({ error: "channels must be an array" });
     }
 
-    const account = await GuardianAccountModel.findByIdAndUpdate(
+    // Enforce tier limit on number of alert channels
+    const account = await GuardianAccountModel.findById(guardianAccountId);
+    if (!account) return res.status(404).json({ error: "Account not found" });
+    const limit = TIER_LIMITS[account.tier]?.alertChannels ?? 1;
+    if (channels.length > limit) {
+      return res.status(403).json({
+        error: `Your ${account.tier === "free" ? "current" : account.tier} plan allows ${limit} alert channel(s). Upgrade to add more.`,
+        currentTier: account.tier,
+        limit,
+        requested: channels.length,
+      });
+    }
+
+    const updatedAccount = await GuardianAccountModel.findByIdAndUpdate(
       guardianAccountId,
       { alertChannels: channels },
       { new: true }
     );
 
-    if (!account) {
-      return res.status(404).json({ error: "Account not found" });
-    }
-
     logActivity({
       orgId: guardianAccountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
       action: "alert_channel.update", resourceType: "alert_channel",
-      details: { channelCount: account.alertChannels.length }, ipAddress: req.ip,
+      details: { channelCount: updatedAccount!.alertChannels.length }, ipAddress: req.ip,
     });
 
-    res.json({ updated: true, channelCount: account.alertChannels.length });
+    res.json({ updated: true, channelCount: updatedAccount!.alertChannels.length });
   } catch (e) {
     next(e);
   }

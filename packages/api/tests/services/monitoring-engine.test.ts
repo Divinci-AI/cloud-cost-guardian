@@ -10,6 +10,7 @@ vi.mock("../../src/models/cloud-account/schema.js", () => ({
 
 vi.mock("../../src/models/guardian-account/schema.js", () => ({
   GuardianAccountModel: {
+    find: vi.fn().mockResolvedValue([]),
     findById: vi.fn(),
   },
 }));

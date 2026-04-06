@@ -301,6 +301,22 @@ export function createApp() {
       const ownedAccounts = await GuardianAccountModel.find({ ownerUserId: userId }).lean();
       const ownedOrgIds = ownedAccounts.map((a: any) => a._id.toString());
 
+      // Cancel active Stripe subscriptions so the user stops being billed
+      try {
+        const { default: Stripe } = await import("stripe");
+        const stripeKey = process.env.STRIPE_API_SECRET_KEY;
+        if (stripeKey) {
+          const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" });
+          await Promise.all(
+            (ownedAccounts as any[])
+              .filter(a => a.stripeSubscriptionId)
+              .map(a => stripe.subscriptions.cancel(a.stripeSubscriptionId).catch(() => {}))
+          );
+        }
+      } catch {
+        // Non-fatal: Stripe may not be configured in all envs
+      }
+
       // Cascade-delete per org
       await Promise.all(
         ownedOrgIds.map(orgId =>
