@@ -429,7 +429,7 @@ export const redisProvider: CloudProvider = {
           return { success: true, action, serviceName, details: "Scaled Redis Cloud database to minimum 25MB" };
         }
         if (creds.subType === "elasticache") {
-          const { ElastiCacheClient, DescribeCacheClustersCommand, ModifyReplicationGroupCommand } = await import("@aws-sdk/client-elasticache");
+          const { ElastiCacheClient, DescribeCacheClustersCommand, DecreaseReplicaCountCommand } = await import("@aws-sdk/client-elasticache");
           const ec = new ElastiCacheClient({
             region: creds.awsRegion!, credentials: { accessKeyId: creds.awsAccessKeyId!, secretAccessKey: creds.awsSecretAccessKey! },
           });
@@ -441,9 +441,9 @@ export const redisProvider: CloudProvider = {
             return { success: false, action, serviceName, details: "ElastiCache scale-down requires a replication group (standalone clusters are already minimum size)" };
           }
           // Reduce to primary-only (0 replicas) — keeps data, eliminates read replica cost
-          await ec.send(new ModifyReplicationGroupCommand({
+          await ec.send(new DecreaseReplicaCountCommand({
             ReplicationGroupId: rgId,
-            NumCacheClusters: 1,  // primary only
+            NewReplicaCount: 0,
             ApplyImmediately: true,
           }));
           return { success: true, action, serviceName, details: `ElastiCache replication group ${rgId} scaled to primary-only (replicas removed)` };
