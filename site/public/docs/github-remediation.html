@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>GitHub AI Remediation | Kill Switch</title>
+    <meta name="description" content="Automatically fix cloud cost violations with AI — Kill Switch triggers Claude Code to analyze your codebase and open a PR fixing the root cause.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: rgb(12, 18, 41); color: #c4c5ca; }
+        a { color: #5ce2e7; text-decoration: none; }
+        a:hover { color: #fff; }
+        .navbar {
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 2em; height: 58px;
+            background: rgba(51, 51, 51, 0.55); backdrop-filter: blur(12px);
+            border-top: 4px solid #0e102dab;
+        }
+        .nav-brand { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .nav-brand .icon { font-size: 24px; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: #fff; font-weight: 500; font-size: 14px; }
+        .nav-links a.active { color: #5ce2e7; }
+        .btn-github { background: #24292e; color: #fff !important; padding: 7px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; border: 1px solid #444; }
+        .btn-github:hover { background: #444; }
+
+        /* Layout: sidebar + content */
+        .page-layout {
+            display: flex;
+            max-width: 1160px;
+            margin: 0 auto;
+            padding-top: 58px;
+        }
+        .toc {
+            position: sticky;
+            top: 74px;
+            align-self: flex-start;
+            width: 220px;
+            min-width: 220px;
+            padding: 24px 0 24px 2em;
+            max-height: calc(100vh - 74px);
+            overflow-y: auto;
+        }
+        .toc-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1.2px;
+            color: #6b7280; margin-bottom: 12px;
+        }
+        .toc ul { list-style: none; margin: 0; padding: 0; }
+        .toc li { margin-bottom: 2px; }
+        .toc a {
+            display: block; padding: 5px 12px; font-size: 13px; color: #8b8d95;
+            border-radius: 6px; border-left: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .toc a:hover { color: #fff; background: rgba(255,255,255,0.04); }
+        .toc a.active { color: #5ce2e7; border-left-color: #5ce2e7; background: rgba(92,226,231,0.06); }
+        .toc .toc-sub { padding-left: 14px; }
+        .toc .toc-sub a { font-size: 12px; padding: 3px 12px; }
+
+        .content { flex: 1; min-width: 0; padding: 32px 2em 4em; }
+        h1 { font-family: 'Outfit', sans-serif; font-size: 2.2em; font-weight: 800; color: #fff; margin: 0 0 0.4em; }
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.5em; font-weight: 700; color: #fff; margin: 2em 0 0.6em; padding-top: 1em; border-top: 1px solid rgba(255,255,255,0.06); scroll-margin-top: 80px; }
+        h3 { font-family: 'Outfit', sans-serif; font-size: 1.15em; font-weight: 600; color: #ddd; margin: 1.5em 0 0.4em; scroll-margin-top: 80px; }
+        p { line-height: 1.7; margin: 0 0 1em; }
+        ul, ol { margin: 0 0 1.2em 1.5em; line-height: 1.8; }
+        code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; color: #5ce2e7; }
+        pre { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 1.2em; overflow-x: auto; margin: 0 0 1.5em; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; color: #c4c5ca; }
+        pre code { background: none; padding: 0; color: inherit; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-right: 6px; }
+        .badge-new { background: rgba(76,175,80,0.15); color: #4caf50; }
+        .badge-pro { background: rgba(92,226,231,0.15); color: #5ce2e7; }
+        table { width: 100%; border-collapse: collapse; margin: 0 0 1.5em; font-size: 14px; }
+        th { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.04); color: #fff; font-weight: 600; }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .callout { background: rgba(92,226,231,0.06); border-left: 3px solid #5ce2e7; padding: 1em 1.2em; border-radius: 0 6px 6px 0; margin: 0 0 1.5em; }
+        .callout-warn { background: rgba(255,152,0,0.06); border-left-color: #ff9800; }
+        .callout-danger { background: rgba(255,107,107,0.06); border-left-color: #ff6b6b; }
+        .step-list { counter-reset: steps; list-style: none; margin: 0 0 1.5em; padding: 0; }
+        .step-list > li { counter-increment: steps; display: flex; gap: 16px; margin-bottom: 1.2em; }
+        .step-list > li::before {
+            content: counter(steps);
+            flex-shrink: 0; width: 28px; height: 28px;
+            background: rgba(92,226,231,0.15); color: #5ce2e7;
+            border-radius: 50%; font-weight: 700; font-size: 13px;
+            display: flex; align-items: center; justify-content: center;
+            margin-top: 1px;
+        }
+        .flow-diagram {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 1.5em 2em;
+            margin: 0 0 1.5em;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 2;
+        }
+        .flow-arrow { color: #5ce2e7; }
+        .flow-label { color: #9ca3af; font-size: 11px; }
+
+        /* Anchor links */
+        h2[id], h3[id] { position: relative; }
+        h2[id] .anchor, h3[id] .anchor { color: #3a3d4a; text-decoration: none; margin-left: 8px; font-weight: 400; transition: color 0.15s; }
+        h2[id]:hover .anchor, h3[id]:hover .anchor { color: #5ce2e7; }
+        h2[id] .anchor::after, h3[id] .anchor::after { content: "#"; }
+
+        @media (max-width: 900px) {
+            .toc { display: none; }
+            .content { padding: 32px 1.5em 4em; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand" style="text-decoration:none;">
+            <span class="icon">&#9889;</span>
+            <span>Kill Switch</span>
+        </a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/docs">API Docs</a>
+            <a href="/docs/cli.html">CLI</a>
+            <a href="/docs/integration.html">Integration</a>
+            <a href="/docs/github-remediation.html" class="active">AI Remediation</a>
+            <a href="https://github.com/divinci-ai/kill-switch" class="btn-github">
+                <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub
+            </a>
+        </div>
+    </nav>
+
+    <div class="page-layout">
+        <aside class="toc">
+            <div class="toc-title">On this page</div>
+            <ul>
+                <li><a href="#overview">How it works</a></li>
+                <li><a href="#setup">Setup</a>
+                    <ul class="toc-sub">
+                        <li><a href="#step-workflow">1. Add workflow file</a></li>
+                        <li><a href="#step-secret">2. Add Anthropic API key</a></li>
+                        <li><a href="#step-pat">3. Create GitHub PAT</a></li>
+                        <li><a href="#step-channel">4. Add alert channel</a></li>
+                    </ul>
+                </li>
+                <li><a href="#workflow-file">Workflow reference</a></li>
+                <li><a href="#pat-scopes">PAT scopes</a></li>
+                <li><a href="#what-claude-does">What Claude does</a></li>
+                <li><a href="#dedup">Deduplication</a></li>
+                <li><a href="#cli-setup">CLI setup</a></li>
+                <li><a href="#troubleshooting">Troubleshooting</a></li>
+            </ul>
+        </aside>
+
+        <div class="content">
+            <h1>&#129302; GitHub AI Remediation <span class="badge badge-new">New</span></h1>
+            <p style="font-size:1.1em;color:#9ca3af;margin-bottom:2em;">
+                When Kill Switch detects a threshold violation and kills the runaway service,
+                it can automatically trigger Claude Code to analyze your codebase and open a
+                pull request fixing the root cause — so the same spike never happens again.
+            </p>
+
+            <div class="callout">
+                <strong>Zero-touch remediation loop:</strong> Kill Switch stops the bleeding immediately,
+                then Claude Code digs into your code, finds why it happened, and opens a PR to fix it.
+                You review and merge.
+            </div>
+
+            <h2 id="overview">How it works <a href="#overview" class="anchor"></a></h2>
+
+            <div class="flow-diagram">
+                <div>&#9889; Kill Switch detects threshold violation</div>
+                <div class="flow-arrow">  ↓  <span class="flow-label">immediately</span></div>
+                <div>&#128683; Kill action runs (disconnect worker / stop pod / scale to 0)</div>
+                <div class="flow-arrow">  ↓  <span class="flow-label">milliseconds later</span></div>
+                <div>&#128276; Alerts fire (PagerDuty, Slack, email, …)</div>
+                <div class="flow-arrow">  ↓  <span class="flow-label">simultaneously</span></div>
+                <div>&#128640; GitHub <code>workflow_dispatch</code> triggers your remediation workflow</div>
+                <div class="flow-arrow">  ↓  <span class="flow-label">GitHub Actions picks it up</span></div>
+                <div>&#129302; Claude Code checks out your repo, reads the violation details</div>
+                <div class="flow-arrow">  ↓</div>
+                <div>&#128269; Searches codebase for root cause (N+1, loops, missing indexes, …)</div>
+                <div class="flow-arrow">  ↓</div>
+                <div>&#128196; Opens a PR: <em>"fix: N+1 query causing D1 overage"</em></div>
+                <div class="flow-arrow">  ↓  <span class="flow-label">you review &amp; merge</span></div>
+                <div>&#9989; Violation fixed permanently</div>
+            </div>
+
+            <p>Kill Switch passes structured violation data as workflow inputs so Claude has full context:
+            which provider fired, which service, what metric, how far over threshold, and what action was already taken.</p>
+
+            <h2 id="setup">Setup <a href="#setup" class="anchor"></a></h2>
+
+            <ol class="step-list">
+                <li>
+                    <div>
+                        <h3 id="step-workflow" style="margin-top:0;">Add the workflow file to your repo</h3>
+                        <p>Copy the template from Kill Switch Settings → Alert Channels → GitHub, or
+                        copy it from the example file in the Kill Switch repo:</p>
+                        <pre>cp kill-switch-remediate.example.yml \
+    .github/workflows/kill-switch-remediate.yml</pre>
+                        <p>Commit and push to your default branch.</p>
+                    </div>
+                </li>
+                <li>
+                    <div>
+                        <h3 id="step-secret" style="margin-top:0;">Add your Anthropic API key to the repo</h3>
+                        <p>Go to your repo on GitHub → <strong>Settings → Secrets and variables → Actions → New repository secret</strong>.</p>
+                        <table>
+                            <tr><th>Name</th><th>Value</th></tr>
+                            <tr><td><code>ANTHROPIC_API_KEY</code></td><td>Your Anthropic API key (starts with <code>sk-ant-</code>)</td></tr>
+                        </table>
+                        <p>Get an API key at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>.</p>
+                    </div>
+                </li>
+                <li>
+                    <div>
+                        <h3 id="step-pat" style="margin-top:0;">Create a GitHub Personal Access Token</h3>
+                        <p>Kill Switch needs a PAT to dispatch the workflow on your behalf.
+                        Create one at <strong>GitHub → Settings → Developer settings → Personal access tokens</strong>.</p>
+                        <p>See <a href="#pat-scopes">PAT scopes</a> below for required permissions.</p>
+                    </div>
+                </li>
+                <li>
+                    <div>
+                        <h3 id="step-channel" style="margin-top:0;">Add the GitHub alert channel in Kill Switch</h3>
+                        <p>Go to <strong>Kill Switch Settings → Alert Channels → Add Channel → GitHub Remediation</strong> and fill in:</p>
+                        <table>
+                            <tr><th>Field</th><th>Description</th></tr>
+                            <tr><td>Personal Access Token</td><td>The PAT you created in step 3</td></tr>
+                            <tr><td>Repo owner</td><td>Your GitHub org or username (e.g. <code>acme-corp</code>)</td></tr>
+                            <tr><td>Repo name</td><td>The repo Claude should analyze (e.g. <code>my-app</code>)</td></tr>
+                            <tr><td>Workflow file</td><td><code>kill-switch-remediate.yml</code></td></tr>
+                            <tr><td>Branch</td><td>Default branch (e.g. <code>main</code>)</td></tr>
+                        </table>
+                        <p>Use <strong>Test</strong> to verify the channel is configured correctly before saving.</p>
+                    </div>
+                </li>
+            </ol>
+
+            <h2 id="workflow-file">Workflow reference <a href="#workflow-file" class="anchor"></a></h2>
+
+            <p>The workflow receives these inputs from Kill Switch via <code>workflow_dispatch</code>:</p>
+
+            <table>
+                <tr><th>Input</th><th>Type</th><th>Description</th></tr>
+                <tr><td><code>provider</code></td><td>string</td><td>Cloud provider (e.g. <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, <code>runpod</code>)</td></tr>
+                <tr><td><code>account_name</code></td><td>string</td><td>Human-readable name of the cloud account</td></tr>
+                <tr><td><code>severity</code></td><td>string</td><td><code>critical</code>, <code>error</code>, or <code>warning</code></td></tr>
+                <tr><td><code>violation_count</code></td><td>string</td><td>Number of threshold violations detected</td></tr>
+                <tr><td><code>violations_json</code></td><td>string</td><td>JSON array — see structure below</td></tr>
+                <tr><td><code>kill_switch_action</code></td><td>string</td><td>Action already taken (e.g. <code>Disconnected d1-chunks-abc</code>)</td></tr>
+                <tr><td><code>dedup_key</code></td><td>string</td><td><code>accountId:YYYY-MM-DD</code> — used to prevent duplicate runs</td></tr>
+            </table>
+
+            <h3 id="violations-json">violations_json structure</h3>
+            <pre>[
+  {
+    "serviceName": "d1-chunks-abc",
+    "metricName": "D1 Rows Read",
+    "currentValue": 302100000,
+    "threshold": 5000000,
+    "multiplier": "60x",
+    "severity": "critical"
+  }
+]</pre>
+
+            <h3 id="workflow-template">Complete workflow template</h3>
+            <pre>name: Kill Switch — AI Remediation
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        required: true
+        type: string
+      account_name:
+        required: true
+        type: string
+      severity:
+        required: true
+        type: string
+      violation_count:
+        required: true
+        type: string
+      violations_json:
+        required: true
+        type: string
+      kill_switch_action:
+        required: true
+        type: string
+      dedup_key:
+        required: true
+        type: string
+
+# Prevent duplicate runs for the same account+day
+concurrency:
+  group: kill-switch-remediate-${{ inputs.dedup_key }}
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Claude Code — analyze and open fix PR
+        uses: anthropics/claude-code-action@v1
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          ACCOUNT_NAME: ${{ inputs.account_name }}
+          SEVERITY: ${{ inputs.severity }}
+          VIOLATION_COUNT: ${{ inputs.violation_count }}
+          VIOLATIONS_JSON: ${{ inputs.violations_json }}
+          KILL_SWITCH_ACTION: ${{ inputs.kill_switch_action }}
+          DEDUP_KEY: ${{ inputs.dedup_key }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--allowedTools Edit,Read,Write,Bash,Glob,Grep --max-turns 30"
+          prompt: |
+            Kill Switch detected $VIOLATION_COUNT violation(s) on
+            "$ACCOUNT_NAME" ($PROVIDER, severity: $SEVERITY).
+
+            Kill Switch already took the emergency action: $KILL_SWITCH_ACTION
+
+            Violations: $VIOLATIONS_JSON
+
+            Find and fix the ROOT CAUSE so this doesn't happen again.
+            Create a branch fix/kill-switch-$DEDUP_KEY and open a PR.</pre>
+
+            <div class="callout callout-warn">
+                <strong>Security note:</strong> Always pass <code>${{ inputs.* }}</code> values through
+                <code>env:</code> variables and reference them as <code>$VAR_NAME</code> in shell steps.
+                Never interpolate them directly into <code>run:</code> blocks — this prevents shell injection.
+            </div>
+
+            <h2 id="pat-scopes">PAT scopes <a href="#pat-scopes" class="anchor"></a></h2>
+
+            <table>
+                <tr><th>Token type</th><th>Required scopes</th></tr>
+                <tr>
+                    <td>Classic PAT</td>
+                    <td><code>repo</code>, <code>workflow</code></td>
+                </tr>
+                <tr>
+                    <td>Fine-grained PAT</td>
+                    <td>
+                        Actions (read/write),
+                        Contents (read/write),
+                        Pull requests (read/write)
+                    </td>
+                </tr>
+            </table>
+
+            <p>Create a PAT at <strong>GitHub → Settings → Developer settings → Personal access tokens</strong>.</p>
+            <p>Fine-grained tokens are recommended: they can be scoped to a single repository and expire automatically.</p>
+
+            <h2 id="what-claude-does">What Claude does <a href="#what-claude-does" class="anchor"></a></h2>
+
+            <p>Claude Code receives the violation details and investigates based on the provider and metric type:</p>
+
+            <table>
+                <tr><th>Metric spike</th><th>What Claude looks for</th></tr>
+                <tr><td>D1 / database reads</td><td>N+1 queries, missing indexes, full-table scans, runaway background jobs, missing pagination</td></tr>
+                <tr><td>Worker / CPU / requests</td><td>Infinite loops, unbounded recursion, missing rate limiting, hot endpoints with no caching</td></tr>
+                <tr><td>Storage</td><td>Missing TTLs, unbounded writes, log accumulation</td></tr>
+                <tr><td>API token / AI cost</td><td>Retry loops without backoff, missing deduplication, expensive calls without result caching</td></tr>
+                <tr><td>GPU / compute</td><td>Unconstrained job queues, missing spot-instance limits, runaway training loops</td></tr>
+            </table>
+
+            <p>Claude then:</p>
+            <ol>
+                <li>Reads the violation details and recent git history (<code>git log --oneline -20</code>)</li>
+                <li>Searches the codebase for code touching the affected service and metric</li>
+                <li>Identifies the root cause</li>
+                <li>Creates a branch <code>fix/kill-switch-&lt;dedup-key&gt;</code></li>
+                <li>Applies the minimal correct fix</li>
+                <li>Opens a pull request with a clear description, what was found, and how to verify the fix</li>
+            </ol>
+
+            <h2 id="dedup">Deduplication <a href="#dedup" class="anchor"></a></h2>
+
+            <p>Kill Switch scopes the <code>dedup_key</code> to <code>accountId:YYYY-MM-DD</code>.
+            The workflow uses a GitHub Actions <code>concurrency</code> group keyed on this value,
+            so if the same violation fires multiple times in a day (e.g. across cron checks),
+            only the first workflow run proceeds — subsequent dispatches queue behind it and skip
+            if the first is still in progress.</p>
+
+            <pre>concurrency:
+  group: kill-switch-remediate-${{ inputs.dedup_key }}
+  cancel-in-progress: false   # don't cancel an in-progress fix</pre>
+
+            <h2 id="cli-setup">CLI setup <a href="#cli-setup" class="anchor"></a></h2>
+
+            <p>Add the GitHub remediation channel via the Kill Switch CLI:</p>
+
+            <pre>ks alerts add \
+  --type github \
+  --token ghp_YOUR_PAT \
+  --repo-owner acme-corp \
+  --repo-name my-app \
+  --workflow-file kill-switch-remediate.yml \
+  --branch main</pre>
+
+            <p>Test it immediately:</p>
+            <pre>ks alerts test</pre>
+
+            <p>This dispatches a test <code>workflow_dispatch</code> with empty violation data so you can
+            verify the channel is wired up before any real violation fires.</p>
+
+            <h2 id="troubleshooting">Troubleshooting <a href="#troubleshooting" class="anchor"></a></h2>
+
+            <table>
+                <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+                <tr>
+                    <td>Dispatch returns 422</td>
+                    <td>Branch does not exist, or workflow file not found on that branch</td>
+                    <td>Confirm the workflow file is committed to the branch configured in Kill Switch</td>
+                </tr>
+                <tr>
+                    <td>Dispatch returns 404</td>
+                    <td>Repo owner/name wrong, or PAT lacks <code>repo</code> scope</td>
+                    <td>Double-check repo owner and name; re-create PAT with correct scopes</td>
+                </tr>
+                <tr>
+                    <td>Dispatch returns 401</td>
+                    <td>PAT expired or revoked</td>
+                    <td>Generate a new PAT and update the alert channel in Kill Switch Settings</td>
+                </tr>
+                <tr>
+                    <td>Workflow runs but Claude doesn't open a PR</td>
+                    <td>Missing <code>ANTHROPIC_API_KEY</code> secret, or permissions not set</td>
+                    <td>Check the <code>ANTHROPIC_API_KEY</code> secret exists; confirm <code>contents: write</code> and <code>pull-requests: write</code> permissions</td>
+                </tr>
+                <tr>
+                    <td>Duplicate workflow runs</td>
+                    <td>Concurrency group missing from workflow</td>
+                    <td>Ensure the <code>concurrency:</code> block with <code>cancel-in-progress: false</code> is present</td>
+                </tr>
+                <tr>
+                    <td>Channel shows as disabled after test</td>
+                    <td>Test dispatch failed</td>
+                    <td>Check Kill Switch alert history for the error code; fix PAT or repo config</td>
+                </tr>
+            </table>
+
+            <div class="callout">
+                <strong>Need help?</strong> Open an issue at
+                <a href="https://github.com/divinci-ai/kill-switch" target="_blank" rel="noopener">github.com/divinci-ai/kill-switch</a>
+                or email <a href="mailto:admin@kill-switch.net">admin@kill-switch.net</a>.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Highlight active TOC link on scroll
+        const headings = document.querySelectorAll('h2[id], h3[id]');
+        const tocLinks = document.querySelectorAll('.toc a');
+
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    tocLinks.forEach(l => l.classList.remove('active'));
+                    const link = document.querySelector(`.toc a[href="#${entry.target.id}"]`);
+                    if (link) link.classList.add('active');
+                }
+            });
+        }, { rootMargin: '-58px 0px -60% 0px' });
+
+        headings.forEach(h => observer.observe(h));
+    </script>
+</body>
+</html>
