@@ -54,8 +54,8 @@ export const fmtFull = (n: number) =>
   `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const shortDate = (d: string) => {
-  const dt = new Date(d);
-  return `${dt.getMonth() + 1}/${dt.getDate()}`;
+  const [, m, day] = d.split("T")[0].split("-");
+  return `${+m}/${+day}`;
 };
 
 const statusColor = (status?: string) => {
@@ -425,6 +425,7 @@ export function DashboardPage() {
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v: number) => fmt(v)}
+                  domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
                 />
                 <Tooltip content={<ChartTooltip />} />
                 {/* Average line */}
