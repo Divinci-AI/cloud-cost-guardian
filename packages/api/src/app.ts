@@ -280,6 +280,69 @@ export function createApp() {
     } catch (e) { next(e); }
   });
 
+  /**
+   * DELETE /accounts/me — Permanently delete caller's account and all owned data.
+   * Cascade-deletes every org owned by the user: cloud accounts, credentials, API keys,
+   * team members, invitations, and activity logs. Also removes the user profile.
+   */
+  app.delete("/accounts/me", requireAuth, async (req: any, res, next) => {
+    try {
+      const userId = req.userId;
+
+      // Lazy imports to avoid circular deps
+      const { CloudAccountModel } = await import("./models/cloud-account/schema.js");
+      const { TeamMemberModel } = await import("./models/team/schema.js");
+      const { UserProfileModel } = await import("./models/user-profile/schema.js");
+      const { deleteAllCredentialsForAccount } = await import("./models/encrypted-credential/schema.js");
+      const { deleteAllApiKeysForAccount } = await import("./models/api-key/schema.js");
+      const { getPostgresPool } = await import("./globals/index.js");
+
+      // All orgs this user owns (personal + team workspaces)
+      const ownedAccounts = await GuardianAccountModel.find({ ownerUserId: userId }).lean();
+      const ownedOrgIds = ownedAccounts.map((a: any) => a._id.toString());
+
+      // Cascade-delete per org
+      await Promise.all(
+        ownedOrgIds.map(orgId =>
+          Promise.all([
+            CloudAccountModel.deleteMany({ guardianAccountId: orgId }),
+            TeamMemberModel.deleteMany({ guardianAccountId: orgId }),
+            deleteAllCredentialsForAccount(orgId).catch(() => {}),
+            deleteAllApiKeysForAccount(orgId).catch(() => {}),
+          ])
+        )
+      );
+
+      // Delete invitations for all owned orgs
+      const { TeamInvitationModel } = await import("./models/team/schema.js");
+      if (ownedOrgIds.length > 0) {
+        await TeamInvitationModel.deleteMany({ guardianAccountId: { $in: ownedOrgIds } });
+      }
+
+      // Delete Postgres activity log rows for all owned orgs
+      if (ownedOrgIds.length > 0) {
+        try {
+          const pool = getPostgresPool();
+          const placeholders = ownedOrgIds.map((_: string, i: number) => `$${i + 1}`).join(", ");
+          await pool.query(`DELETE FROM activity_log WHERE org_id IN (${placeholders})`, ownedOrgIds);
+        } catch {
+          // Postgres may not be configured in all envs; non-fatal
+        }
+      }
+
+      // Remove this user's memberships in orgs they don't own
+      await TeamMemberModel.deleteMany({ userId });
+
+      // Delete user profile and all owned accounts
+      await Promise.all([
+        UserProfileModel.deleteMany({ userId }),
+        GuardianAccountModel.deleteMany({ ownerUserId: userId }),
+      ]);
+
+      res.json({ deleted: true });
+    } catch (e) { next(e); }
+  });
+
   // Analytics overview (aggregate FinOps data across all accounts)
   app.get("/analytics/overview", requireAuth, resolveOrg, requirePermission("cloud_accounts:read"), async (req: any, res, next) => {
     try {

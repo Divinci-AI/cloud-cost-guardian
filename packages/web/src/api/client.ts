@@ -74,6 +74,7 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+  deleteAccount: () => guardianFetch<any>("/accounts/me", { method: "DELETE" }),
   completeOnboarding: () =>
     guardianFetch<any>("/accounts/me", {
       method: "PATCH",

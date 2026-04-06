@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/clerk-react";
+import { useUser, useClerk } from "@clerk/clerk-react";
 import { api } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
 
@@ -41,6 +41,7 @@ const btnStyle = {
 
 export function SettingsPage() {
   const { user } = useUser();
+  const { signOut } = useClerk();
   const { activeOrg, teamRole, refreshOrgs, orgVersion } = useOrg();
   const [account, setAccount] = useState<any>(null);
   const [orgName, setOrgName] = useState("");
@@ -1013,10 +1014,13 @@ jobs:
           These actions are irreversible. Proceed with caution.
         </p>
         <button
-          onClick={() => {
-            if (window.confirm("Are you sure you want to delete your account? This will remove all cloud accounts, rules, and alert history. This cannot be undone.")) {
-              // TODO: Implement DELETE /accounts/me
-              flash("Account deletion is not yet available. Contact support@divinci.ai.", "error");
+          onClick={async () => {
+            if (!window.confirm("Are you sure you want to delete your account? This will remove all cloud accounts, rules, and alert history. This cannot be undone.")) return;
+            try {
+              await api.deleteAccount();
+              await signOut({ redirectUrl: "/" });
+            } catch (err: any) {
+              flash(err?.message || "Failed to delete account. Please try again.", "error");
             }
           }}
           style={{ ...btnStyle, background: "rgba(255,107,107,0.1)", borderColor: "rgba(255,107,107,0.3)", color: "#ff6b6b" }}

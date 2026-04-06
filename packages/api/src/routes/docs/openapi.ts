@@ -41,6 +41,16 @@ export const openApiSpec = {
         requestBody: { required: true, content: { "application/json": { schema: { "$ref": "#/components/schemas/Credential" } } } },
         responses: { "200": { description: "Validation result" } } },
     },
+    "/accounts/me": {
+      get: { summary: "Get current user account", operationId: "getMe", tags: ["Account"], security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Account details including org list" } } },
+      patch: { summary: "Update account settings", operationId: "updateMe", tags: ["Account"], security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, "settings.timezone": { type: "string" }, "settings.dailyReportEnabled": { type: "boolean" } } } } } },
+        responses: { "200": { description: "Updated account" } } },
+      delete: { summary: "Delete account permanently", operationId: "deleteAccount", tags: ["Account"], security: [{ bearerAuth: [] }],
+        description: "Permanently deletes the caller's account and all owned data: every org, cloud account, credential, API key, team membership, and activity log. Cannot be undone.",
+        responses: { "200": { description: "Account deleted", content: { "application/json": { schema: { type: "object", properties: { deleted: { type: "boolean" } } } } } } } },
+    },
     "/cloud-accounts": {
       get: { summary: "List connected cloud accounts", operationId: "listCloudAccounts", tags: ["Cloud Accounts"], security: [{ bearerAuth: [] }],
         responses: { "200": { description: "Connected accounts" } } },
