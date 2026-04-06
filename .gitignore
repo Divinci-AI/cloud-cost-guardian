@@ -5,3 +5,5 @@ dist/
 .env.local
 package-lock.json
 *.log
+coverage/
+.claude/scheduled_tasks.lock
