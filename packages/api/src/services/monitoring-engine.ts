@@ -14,6 +14,7 @@ import { getCredential } from "../models/encrypted-credential/schema.js";
 import { getProvider } from "../providers/index.js";
 import { sendAlerts } from "./alerting.js";
 import { recordUsageSnapshot, recordAlert } from "../globals/index.js";
+import { captureSnapshot } from "./forensics.js";
 import type { UsageResult, Violation, KillAction, ProviderId } from "../providers/types.js";
 
 function getDefaultKillAction(provider: ProviderId): KillAction {
@@ -42,6 +43,7 @@ export interface CheckResult {
   status: "ok" | "violation" | "error";
   violations: Violation[];
   actionsTaken: string[];
+  forensicSnapshotIds: string[];
   usage: UsageResult | null;
   error?: string;
 }
@@ -119,6 +121,7 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
     status: "ok",
     violations: [],
     actionsTaken: [],
+    forensicSnapshotIds: [],
     usage: null,
   };
 
@@ -152,10 +155,18 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
         if (cloudAccount.autoDelete && violation.severity === "critical") {
           const action = await provider.executeKillSwitch(credential, violation.serviceName, "delete");
           result.actionsTaken.push(action.details);
+          // Capture forensic snapshot for evidence and compliance
+          captureSnapshot(credential, violation.serviceName, `kill-switch:delete:${violation.metricName}`, cloudAccount._id.toString())
+            .then(snap => result.forensicSnapshotIds.push(snap.id))
+            .catch(err => console.warn(`[guardian] Forensic snapshot failed for ${violation.serviceName}:`, err.message));
         } else if (cloudAccount.autoDisconnect) {
           const killAction = getDefaultKillAction(cloudAccount.provider as ProviderId);
           const action = await provider.executeKillSwitch(credential, violation.serviceName, killAction);
           result.actionsTaken.push(action.details);
+          // Capture forensic snapshot for evidence and compliance
+          captureSnapshot(credential, violation.serviceName, `kill-switch:${killAction}:${violation.metricName}`, cloudAccount._id.toString())
+            .then(snap => result.forensicSnapshotIds.push(snap.id))
+            .catch(err => console.warn(`[guardian] Forensic snapshot failed for ${violation.serviceName}:`, err.message));
         }
       }
 

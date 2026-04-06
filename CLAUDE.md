@@ -131,6 +131,17 @@ Required permissions:
 - Protected workers (never killed): `kill-switch-cf`, `api-proxy`
 - Expendable workers (can be killed): `cloud-switch-site`, `kill-switch-app`, `edge-agent`
 
+### ⚠ GCP Self-Protection Constraint
+The Kill Switch API (`guardian-api`) runs on **GCP Cloud Run** in project `openai-api-4375643`.
+`getDefaultKillAction("gcp")` returns `"scale-down"`, which scales Cloud Run to 0 instances.
+
+**If you connect the same GCP project that hosts the API**, add `"gcp:cloud-run:guardian-api"`
+to `protectedServices` on that cloud account — otherwise a GCP cost spike could scale down the
+API itself, severing the kill switch from its own infrastructure.
+
+The dogfood Cloudflare account is safe (it monitors CF workers, not GCP). This only affects
+users who connect their own GCP account and happen to run the guardian API there.
+
 ## Auth
 - Auth provider: Clerk (app_3Bb7YfBWlkNukk5VnyszOMcfWFv)
 - Frontend: @clerk/clerk-react with VITE_CLERK_PUBLISHABLE_KEY
