@@ -11,21 +11,31 @@ import { evaluateViolations } from "../shared.js";
 
 const NEON_BASE = "https://console.neon.tech/api/v2";
 
-async function neonFetch(apiKey: string, path: string, options?: RequestInit) {
-  const res = await fetch(`${NEON_BASE}${path}`, {
-    ...options,
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      ...(options?.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Neon API ${res.status}: ${body.slice(0, 200)}`);
+async function neonFetch(apiKey: string, path: string, options?: RequestInit, timeoutMs = 15_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${NEON_BASE}${path}`, {
+      ...options,
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        ...(options?.headers || {}),
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Neon API ${res.status}: ${body.slice(0, 200)}`);
+    }
+    return res.json();
+  } catch (err: any) {
+    if (err.name === "AbortError") throw new Error(`Neon API timeout after ${timeoutMs}ms`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 export const neonProvider: CloudProvider = {

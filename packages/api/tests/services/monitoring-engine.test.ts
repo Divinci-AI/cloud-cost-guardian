@@ -449,4 +449,48 @@ describe("Monitoring Engine", () => {
       "delete" // Nuclear mode
     );
   });
+
+  it("uses scale-down (not disconnect) for Neon provider violations", async () => {
+    // Regression test: Neon doesn't support "disconnect"; default must be "scale-down"
+    const mockProvider = {
+      id: "neon",
+      name: "Neon",
+      checkUsage: vi.fn().mockResolvedValue({
+        provider: "neon",
+        accountId: "neon",
+        checkedAt: Date.now(),
+        services: [],
+        totalEstimatedDailyCostUSD: 0,
+        violations: [{
+          serviceName: "neon:icy-night-79929587",
+          metricName: "Compute",
+          currentValue: 95,
+          threshold: 80,
+          unit: "CU-hrs",
+          severity: "warning",
+        }],
+        securityEvents: [],
+      }),
+      executeKillSwitch: vi.fn().mockResolvedValue({ success: true, action: "scale-down", serviceName: "neon:icy-night-79929587", details: "Suspended endpoints" }),
+      validateCredential: vi.fn(),
+      getDefaultThresholds: vi.fn(),
+    };
+
+    vi.mocked(CloudAccountModel.find).mockResolvedValue([
+      { _id: "acc-neon", provider: "neon", credentialId: "cred1", thresholds: {}, protectedServices: [], autoDisconnect: true, autoDelete: false, guardianAccountId: "ga1", name: "Neon Prod" },
+    ] as any);
+
+    vi.mocked(getCredential).mockResolvedValue({ provider: "neon", neonApiKey: "key" });
+    vi.mocked(getProvider).mockReturnValue(mockProvider);
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValue({ alertChannels: [] } as any);
+    vi.mocked(CloudAccountModel.findByIdAndUpdate).mockResolvedValue(null);
+
+    await runCheckCycle();
+
+    expect(mockProvider.executeKillSwitch).toHaveBeenCalledWith(
+      expect.anything(),
+      "neon:icy-night-79929587",
+      "scale-down" // Neon must NOT use "disconnect" — it's not supported
+    );
+  });
 });

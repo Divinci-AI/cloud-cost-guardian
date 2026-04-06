@@ -107,6 +107,8 @@ export function createApp() {
     app.use("/alerts/test", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey, ...rlOpts }));
     app.use("/team/invite", rateLimit({ windowMs: 15 * 60 * 1000, max: 20, keyGenerator: perUserKey, ...rlOpts }));
     app.use("/agent/report", rateLimit({ windowMs: 15 * 60 * 1000, max: 30, ...rlOpts }));
+    // /check triggers external cloud API calls — tight per-user limit to prevent amplification
+    app.use("/check", rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyGenerator: perUserKey, ...rlOpts }));
   }
 
   // Skip morgan in test

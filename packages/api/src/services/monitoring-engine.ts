@@ -31,6 +31,7 @@ function getDefaultKillAction(provider: ProviderId): KillAction {
     case "snowflake":  return "scale-down";
     case "vercel":     return "scale-down";
     case "datadog":    return "rotate-creds";
+    case "neon":       return "scale-down";
     default:           return "disconnect";
   }
 }
@@ -111,7 +112,7 @@ export async function runCheckCycle(guardianAccountId?: string): Promise<CheckRe
   return results;
 }
 
-async function checkSingleAccount(cloudAccount: any): Promise<CheckResult> {
+export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult> {
   const result: CheckResult = {
     cloudAccountId: cloudAccount._id.toString(),
     provider: cloudAccount.provider,

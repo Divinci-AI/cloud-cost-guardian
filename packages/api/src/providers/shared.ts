@@ -29,7 +29,7 @@ export function evaluateViolations(
           currentValue: metric.value,
           threshold,
           unit: metric.unit,
-          severity: metric.value > threshold * 2 ? "critical" : "warning",
+          severity: metric.value >= threshold * 2 ? "critical" : "warning",
         });
       }
     }
@@ -42,7 +42,7 @@ export function evaluateViolations(
       currentValue: totalDailyCost,
       threshold: costThreshold,
       unit: "USD",
-      severity: totalDailyCost > costThreshold * 2 ? "critical" : "warning",
+      severity: totalDailyCost >= costThreshold * 2 ? "critical" : "warning",
     });
   }
   return violations;

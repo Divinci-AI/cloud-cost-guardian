@@ -8,7 +8,7 @@ import { Router } from "express";
 import { CloudAccountModel } from "../../models/cloud-account/schema.js";
 import { storeCredential, deleteCredential } from "../../models/encrypted-credential/schema.js";
 import { getProvider } from "../../providers/index.js";
-import { runCheckCycle } from "../../services/monitoring-engine.js";
+import { checkSingleAccount } from "../../services/monitoring-engine.js";
 import { enforceTierLimits } from "../billing/index.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { logActivity } from "../../services/activity-logger.js";
@@ -248,9 +248,10 @@ cloudAccountRouter.patch("/:id/credentials", requirePermission("cloud_accounts:w
 cloudAccountRouter.post("/:id/check", requirePermission("check:trigger"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId;
-    const results = await runCheckCycle(guardianAccountId);
-    const result = results.find(r => r.cloudAccountId === req.params.id);
-    res.json(result || { status: "not found" });
+    const account = await CloudAccountModel.findOne({ _id: req.params.id, guardianAccountId });
+    if (!account) return res.status(404).json({ error: "Cloud account not found" });
+    const result = await checkSingleAccount(account);
+    res.json(result);
   } catch (e) {
     next(e);
   }

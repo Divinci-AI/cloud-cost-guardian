@@ -115,6 +115,18 @@ describe("Datadog Provider — checkUsage", () => {
     const result = await datadogProvider.checkUsage(cred, {});
     expect(result.services[0].metrics[0].value).toBe(5);
   });
+
+  it("reports zero hosts correctly when host_count is 0 (not falling through to usage array)", async () => {
+    // Regression test for || vs ?? bug: host_count: 0 is a valid state (no monitored hosts)
+    // and must NOT fall through to usage[0].host_count via falsy ||
+    vi.mocked(providerFetch).mockResolvedValueOnce({
+      host_count: 0,
+      usage: [{ host_count: 10, ingested_events_bytes_sum: 0 }],
+    });
+    const result = await datadogProvider.checkUsage(cred, {});
+    expect(result.services[0].metrics[0].value).toBe(0); // must be 0, not 10
+    expect(result.totalEstimatedDailyCostUSD).toBe(0);   // 0 hosts = $0 cost
+  });
 });
 
 // ─── executeKillSwitch ─────────────────────────────────────────────────────
