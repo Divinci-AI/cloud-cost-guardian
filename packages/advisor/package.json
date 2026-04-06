@@ -1,0 +1,19 @@
+{
+  "name": "kill-switch-advisor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kill Switch strategic advisor cron — weekly AI analysis across product, marketing, business, security, UX, and competitive dimensions",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID wrangler deploy",
+    "trigger": "curl -sS 'http://localhost:8787/__scheduled?cron=*+*+*+*+*' | jq ."
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.15",
+    "typescript": "^5.0.0",
+    "wrangler": "^4.0.0"
+  }
+}

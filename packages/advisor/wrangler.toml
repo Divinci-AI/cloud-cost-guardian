@@ -1,0 +1,37 @@
+# Kill Switch Strategic Advisor
+#
+# A Cloudflare Worker cron that runs weekly, spins up domain-specific
+# sub-agents (Product, Marketing, Business, Security, UX, Competitive),
+# synthesizes their perspectives with Claude, and publishes the result
+# as a GitHub Issue for the team to review.
+#
+# Deploy:
+#   env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID wrangler deploy
+#
+# Secrets to set:
+#   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put GITHUB_TOKEN          # needs Issues: write on divinci-ai/kill-switch
+#
+# Trigger manually (for testing):
+#   curl -X POST https://advisor.kill-switch.net/__scheduled?cron=*+*+*+*+*
+
+name = "kill-switch-advisor"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+# Every Monday at 9:00 AM UTC
+crons = ["0 9 * * MON"]
+
+[vars]
+GITHUB_REPO = "divinci-ai/kill-switch"
+GITHUB_ISSUE_LABEL = "advisor"
+# Model used for sub-agents (fast, capable)
+AGENT_MODEL = "claude-sonnet-4-6"
+# Model used for final synthesis (deepest reasoning)
+SYNTH_MODEL = "claude-opus-4-6"
+
+[[kv_namespaces]]
+binding = "ADVISOR_KV"
+id = "c7f199c9ee3b4035a4dd79ff3c279bd2"
