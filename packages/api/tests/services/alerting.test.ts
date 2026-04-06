@@ -1,9 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { sendAlerts } from "../../src/services/alerting.js";
 import type { AlertChannel } from "../../src/models/guardian-account/schema.js";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
+
+// Mock the Resend SDK so email tests don't make real HTTP calls
+const mockResendSend = vi.fn();
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(() => ({
+    emails: { send: mockResendSend },
+  })),
+}));
 
 describe("Alerting Service", () => {
   beforeEach(() => {
@@ -394,6 +402,142 @@ describe("Alerting Service", () => {
         expect.stringContaining("https://api.github.com/"),
         expect.any(Object)
       );
+    });
+  });
+
+  describe("Email Channel (Resend)", () => {
+    const emailChannel = (): AlertChannel => ({
+      type: "email",
+      name: "Email Alerts",
+      config: { email: "oncall@example.com" },
+      enabled: true,
+    });
+
+    const violations = [
+      { serviceName: "my-worker", metricName: "CPU Time", currentValue: 60_000, threshold: 10_000, unit: "ms", severity: "critical" },
+    ];
+
+    beforeEach(() => {
+      process.env.RESEND_API_KEY = "re_test_key";
+      mockResendSend.mockResolvedValue({ data: { id: "email-123" }, error: null });
+    });
+
+    afterEach(() => {
+      delete process.env.RESEND_API_KEY;
+      delete process.env.RESEND_FROM;
+    });
+
+    it("sends email with correct to, subject, html, and text fields", async () => {
+      await sendAlerts([emailChannel()], "CPU spike detected", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", violations,
+      });
+
+      expect(mockResendSend).toHaveBeenCalledOnce();
+      const [payload] = mockResendSend.mock.calls[0];
+      expect(payload.to).toEqual(["oncall@example.com"]);
+      expect(payload.subject).toContain("CPU spike detected");
+      expect(payload.html).toBeDefined();
+      expect(payload.text).toBeDefined();
+    });
+
+    it("subject includes severity emoji and uppercased severity", async () => {
+      await sendAlerts([emailChannel()], "Cost runaway", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", violations,
+      });
+
+      const [payload] = mockResendSend.mock.calls[0];
+      expect(payload.subject).toContain("🚨");
+      expect(payload.subject).toContain("CRITICAL");
+      expect(payload.subject).toContain("Cost runaway");
+    });
+
+    it("uses RESEND_FROM env var when set", async () => {
+      process.env.RESEND_FROM = "Alerts <noreply@myapp.com>";
+
+      await sendAlerts([emailChannel()], "test", "info", { violations: [] });
+
+      const [payload] = mockResendSend.mock.calls[0];
+      expect(payload.from).toBe("Alerts <noreply@myapp.com>");
+    });
+
+    it("defaults from address to Kill Switch branding", async () => {
+      await sendAlerts([emailChannel()], "test", "info", { violations: [] });
+
+      const [payload] = mockResendSend.mock.calls[0];
+      expect(payload.from).toBe("Kill Switch <alerts@kill-switch.net>");
+    });
+
+    it("HTML body contains violation table rows for each violation", async () => {
+      await sendAlerts([emailChannel()], "CPU spike", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", violations,
+      });
+
+      const [payload] = mockResendSend.mock.calls[0];
+      expect(payload.html).toContain("my-worker");
+      expect(payload.html).toContain("CPU Time");
+      expect(payload.html).toContain("60000");
+      expect(payload.html).toContain("10000");
+      expect(payload.html).toContain("6×"); // 60000 / 10000 = 6
+    });
+
+    it("plain-text fallback includes provider, account, and violations", async () => {
+      await sendAlerts([emailChannel()], "CPU spike", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", violations,
+      });
+
+      const [payload] = mockResendSend.mock.calls[0];
+      expect(payload.text).toContain("cloudflare");
+      expect(payload.text).toContain("zombay-cf");
+      expect(payload.text).toContain("my-worker");
+    });
+
+    it("skips sending when RESEND_API_KEY is not set", async () => {
+      delete process.env.RESEND_API_KEY;
+
+      await sendAlerts([emailChannel()], "test", "info", { violations: [] });
+
+      expect(mockResendSend).not.toHaveBeenCalled();
+    });
+
+    it("skips sending when email address is missing from config", async () => {
+      const channel: AlertChannel = {
+        type: "email",
+        name: "Email Alerts",
+        config: {}, // no email
+        enabled: true,
+      };
+
+      await sendAlerts([channel], "test", "info", { violations: [] });
+
+      expect(mockResendSend).not.toHaveBeenCalled();
+    });
+
+    it("logs error but does not throw when Resend returns an error", async () => {
+      mockResendSend.mockResolvedValueOnce({ data: null, error: { message: "Invalid API key" } });
+
+      await expect(
+        sendAlerts([emailChannel()], "test", "critical", { violations: [] })
+      ).resolves.not.toThrow();
+    });
+
+    it("HTML includes actionsTaken when provided", async () => {
+      await sendAlerts([emailChannel()], "CPU spike", "critical", {
+        provider: "cloudflare", accountName: "zombay-cf", violations,
+        actionsTaken: ["Stopped worker my-worker"],
+      });
+
+      const [payload] = mockResendSend.mock.calls[0];
+      expect(payload.html).toContain("Stopped worker my-worker");
+    });
+
+    it("still sends email when violations array is empty", async () => {
+      await sendAlerts([emailChannel()], "Test alert", "info", {
+        provider: "cloudflare", accountName: "zombay-cf", violations: [],
+      });
+
+      expect(mockResendSend).toHaveBeenCalledOnce();
+      const [payload] = mockResendSend.mock.calls[0];
+      expect(payload.html).not.toContain("<tbody><tr>"); // no violation rows
     });
   });
 
