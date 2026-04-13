@@ -6,6 +6,21 @@
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8090";
 
+export class TierLimitError extends Error {
+  code = "TIER_LIMIT" as const;
+  currentTier: string;
+  limit: number;
+  constructor(message: string, currentTier: string, limit: number) {
+    super(message);
+    this.currentTier = currentTier;
+    this.limit = limit;
+  }
+}
+
+export function isTierLimitError(e: unknown): e is TierLimitError {
+  return e instanceof TierLimitError;
+}
+
 let getAccessToken: (() => Promise<string | null>) | null = null;
 let activeOrgId: string | null = null;
 
@@ -47,6 +62,13 @@ async function guardianFetch<T>(path: string, options: RequestInit = {}): Promis
   }
 
   if (!res.ok) {
+    if (res.status === 403 && data.limit !== undefined && data.currentTier !== undefined) {
+      throw new TierLimitError(
+        data.error || "Plan limit reached. Upgrade to continue.",
+        data.currentTier,
+        data.limit,
+      );
+    }
     throw new Error(data.error || `API error: ${res.status}`);
   }
 

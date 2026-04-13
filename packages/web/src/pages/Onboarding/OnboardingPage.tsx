@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "@clerk/clerk-react";
-import { api } from "../../api/client";
+import { api, isTierLimitError } from "../../api/client";
+import { UpgradeBanner } from "../../components/TierLimitBanner";
 
 type Step = "welcome" | "provider" | "connect" | "thresholds" | "alerts" | "done";
 
@@ -19,6 +20,7 @@ const providers = [
   { id: "snowflake", name: "Snowflake", color: "#29b5e8", desc: "Warehouse credits, query costs", group: "data" },
   { id: "redis", name: "Redis", color: "#dc382d", desc: "Memory, connections, ops/sec", group: "data" },
   { id: "mongodb", name: "MongoDB", color: "#00ed64", desc: "Atlas storage, connections, cost", group: "data" },
+  { id: "neo4j", name: "Neo4j Aura", color: "#018bff", desc: "Graph DB memory, storage, cost", group: "data" },
 ];
 
 const presets = [
@@ -69,6 +71,7 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
   const [currentProviderIndex, setCurrentProviderIndex] = useState(0);
   const [error, setError] = useState("");
+  const [rawError, setRawError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
 
   // Connect form state
@@ -121,6 +124,8 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
         return { label1: "Redis Cloud Account Key", placeholder1: "Paste your account key", label2: "Secret Key", placeholder2: "Paste your secret key", showField3: true, label3: "Subscription ID", placeholder3: "Your subscription ID" };
       case "mongodb":
         return { label1: "Atlas Public Key", placeholder1: "Paste your public key", label2: "Private Key", placeholder2: "Paste your private key", showField3: true, label3: "Project ID", placeholder3: "Your Atlas project ID" };
+      case "neo4j":
+        return { label1: "Client ID", placeholder1: "Neo4j Aura API client ID", label2: "Client Secret", placeholder2: "Neo4j Aura API client secret", showField3: true, label3: "Instance ID (optional)", placeholder3: "e.g., 9c96c178" };
       default:
         return { label1: "", placeholder1: "", label2: "", placeholder2: "", showField3: false };
     }
@@ -154,6 +159,8 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
         return { provider: "redis", type: "cloud", accountKey: field1, secretKey: field2, subscriptionId: field3 };
       case "mongodb":
         return { provider: "mongodb", type: "atlas", publicKey: field1, privateKey: field2, projectId: field3 };
+      case "neo4j":
+        return { provider: "neo4j", neo4jClientId: field1, neo4jClientSecret: field2, ...(field3 ? { neo4jInstanceId: field3 } : {}) };
       default:
         return {};
     }
@@ -175,6 +182,7 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
   const handleConnect = async () => {
     setLoading(true);
     setError("");
+    setRawError(null);
     try {
       await api.connectCloudAccount({
         provider: selectedProvider!,
@@ -195,7 +203,8 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
         setStep("thresholds");
       }
     } catch (e: any) {
-      setError(e.message);
+      setRawError(e);
+      if (!isTierLimitError(e)) setError(e.message);
     }
     setLoading(false);
   };
@@ -450,6 +459,8 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
               </div>
             )}
 
+            <UpgradeBanner error={rawError} />
+
             {error && (
               <div style={{ padding: "12px 16px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.2)", borderRadius: "8px", color: "#ff6b6b", fontSize: "13px" }}>
                 {error}
@@ -592,6 +603,22 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
           <p style={{ color: "#8b8fa3", fontSize: "16px", maxWidth: "440px", margin: "0 auto 40px", lineHeight: "1.6" }}>
             Kill Switch is now monitoring your cloud account. We'll alert you the moment spending goes out of bounds.
           </p>
+          <div style={{
+            maxWidth: "440px", margin: "0 auto 32px", padding: "16px 20px",
+            background: "rgba(194, 88, 0, 0.08)", border: "1px solid rgba(224, 104, 0, 0.2)",
+            borderRadius: "10px", textAlign: "left",
+          }}>
+            <div style={{ color: "#ff9d42", fontSize: "14px", fontWeight: "600", marginBottom: "6px" }}>
+              You're on the Free plan
+            </div>
+            <div style={{ color: "#9ca3af", fontSize: "13px", lineHeight: "1.5" }}>
+              1 cloud account, 6-hour check intervals, 1 alert channel.{" "}
+              <a href="/billing?plan=pro" style={{ color: "#ff9d42", textDecoration: "underline" }}>
+                Upgrade to Pro ($29/mo)
+              </a>{" "}
+              for 3 accounts, 5-minute checks, and 10 alert channels.
+            </div>
+          </div>
           <button onClick={handleFinish} disabled={loading} style={btnPrimary}>
             {loading ? "Finishing..." : "Go to Dashboard"}
           </button>

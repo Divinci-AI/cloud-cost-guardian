@@ -6,7 +6,7 @@
  */
 
 export type ProviderId = "cloudflare" | "gcp" | "aws" | "runpod" | "redis" | "mongodb"
-  | "openai" | "anthropic" | "xai" | "replicate" | "snowflake" | "vercel" | "datadog" | "neon";
+  | "openai" | "anthropic" | "xai" | "replicate" | "snowflake" | "vercel" | "datadog" | "neon" | "neo4j";
 
 export type RedisSubType = "redis-cloud" | "elasticache" | "self-hosted";
 export type MongoDBSubType = "atlas" | "self-hosted";
@@ -209,6 +209,12 @@ export interface ThresholdConfig {
   neonDataTransferGB?: number;             // Max data transfer GB (free: 5)
   neonDailyCostUSD?: number;               // Max daily Neon spend (paid plans)
 
+  // ─── Neo4j Aura Thresholds ────────────────────────────────────────────────
+  neo4jInstanceCount?: number;             // Max running instances
+  neo4jMemoryGB?: number;                  // Max memory per instance (GB)
+  neo4jStorageGB?: number;                 // Max storage per instance (GB)
+  neo4jDailyCostUSD?: number;              // Max daily Neo4j spend
+
   // ─── Shared Thresholds ──────────────────────────────────────────────────────
   monthlySpendLimitUSD?: number;
   requestsPerMinute?: number;       // DDoS detection
@@ -278,6 +284,11 @@ export interface DecryptedCredential {
   // Neon
   neonApiKey?: string;
   neonProjectId?: string;  // Optional — monitor a specific project; omit to monitor all
+
+  // Neo4j Aura (OAuth2 client credentials)
+  neo4jClientId?: string;
+  neo4jClientSecret?: string;
+  neo4jInstanceId?: string;  // Optional — monitor a specific instance; omit to monitor all
 }
 
 // ─── Forensic Snapshot ──────────────────────────────────────────────────────

@@ -116,6 +116,7 @@ Required permissions:
 - **Replicate** — GPU prediction costs, model usage monitoring
 - **Snowflake** — Warehouse credits, query costs, data scanning
 - **Vercel** — Function invocations, bandwidth, build minutes
+- **Neo4j** — Neo4j Aura graph database instances (memory, storage, instance count, cost)
 - **Datadog** — Host count, log ingestion, custom metrics costs
 
 ## Organizations & Permissions

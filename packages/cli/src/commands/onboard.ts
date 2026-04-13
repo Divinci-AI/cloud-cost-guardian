@@ -162,6 +162,23 @@ const PROVIDER_HELP: Record<string, { name: string; fields: string; howToGet: st
   Application Key: Organization Settings > Application Keys
   Optional: --datadog-site us|eu (default: us)`,
   },
+  neo4j: {
+    name: "Neo4j Aura",
+    fields: "--neo4j-client-id + --neo4j-client-secret",
+    howToGet: `How to get these values:
+
+  API Credentials (OAuth2 client credentials):
+    1. Go to https://console.neo4j.io/
+    2. Click your account menu (top-right) > API Credentials
+    3. Click "Create API Credentials"
+    4. Choose the "Tenant Admin" role for full monitoring + kill switch actions
+    5. Copy both the Client ID and Client Secret
+
+  Instance ID (optional):
+    Found in the console URL or the instance card:
+    https://console.neo4j.io/d/<INSTANCE_ID>/overview
+    Or omit to monitor all instances in your tenant.`,
+  },
 };
 
 const AVAILABLE_SHIELDS = [
@@ -184,6 +201,9 @@ export function registerOnboardCommands(program: Command, createClient: ClientFa
     .option("--secret-key <key>", "Secret Access Key (AWS)")
     .option("--region <region>", "Region (AWS, default: us-east-1)")
     .option("--runpod-api-key <key>", "API Key (RunPod)")
+    .option("--neo4j-client-id <id>", "Client ID (Neo4j Aura)")
+    .option("--neo4j-client-secret <secret>", "Client Secret (Neo4j Aura)")
+    .option("--neo4j-instance-id <id>", "Instance ID (Neo4j Aura, optional)")
     .option("--shields <presets>", "Comma-separated shield presets to apply (default: cost-runaway)")
     .option("--alert-pagerduty <key>", "PagerDuty Events API v2 routing key (recommended)")
     .option("--alert-email <email>", "Email address for alerts")
@@ -260,10 +280,11 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           console.log("  2. gcp         — Cloud Run, Compute, GKE, BigQuery");
           console.log("  3. aws         — EC2, Lambda, RDS, ECS, S3");
           console.log("  4. runpod      — GPU Pods, Serverless Endpoints, Network Volumes");
+          console.log("  5. neo4j       — Neo4j Aura graph databases");
           console.log();
 
-          const choice = await ask("Choose a provider (1/2/3/4 or name): ");
-          provider = { "1": "cloudflare", "2": "gcp", "3": "aws", "4": "runpod" }[choice] || choice;
+          const choice = await ask("Choose a provider (1-5 or name): ");
+          provider = { "1": "cloudflare", "2": "gcp", "3": "aws", "4": "runpod", "5": "neo4j" }[choice] || choice;
         }
 
         if (!PROVIDER_HELP[provider]) {
@@ -350,6 +371,28 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
             process.exit(1);
           }
           credential.runpodApiKey = apiKey;
+        } else if (provider === "neo4j") {
+          let neo4jClientId = opts.neo4jClientId || process.env.NEO4J_CLIENT_ID;
+          let neo4jClientSecret = opts.neo4jClientSecret || process.env.NEO4J_CLIENT_SECRET;
+          let neo4jInstanceId = opts.neo4jInstanceId || process.env.NEO4J_INSTANCE_ID;
+
+          if (!neo4jClientId && !json) {
+            console.log("\n  Tip: Create API Credentials at https://console.neo4j.io/ > Account > API Credentials");
+            neo4jClientId = await ask("  Neo4j Client ID: ");
+          }
+          if (!neo4jClientSecret && !json) {
+            neo4jClientSecret = await ask("  Neo4j Client Secret: ");
+          }
+          if (!neo4jInstanceId && !json) {
+            neo4jInstanceId = await ask("  Instance ID (Enter to monitor all): ");
+          }
+          if (!neo4jClientId || !neo4jClientSecret) {
+            outputError(`Neo4j requires ${PROVIDER_HELP.neo4j.fields}`, json);
+            process.exit(1);
+          }
+          credential.neo4jClientId = neo4jClientId;
+          credential.neo4jClientSecret = neo4jClientSecret;
+          if (neo4jInstanceId) credential.neo4jInstanceId = neo4jInstanceId;
         }
 
         // 1. Connect cloud account

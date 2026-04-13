@@ -81,6 +81,20 @@
             pointer-events: none;
             z-index: 1;
         }
+        .beta-banner {
+            width: 100%; background: linear-gradient(135deg, #c25800, #e06800);
+            color: #fff; text-align: center; padding: 8px 16px;
+            font-size: 13px; font-weight: 600; font-family: 'Outfit', sans-serif;
+            letter-spacing: 0.3px; z-index: 1001;
+        }
+        .beta-banner a { color: #fff; text-decoration: underline; }
+        .beta-badge {
+            display: inline-block; background: rgba(194, 88, 0, 0.25);
+            border: 1px solid rgba(224, 104, 0, 0.5); border-radius: 6px;
+            padding: 2px 8px; font-size: 11px; font-weight: 700;
+            color: #ff9d42; text-transform: uppercase; letter-spacing: 0.5px;
+            margin-left: 8px; vertical-align: middle;
+        }
         .hero-badge {
             display: inline-flex; align-items: center; gap: 8px;
             background: rgba(220, 50, 50, 0.15);
@@ -626,10 +640,12 @@
     </style>
 </head>
 <body>
+    <div class="beta-banner">&#128679; Beta Preview &mdash; We're onboarding early users. <a href="https://app.kill-switch.net?screen_hint=signup">Sign up</a> to lock in founding member pricing.</div>
     <nav class="navbar">
         <div class="nav-brand">
             <span class="icon">&#9889;</span>
             <span>Kill Switch</span>
+            <span class="beta-badge">Beta</span>
         </div>
         <div class="nav-links">
             <a href="#how-it-works">How It Works</a>

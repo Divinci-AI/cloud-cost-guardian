@@ -13,6 +13,7 @@ import { snowflakeProvider } from "./snowflake/checker.js";
 import { vercelProvider } from "./vercel/checker.js";
 import { datadogProvider } from "./datadog/checker.js";
 import { neonProvider } from "./neon/checker.js";
+import { neo4jProvider } from "./neo4j/checker.js";
 
 const providers: Record<string, CloudProvider> = {
   cloudflare: cloudflareProvider,
@@ -29,6 +30,7 @@ const providers: Record<string, CloudProvider> = {
   vercel: vercelProvider,
   datadog: datadogProvider,
   neon: neonProvider,
+  neo4j: neo4jProvider,
 };
 
 export function getProvider(id: ProviderId): CloudProvider | undefined {

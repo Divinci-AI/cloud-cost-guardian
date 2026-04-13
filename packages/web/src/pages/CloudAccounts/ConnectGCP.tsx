@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../api/client";
+import { api, isTierLimitError } from "../../api/client";
+import { UpgradeBanner } from "../../components/TierLimitBanner";
 
 export function ConnectGCP() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export function ConnectGCP() {
   const [connecting, setConnecting] = useState(false);
   const [validation, setValidation] = useState<any>(null);
   const [error, setError] = useState("");
+  const [rawError, setRawError] = useState<unknown>(null);
 
   const handleValidate = async () => {
     setValidating(true);
@@ -34,6 +36,7 @@ export function ConnectGCP() {
   const handleConnect = async () => {
     setConnecting(true);
     setError("");
+    setRawError(null);
     try {
       await api.connectCloudAccount({
         provider: "gcp",
@@ -42,7 +45,8 @@ export function ConnectGCP() {
       });
       navigate("/");
     } catch (e: any) {
-      setError(e.message);
+      setRawError(e);
+      if (!isTierLimitError(e)) setError(e.message);
     }
     setConnecting(false);
   };
@@ -92,6 +96,8 @@ export function ConnectGCP() {
             Required IAM roles: Cloud Run Viewer/Admin, Compute Viewer/Instance Admin, Container Cluster Viewer, BigQuery User, Service Usage Admin, Billing Project Manager
           </p>
         </div>
+
+        <UpgradeBanner error={rawError} />
 
         {error && (
           <div style={{ padding: "12px 16px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.2)", borderRadius: "8px", color: "#ff6b6b", fontSize: "13px" }}>

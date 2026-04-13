@@ -20,6 +20,7 @@ import { ConnectSnowflake } from "./pages/CloudAccounts/ConnectSnowflake";
 import { ConnectVercel } from "./pages/CloudAccounts/ConnectVercel";
 import { ConnectDatadog } from "./pages/CloudAccounts/ConnectDatadog";
 import { ConnectNeon } from "./pages/CloudAccounts/ConnectNeon";
+import { ConnectNeo4j } from "./pages/CloudAccounts/ConnectNeo4j";
 import { ConnectProvider } from "./pages/CloudAccounts/ConnectProvider";
 import { AlertsHistory } from "./pages/Alerts/AlertsHistory";
 import { BillingPage } from "./pages/Billing/BillingPage";
@@ -83,6 +84,7 @@ function AuthenticatedApp() {
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <span style={{ fontSize: "20px" }}>&#9889;</span>
             <Link to="/" style={{ fontFamily: "Outfit, sans-serif", fontWeight: "600", fontSize: "18px", color: "#fff", textDecoration: "none" }}>Kill Switch</Link>
+            <span style={{ display: "inline-block", background: "rgba(194, 88, 0, 0.25)", border: "1px solid rgba(224, 104, 0, 0.5)", borderRadius: "6px", padding: "2px 8px", fontSize: "11px", fontWeight: "700", color: "#ff9d42", textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>Beta</span>
             <OrgSwitcher />
           </div>
           <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
@@ -117,6 +119,7 @@ function AuthenticatedApp() {
             <Route path="/accounts/connect/vercel" element={<ConnectVercel />} />
             <Route path="/accounts/connect/datadog" element={<ConnectDatadog />} />
             <Route path="/accounts/connect/neon" element={<ConnectNeon />} />
+            <Route path="/accounts/connect/neo4j" element={<ConnectNeo4j />} />
             <Route path="/alerts" element={<AlertsHistory />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/billing" element={<BillingPage />} />

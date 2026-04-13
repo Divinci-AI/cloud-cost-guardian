@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../api/client";
+import { api, isTierLimitError } from "../../api/client";
+import { UpgradeBanner } from "../../components/TierLimitBanner";
 
 type RedisSubType = "redis-cloud" | "elasticache" | "self-hosted";
 
@@ -12,6 +13,7 @@ export function ConnectRedis() {
   const [connecting, setConnecting] = useState(false);
   const [validation, setValidation] = useState<any>(null);
   const [error, setError] = useState("");
+  const [rawError, setRawError] = useState<unknown>(null);
 
   // Redis Cloud
   const [accountKey, setAccountKey] = useState("");
@@ -55,6 +57,7 @@ export function ConnectRedis() {
   const handleConnect = async () => {
     setConnecting(true);
     setError("");
+    setRawError(null);
     try {
       await api.connectCloudAccount({
         provider: "redis",
@@ -63,7 +66,8 @@ export function ConnectRedis() {
       });
       navigate("/");
     } catch (e: any) {
-      setError(e.message);
+      setRawError(e);
+      if (!isTierLimitError(e)) setError(e.message);
     }
     setConnecting(false);
   };
@@ -134,6 +138,7 @@ export function ConnectRedis() {
           </label>
         </>)}
 
+        <UpgradeBanner error={rawError} />
         {error && <div style={{ padding: "12px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.2)", borderRadius: "8px", color: "#ff6b6b", fontSize: "13px" }}>{error}</div>}
         {validation?.valid && <div style={{ padding: "12px", background: "rgba(92,226,231,0.1)", border: "1px solid rgba(92,226,231,0.2)", borderRadius: "8px", color: "#5ce2e7", fontSize: "13px" }}>Validated: {validation.accountName} ({validation.accountId})</div>}
 

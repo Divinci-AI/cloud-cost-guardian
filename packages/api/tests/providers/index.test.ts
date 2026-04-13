@@ -31,6 +31,13 @@ describe("Provider Registry", () => {
       expect(provider!.name).toBe("RunPod");
     });
 
+    it("returns neo4j provider", () => {
+      const provider = getProvider("neo4j");
+      expect(provider).toBeDefined();
+      expect(provider!.id).toBe("neo4j");
+      expect(provider!.name).toBe("Neo4j Aura");
+    });
+
     it("returns undefined for unknown provider", () => {
       const provider = getProvider("azure" as any);
       expect(provider).toBeUndefined();
@@ -38,9 +45,9 @@ describe("Provider Registry", () => {
   });
 
   describe("getAllProviders", () => {
-    it("returns all fourteen providers", () => {
+    it("returns all fifteen providers", () => {
       const providers = getAllProviders();
-      expect(providers).toHaveLength(14);
+      expect(providers).toHaveLength(15);
 
       const ids = providers.map(p => p.id);
       expect(ids).toContain("cloudflare");
@@ -56,6 +63,8 @@ describe("Provider Registry", () => {
       expect(ids).toContain("snowflake");
       expect(ids).toContain("vercel");
       expect(ids).toContain("datadog");
+      expect(ids).toContain("neon");
+      expect(ids).toContain("neo4j");
     });
 
     it("all providers implement the CloudProvider interface", () => {

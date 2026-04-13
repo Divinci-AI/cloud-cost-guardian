@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useUser, useClerk } from "@clerk/clerk-react";
-import { api } from "../../api/client";
+import { api, isTierLimitError } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
 
 interface AlertChannel {
@@ -163,7 +163,12 @@ export function SettingsPage() {
       setGhToken(""); setGhOwner(""); setGhRepo(""); setGhWorkflow("kill-switch-remediate.yml"); setGhBranch("main");
       flash("Alert channel added");
     } catch (e: any) {
-      flash(e.message, "error");
+      if (isTierLimitError(e)) {
+        flash("Plan limit reached — upgrade to add more alert channels.", "error");
+        setTimeout(() => window.location.assign("/billing?plan=pro"), 1500);
+      } else {
+        flash(e.message, "error");
+      }
     }
   };
 
@@ -370,7 +375,7 @@ export function SettingsPage() {
             <label style={labelStyle}>Check Interval</label>
             <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#9ca3af", cursor: "not-allowed" }}>
               Every {account?.settings?.checkIntervalMinutes || 360} minutes
-              {account?.tier === "free" && <span style={{ color: "#c25800", marginLeft: "8px" }}>(upgrade for 5-min checks)</span>}
+              {account?.tier === "free" && <a href="/billing?plan=pro" style={{ color: "#c25800", marginLeft: "8px", textDecoration: "underline" }}>(upgrade for 5-min checks)</a>}
             </div>
           </div>
         </div>

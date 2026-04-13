@@ -99,6 +99,13 @@ const providers = [
     color: "#00e699",
     available: true,
   },
+  {
+    id: "neo4j",
+    name: "Neo4j Aura",
+    description: "Monitor Neo4j Aura graph database instances for memory, storage, and cost runaway.",
+    color: "#018bff",
+    available: true,
+  },
 ];
 
 export function ConnectProvider() {
