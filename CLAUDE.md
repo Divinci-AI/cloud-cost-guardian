@@ -136,9 +136,20 @@ Required permissions:
 The Kill Switch API (`guardian-api`) runs on **GCP Cloud Run** in project `openai-api-4375643`.
 `getDefaultKillAction("gcp")` returns `"scale-down"`, which scales Cloud Run to 0 instances.
 
-**If you connect the same GCP project that hosts the API**, add `"gcp:cloud-run:guardian-api"`
-to `protectedServices` on that cloud account — otherwise a GCP cost spike could scale down the
-API itself, severing the kill switch from its own infrastructure.
+**If you connect the same GCP project that hosts the API**, add the bare service name
+`"guardian-api"` to `protectedServices` on that cloud account — otherwise a GCP cost spike
+could scale down the API itself, severing the kill switch from its own infrastructure.
+
+GCP `serviceName` formats by resource type (this is what `protectedServices` matches against):
+- **Cloud Run** — bare name, e.g. `"guardian-api"`
+- **Compute Engine** — `"compute:<instance-name>:<zone>"`
+- **GKE** — `"gke:<cluster-name>"`
+- **BigQuery** — `"bq:<projectId>"`
+- **Cloud Functions** — `"gcf:<function-name>"`
+- **Cloud Storage** — `"gcs:<bucket-name>"`
+
+(Older docs referenced `"gcp:cloud-run:<name>"` for Cloud Run — that prefix is **not** what
+the checker emits, so it silently fails to match. The bare name is correct.)
 
 The dogfood Cloudflare account is safe (it monitors CF workers, not GCP). This only affects
 users who connect their own GCP account and happen to run the guardian API there.

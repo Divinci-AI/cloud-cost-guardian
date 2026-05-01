@@ -30,6 +30,7 @@ vi.mock("../../src/services/alerting.js", () => ({
 vi.mock("../../src/globals/index.js", () => ({
   recordUsageSnapshot: vi.fn(),
   recordAlert: vi.fn(),
+  recordRuleEvent: vi.fn(),
 }));
 
 vi.mock("../../src/models/kill-switch-rule/schema.js", () => ({

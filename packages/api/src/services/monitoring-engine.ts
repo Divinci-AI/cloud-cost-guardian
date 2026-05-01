@@ -374,25 +374,46 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
           triggeredAt: Date.now(),
         });
 
-        if (cloudAccount.autoDelete && violation.severity === "critical") {
-          const ctx = buildThresholdContext("delete");
-          const raw = await provider.executeKillSwitch(credential, violation.serviceName, "delete", ctx);
-          const action = withSentinel(raw, ctx);
-          result.actionsTaken.push(action.details);
-          // Capture forensic snapshot for evidence and compliance
-          captureSnapshot(credential, violation.serviceName, `kill-switch:delete:${violation.metricName}`, cloudAccount._id.toString())
-            .then(snap => result.forensicSnapshotIds.push(snap.id))
-            .catch(err => console.warn(`[guardian] Forensic snapshot failed for ${violation.serviceName}:`, err.message));
-        } else if (cloudAccount.autoDisconnect) {
-          const killAction = getDefaultKillAction(cloudAccount.provider as ProviderId);
+        // Helper so success/failure event emission stays identical between
+        // the autoDelete and autoDisconnect branches.
+        const fireThresholdKill = async (killAction: KillAction): Promise<void> => {
           const ctx = buildThresholdContext(killAction);
-          const raw = await provider.executeKillSwitch(credential, violation.serviceName, killAction, ctx);
-          const action = withSentinel(raw, ctx);
-          result.actionsTaken.push(action.details);
-          // Capture forensic snapshot for evidence and compliance
-          captureSnapshot(credential, violation.serviceName, `kill-switch:${killAction}:${violation.metricName}`, cloudAccount._id.toString())
-            .then(snap => result.forensicSnapshotIds.push(snap.id))
-            .catch(err => console.warn(`[guardian] Forensic snapshot failed for ${violation.serviceName}:`, err.message));
+          try {
+            const raw = await provider.executeKillSwitch(credential, violation.serviceName, killAction, ctx);
+            const action = withSentinel(raw, ctx);
+            result.actionsTaken.push(action.details);
+            await recordRuleEvent({
+              kind: "action_taken",
+              guardianAccountId: cloudAccount.guardianAccountId,
+              cloudAccountId: cloudAccount._id.toString(),
+              actionType: `threshold-kill:${killAction}`,
+              target: violation.serviceName,
+              success: action.success,
+              details: action.details,
+            });
+            // Capture forensic snapshot for evidence and compliance
+            captureSnapshot(credential, violation.serviceName, `kill-switch:${killAction}:${violation.metricName}`, cloudAccount._id.toString())
+              .then(snap => result.forensicSnapshotIds.push(snap.id))
+              .catch(err => console.warn(`[guardian] Forensic snapshot failed for ${violation.serviceName}:`, err.message));
+          } catch (err: any) {
+            console.warn(`[guardian] Threshold kill failed (${violation.serviceName}/${killAction}):`, err.message);
+            result.actionsTaken.push(`${killAction} failed on ${violation.serviceName} — ${err.message}`);
+            await recordRuleEvent({
+              kind: "action_skipped",
+              guardianAccountId: cloudAccount.guardianAccountId,
+              cloudAccountId: cloudAccount._id.toString(),
+              actionType: `threshold-kill:${killAction}`,
+              target: violation.serviceName,
+              reason: "exec-failed",
+              details: err.message,
+            });
+          }
+        };
+
+        if (cloudAccount.autoDelete && violation.severity === "critical") {
+          await fireThresholdKill("delete");
+        } else if (cloudAccount.autoDisconnect) {
+          await fireThresholdKill(getDefaultKillAction(cloudAccount.provider as ProviderId));
         }
       }
 
