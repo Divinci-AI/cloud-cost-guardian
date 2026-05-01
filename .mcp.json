@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "opus-advisor": {
+      "command": "node",
+      "args": ["/Users/mikeumus/Documents/opus-advisor-mcp/dist/index.js"],
+      "timeout": 180000
+    }
+  }
+}

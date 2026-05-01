@@ -143,7 +143,8 @@ describe("Monitoring Engine", () => {
     expect(mockProvider.executeKillSwitch).toHaveBeenCalledWith(
       expect.anything(),
       "bad-worker",
-      "disconnect"
+      "disconnect",
+      expect.objectContaining({ reason: expect.any(String) })
     );
     expect(sendAlerts).toHaveBeenCalledWith(
       expect.any(Array),
@@ -298,7 +299,8 @@ describe("Monitoring Engine", () => {
     expect(mockProvider.executeKillSwitch).toHaveBeenCalledWith(
       expect.anything(),
       "api-service",
-      "scale-down" // GCP uses scale-down
+      "scale-down", // GCP uses scale-down
+      expect.objectContaining({ reason: expect.any(String) })
     );
   });
 
@@ -340,7 +342,8 @@ describe("Monitoring Engine", () => {
     expect(mockProvider.executeKillSwitch).toHaveBeenCalledWith(
       expect.anything(),
       "ec2:i-abc123",
-      "stop-instances" // AWS uses stop-instances
+      "stop-instances", // AWS uses stop-instances
+      expect.objectContaining({ reason: expect.any(String) })
     );
   });
 
@@ -461,7 +464,8 @@ describe("Monitoring Engine", () => {
     expect(mockProvider.executeKillSwitch).toHaveBeenCalledWith(
       expect.anything(),
       "nuke-me",
-      "delete" // Nuclear mode
+      "delete", // Nuclear mode
+      expect.objectContaining({ reason: expect.any(String) })
     );
   });
 
@@ -505,7 +509,8 @@ describe("Monitoring Engine", () => {
     expect(mockProvider.executeKillSwitch).toHaveBeenCalledWith(
       expect.anything(),
       "neon:icy-night-79929587",
-      "scale-down" // Neon must NOT use "disconnect" — it's not supported
+      "scale-down", // Neon must NOT use "disconnect" — it's not supported
+      expect.objectContaining({ reason: expect.any(String) })
     );
   });
 });

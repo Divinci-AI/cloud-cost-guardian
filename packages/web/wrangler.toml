@@ -1,5 +1,6 @@
 name = "kill-switch-app"
 compatibility_date = "2024-09-23"
+main = "src/worker.ts"
 
 # Serve built React SPA from ./dist
 [assets]

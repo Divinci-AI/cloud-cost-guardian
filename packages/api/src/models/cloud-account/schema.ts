@@ -16,6 +16,10 @@ export interface CloudAccountProps {
   lastCheckStatus?: "ok" | "violation" | "error";
   lastCheckError?: string;
   lastViolations?: string[];
+  /** Hash of the last violations we alerted on — used for dedup. */
+  lastAlertHash?: string;
+  /** Timestamp of the last alert sent for the current violation hash. */
+  lastAlertedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -37,6 +41,8 @@ const cloudAccountSchema = new Schema<CloudAccountDocument>({
   lastCheckStatus: { type: String, enum: ["ok", "violation", "error"] },
   lastCheckError: { type: String },
   lastViolations: { type: [String] },
+  lastAlertHash: { type: String },
+  lastAlertedAt: { type: Number },
   createdAt: { type: Number, default: () => Date.now() },
   updatedAt: { type: Number, default: () => Date.now() },
 });

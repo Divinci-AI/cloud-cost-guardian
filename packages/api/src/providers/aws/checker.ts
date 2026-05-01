@@ -19,12 +19,14 @@ import type {
   Violation,
   SecurityEvent,
   KillAction,
+  KillContext,
 } from "../types.js";
+import { killContextToLabels } from "../shared.js";
 
 // ─── AWS SDK Imports ────────────────────────────────────────────────────────
 
 import { STSClient, GetCallerIdentityCommand, AssumeRoleCommand } from "@aws-sdk/client-sts";
-import { EC2Client, DescribeInstancesCommand, StopInstancesCommand, TerminateInstancesCommand } from "@aws-sdk/client-ec2";
+import { EC2Client, DescribeInstancesCommand, StopInstancesCommand, TerminateInstancesCommand, CreateTagsCommand } from "@aws-sdk/client-ec2";
 import { LambdaClient, ListFunctionsCommand, GetAccountSettingsCommand, PutFunctionConcurrencyCommand } from "@aws-sdk/client-lambda";
 import { RDSClient, DescribeDBInstancesCommand, StopDBInstanceCommand } from "@aws-sdk/client-rds";
 import { ECSClient, ListClustersCommand, ListServicesCommand, DescribeServicesCommand, UpdateServiceCommand } from "@aws-sdk/client-ecs";
@@ -362,10 +364,13 @@ async function queryCostExplorer(creds: AWSCreds): Promise<ServiceUsage[]> {
 
 // ─── Kill Switch Actions ────────────────────────────────────────────────────
 
-async function stopEC2Instances(creds: AWSCreds, instanceIds: string[]): Promise<ActionResult> {
+async function stopEC2Instances(
+  creds: AWSCreds, instanceIds: string[], context?: KillContext
+): Promise<ActionResult> {
   const client = new EC2Client({ region: creds.region, credentials: makeCredentials(creds) });
   try {
     await client.send(new StopInstancesCommand({ InstanceIds: instanceIds }));
+    await tagInstancesWithSentinel(client, instanceIds, context);
     return {
       success: true,
       action: "stop-instances",
@@ -377,9 +382,15 @@ async function stopEC2Instances(creds: AWSCreds, instanceIds: string[]): Promise
   }
 }
 
-async function terminateEC2Instances(creds: AWSCreds, instanceIds: string[]): Promise<ActionResult> {
+async function terminateEC2Instances(
+  creds: AWSCreds, instanceIds: string[], context?: KillContext
+): Promise<ActionResult> {
   const client = new EC2Client({ region: creds.region, credentials: makeCredentials(creds) });
   try {
+    // Tag *before* terminate so the sentinel survives in CloudTrail/Config
+    // history even though the instance itself will go away. Tags are the only
+    // "killed-by" breadcrumb when there's no resource left to inspect.
+    await tagInstancesWithSentinel(client, instanceIds, context);
     await client.send(new TerminateInstancesCommand({ InstanceIds: instanceIds }));
     return {
       success: true,
@@ -389,6 +400,22 @@ async function terminateEC2Instances(creds: AWSCreds, instanceIds: string[]): Pr
     };
   } catch (e: any) {
     return { success: false, action: "terminate-instances", serviceName: `ec2:${instanceIds[0]}`, details: `Failed: ${e.message}` };
+  }
+}
+
+async function tagInstancesWithSentinel(
+  client: EC2Client, instanceIds: string[], context?: KillContext
+): Promise<void> {
+  if (!context) return;
+  const labels = killContextToLabels(context);
+  const tags = Object.entries(labels).map(([Key, Value]) => ({ Key, Value }));
+  try {
+    await client.send(new CreateTagsCommand({ Resources: instanceIds, Tags: tags }));
+  } catch (e: any) {
+    // Tagging is best-effort: the kill already succeeded. Don't fail the
+    // whole action because the sentinel didn't stick — log loudly so an
+    // operator notices but proceed.
+    console.warn(`[guardian] EC2 sentinel tagging failed for ${instanceIds.join(",")}: ${e.message}`);
   }
 }
 
@@ -555,7 +582,7 @@ export const awsProvider: CloudProvider = {
     };
   },
 
-  async executeKillSwitch(credential, serviceName, action): Promise<ActionResult> {
+  async executeKillSwitch(credential, serviceName, action, context?: KillContext): Promise<ActionResult> {
     const creds = await getAWSCredentials(credential);
     const [serviceType, ...rest] = serviceName.split(":");
     const serviceId = rest.join(":");
@@ -563,10 +590,10 @@ export const awsProvider: CloudProvider = {
     switch (action) {
       case "stop-instances":
         if (serviceType === "rds") return stopRDSInstance(creds, serviceId);
-        return stopEC2Instances(creds, [serviceId]);
+        return stopEC2Instances(creds, [serviceId], context);
 
       case "terminate-instances":
-        return terminateEC2Instances(creds, [serviceId]);
+        return terminateEC2Instances(creds, [serviceId], context);
 
       case "throttle-lambda":
         return throttleLambda(creds, serviceId);
@@ -588,13 +615,13 @@ export const awsProvider: CloudProvider = {
           return scaleEKSNodeGroup(creds, cluster, nodeGroup);
         }
         // Default: stop EC2 instances
-        return stopEC2Instances(creds, [serviceId]);
+        return stopEC2Instances(creds, [serviceId], context);
 
       case "disconnect":
       default:
         // Default action: stop instances for EC2, throttle for Lambda
         if (serviceType === "lambda") return throttleLambda(creds, serviceId);
-        if (serviceType === "ec2") return stopEC2Instances(creds, [serviceId]);
+        if (serviceType === "ec2") return stopEC2Instances(creds, [serviceId], context);
         if (serviceType === "ecs") {
           const [cluster, svc] = serviceId.split("/");
           return scaleECSService(creds, cluster, svc);
@@ -626,6 +653,25 @@ export const awsProvider: CloudProvider = {
       };
     } catch (e: any) {
       return { valid: false, error: e.message };
+    }
+  },
+
+  async checkHealth(credential): Promise<{ healthy: boolean; reason?: string }> {
+    if (!credential.awsAccessKeyId || !credential.awsSecretAccessKey) {
+      return { healthy: false, reason: "missing-creds" };
+    }
+    // STS GetCallerIdentity is the cheapest "is AWS reachable + are our creds
+    // alive?" probe. Cheap enough to run before each kill cycle. It doesn't
+    // tell us whether EC2 specifically is up — see KILL_SWITCH_SDK_FEEDBACK
+    // 2026-05-01 — but it catches the "creds got rotated mid-cycle" case
+    // which would have made the kill fail anyway.
+    try {
+      const creds = await getAWSCredentials(credential);
+      const stsClient = new STSClient({ region: creds.region, credentials: makeCredentials(creds) });
+      await stsClient.send(new GetCallerIdentityCommand({}));
+      return { healthy: true };
+    } catch (e: any) {
+      return { healthy: false, reason: `sts: ${e.message}` };
     }
   },
 

@@ -17,7 +17,9 @@ import type {
   Violation,
   SecurityEvent,
   KillAction,
+  KillContext,
 } from "../types.js";
+import { killContextToLabels } from "../shared.js";
 
 // ─── JWT Authentication ─────────────────────────────────────────────────────
 
@@ -396,7 +398,8 @@ async function checkSecurityMetrics(
 // ─── Kill Switch Actions ────────────────────────────────────────────────────
 
 async function scaleDownService(
-  accessToken: string, projectId: string, region: string, serviceName: string
+  accessToken: string, projectId: string, region: string, serviceName: string,
+  context?: KillContext
 ): Promise<ActionResult> {
   try {
     const svcUrl = `https://run.googleapis.com/v2/projects/${projectId}/locations/${region}/services/${serviceName}`;
@@ -411,7 +414,19 @@ async function scaleDownService(
 
     service.template.scaling = { ...service.template.scaling, maxInstanceCount: 0 };
 
-    const updateRes = await fetch(`${svcUrl}?updateMask=template.scaling`, {
+    // Stamp the service with sentinel labels so the next engineer to find it
+    // dead can read the labels and know it was killed by Kill Switch — no
+    // log-archaeology required. Both the service-level and revision-template
+    // labels get stamped because Cloud Run shows revision labels in the UI.
+    const updateMask = ["template.scaling"];
+    if (context) {
+      const sentinelLabels = killContextToLabels(context);
+      service.labels = { ...(service.labels || {}), ...sentinelLabels };
+      service.template.labels = { ...(service.template?.labels || {}), ...sentinelLabels };
+      updateMask.push("labels", "template.labels");
+    }
+
+    const updateRes = await fetch(`${svcUrl}?updateMask=${updateMask.join(",")}`, {
       method: "PATCH",
       headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify(service),
@@ -638,11 +653,28 @@ export const gcpProvider: CloudProvider = {
     };
   },
 
-  async executeKillSwitch(credential, serviceName, action): Promise<ActionResult> {
+  async executeKillSwitch(credential, serviceName, action, context?: KillContext): Promise<ActionResult> {
     const { serviceAccountJson, projectId, region } = credential;
     if (!serviceAccountJson || !projectId) {
       throw new Error("Missing GCP credentials");
     }
+
+    // "all-services" is a pseudo-service emitted for account-wide cost
+    // violations (Daily Cost, Projected Monthly Cost). Project-level actions
+    // (disable-billing, set-quota) operate on the project and work fine.
+    // Service-specific actions (scale-down, stop-instances, etc) can't target
+    // a nonexistent service — short-circuit with an informational result
+    // instead of 404ing. The alert still fires.
+    const projectLevelActions = new Set(["disable-billing", "set-quota"]);
+    if (serviceName === "all-services" && !projectLevelActions.has(action)) {
+      return {
+        success: true,
+        action,
+        serviceName,
+        details: `Account-wide violation has no single service to ${action}. Alert sent; configure a disable-billing or set-quota rule for account-wide kill.`,
+      };
+    }
+
     const accessToken = await getAccessToken(serviceAccountJson);
     const gcpRegion = region || "us-central1";
 
@@ -685,7 +717,7 @@ export const gcpProvider: CloudProvider = {
             return scaleCloudFunction(accessToken, projectId, gcpRegion, rest[0]);
           default:
             // Cloud Run services (original behavior)
-            return scaleDownService(accessToken, projectId, gcpRegion, serviceName);
+            return scaleDownService(accessToken, projectId, gcpRegion, serviceName, context);
         }
     }
   },
@@ -711,6 +743,28 @@ export const gcpProvider: CloudProvider = {
       return { valid: true, accountId: project.projectId, accountName: project.name };
     } catch (e: any) {
       return { valid: false, error: e.message };
+    }
+  },
+
+  async checkHealth(credential): Promise<{ healthy: boolean; reason?: string }> {
+    const { serviceAccountJson, projectId, region } = credential;
+    if (!serviceAccountJson || !projectId) return { healthy: false, reason: "missing-creds" };
+    // Probe the Cloud Run list endpoint specifically — that's the API surface
+    // most kill actions use (scale-down). A degraded run.googleapis.com is
+    // exactly the case where we'd want to skip a kill: scaling a service to
+    // 0 won't stop costs if Cloud Run is itself half-down, and we'd amplify
+    // the outage instead of mitigating it.
+    try {
+      const accessToken = await getAccessToken(serviceAccountJson);
+      const gcpRegion = region || "us-central1";
+      const res = await fetch(
+        `https://run.googleapis.com/v2/projects/${projectId}/locations/${gcpRegion}/services?pageSize=1`,
+        { headers: { "Authorization": `Bearer ${accessToken}` }, signal: AbortSignal.timeout(8000) }
+      );
+      if (!res.ok && res.status >= 500) return { healthy: false, reason: `cloud-run ${res.status}` };
+      return { healthy: true };
+    } catch (e: any) {
+      return { healthy: false, reason: `cloud-run probe: ${e.message}` };
     }
   },
 

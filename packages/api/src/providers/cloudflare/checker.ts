@@ -548,6 +548,21 @@ export const cloudflareProvider: CloudProvider = {
     }
   },
 
+  async checkHealth(credential): Promise<{ healthy: boolean; reason?: string }> {
+    const { apiToken } = credential;
+    if (!apiToken) return { healthy: false, reason: "missing-token" };
+    // /tokens/verify is the canonical Cloudflare API liveness probe. If it
+    // 5xx's or times out, the API surface we'd use to fire kills is also
+    // suspect — better to skip than fire blind.
+    try {
+      const res = await cfFetch(`/user/tokens/verify`, apiToken);
+      if (!res.ok) return { healthy: false, reason: `cf-verify ${res.status}` };
+      return { healthy: true };
+    } catch (e: any) {
+      return { healthy: false, reason: `cf-verify error: ${e.message}` };
+    }
+  },
+
   getDefaultThresholds(): ThresholdConfig {
     return {
       doRequestsPerDay: 1_000_000,

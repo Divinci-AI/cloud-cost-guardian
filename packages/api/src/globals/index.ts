@@ -6,6 +6,7 @@
  */
 
 import mongoose from "mongoose";
+import type { RuleEvent } from "../providers/types.js";
 
 let mongoConnected = false;
 
@@ -135,7 +136,67 @@ export async function initPostgresTables(): Promise<void> {
     ON activity_log(actor_user_id, created_at DESC);
   `);
 
+  // Rule-evaluation telemetry. One row per decision point (evaluated, matched,
+  // action_taken, action_skipped). The point isn't to log fire-events — it's
+  // to make *non*-fires observable too, so silent rules become a queryable
+  // signal rather than a vacuum. Background: KILL_SWITCH_SDK_FEEDBACK_2026_05_01.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS guardian_rule_events (
+      id BIGSERIAL PRIMARY KEY,
+      guardian_account_id TEXT NOT NULL,
+      cloud_account_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      rule_id TEXT,
+      rule_name TEXT,
+      action_type TEXT,
+      target TEXT,
+      reason TEXT,
+      success BOOLEAN,
+      details TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_rule_events_guardian
+    ON guardian_rule_events(guardian_account_id, created_at DESC);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_rule_events_rule
+    ON guardian_rule_events(rule_id, created_at DESC);
+  `);
+
   console.error("[guardian] PostgreSQL tables initialized");
+}
+
+/**
+ * Record a structured rule-evaluation event. Failures are swallowed (logged
+ * to stderr) so that telemetry outages never break the monitoring loop.
+ */
+export async function recordRuleEvent(event: RuleEvent): Promise<void> {
+  try {
+    const pool = getPostgresPool();
+    await pool.query(
+      `INSERT INTO guardian_rule_events
+       (guardian_account_id, cloud_account_id, kind, rule_id, rule_name, action_type, target, reason, success, details)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        event.guardianAccountId,
+        event.cloudAccountId,
+        event.kind,
+        event.ruleId ?? null,
+        event.ruleName ?? null,
+        event.actionType ?? null,
+        event.target ?? null,
+        event.reason ?? null,
+        event.success ?? null,
+        event.details ?? null,
+      ]
+    );
+  } catch (err: any) {
+    console.warn("[guardian] recordRuleEvent failed:", err.message);
+  }
 }
 
 /**

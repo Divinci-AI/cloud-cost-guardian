@@ -14,10 +14,31 @@ import { KillSwitchRuleModel } from "../models/kill-switch-rule/schema.js";
 import { getCredential } from "../models/encrypted-credential/schema.js";
 import { getProvider } from "../providers/index.js";
 import { sendAlerts } from "./alerting.js";
-import { recordUsageSnapshot, recordAlert } from "../globals/index.js";
+import { recordUsageSnapshot, recordAlert, recordRuleEvent } from "../globals/index.js";
 import { captureSnapshot } from "./forensics.js";
 import { evaluateRules } from "./rule-engine.js";
-import type { UsageResult, Violation, KillAction, ProviderId } from "../providers/types.js";
+import { withSentinel } from "../providers/shared.js";
+import { createHash } from "node:crypto";
+import type { UsageResult, Violation, KillAction, ProviderId, KillContext } from "../providers/types.js";
+
+/**
+ * Minimum time between alerts for the same violation hash. The monitoring
+ * loop runs every 5 min but violations persist; without this cooldown we'd
+ * re-send the same alert to every channel on every tick.
+ */
+const ALERT_COOLDOWN_MS = Number(process.env.ALERT_COOLDOWN_MS || 6 * 60 * 60 * 1000); // 6h default
+
+/**
+ * Stable hash of the current violations. Same violations → same hash → deduped.
+ * Different violations (new service, changed severity) → different hash → fires a new alert.
+ */
+function hashViolations(violations: Violation[]): string {
+  const normalized = violations
+    .map(v => `${v.serviceName}|${v.metricName}|${v.severity}`)
+    .sort()
+    .join(";");
+  return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+}
 
 function getDefaultKillAction(provider: ProviderId): KillAction {
   switch (provider) {
@@ -145,13 +166,67 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
     const usage = await provider.checkUsage(credential, cloudAccount.thresholds);
     result.usage = usage;
 
+    // Pre-flight upstream health: check the API surface we'd use to fire kill
+    // actions BEFORE we fire any. If the kill-action API is degraded, our
+    // usage signal may be inconsistent with reality and a kill could amplify
+    // the outage.
+    //
+    // Lazy + memoized: only probe on the first kill site that needs it. No
+    // violations + no rule matches = no probe at all (saves ~28K daily API
+    // calls for an org with 100 accounts on 5-min cadence).
+    let cachedHealth: { healthy: boolean; reason?: string } | undefined;
+    const getHealth = async (): Promise<{ healthy: boolean; reason?: string }> => {
+      if (cachedHealth) return cachedHealth;
+      if (typeof provider.checkHealth !== "function") {
+        cachedHealth = { healthy: true };
+        return cachedHealth;
+      }
+      try {
+        cachedHealth = await provider.checkHealth(credential);
+      } catch (e: any) {
+        cachedHealth = { healthy: false, reason: `health-probe-error: ${e.message}` };
+      }
+      return cachedHealth;
+    };
+
     // Evaluate custom kill switch rules against usage data
     try {
       const ruleDocs = await KillSwitchRuleModel.find({ guardianAccountId: cloudAccount.guardianAccountId }).lean();
       if (ruleDocs.length > 0) {
         const ruleResults = evaluateRules(ruleDocs as any, usage);
         for (const ruleResult of ruleResults) {
+          // Emit `evaluated` for *every* enabled rule we considered. This is
+          // the load-bearing signal: if rule X never appears in events, the
+          // evaluator never saw it (config issue, not "rule is quiet").
+          await recordRuleEvent({
+            kind: "evaluated",
+            guardianAccountId: cloudAccount.guardianAccountId,
+            cloudAccountId: cloudAccount._id.toString(),
+            ruleId: ruleResult.ruleId,
+            ruleName: ruleResult.ruleName,
+            details: ruleResult.cooldownActive ? "cooldown-active" : (ruleResult.triggered ? "triggered" : "no-match"),
+          });
+          if (ruleResult.cooldownActive) {
+            await recordRuleEvent({
+              kind: "action_skipped",
+              guardianAccountId: cloudAccount.guardianAccountId,
+              cloudAccountId: cloudAccount._id.toString(),
+              ruleId: ruleResult.ruleId,
+              ruleName: ruleResult.ruleName,
+              reason: "cooldown",
+              details: `Within cooldown window`,
+            });
+            continue;
+          }
           if (!ruleResult.triggered) continue;
+          await recordRuleEvent({
+            kind: "matched",
+            guardianAccountId: cloudAccount.guardianAccountId,
+            cloudAccountId: cloudAccount._id.toString(),
+            ruleId: ruleResult.ruleId,
+            ruleName: ruleResult.ruleName,
+            details: ruleResult.conditionsMatched.join("; "),
+          });
           // Update lastFiredAt on the rule
           await KillSwitchRuleModel.updateOne(
             { guardianAccountId: cloudAccount.guardianAccountId, id: ruleResult.ruleId },
@@ -160,6 +235,16 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
           for (const action of ruleResult.actionsToExecute) {
             if (action.requiresApproval) {
               result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: ${action.type} on ${action.target} — awaiting approval`);
+              await recordRuleEvent({
+                kind: "action_skipped",
+                guardianAccountId: cloudAccount.guardianAccountId,
+                cloudAccountId: cloudAccount._id.toString(),
+                ruleId: ruleResult.ruleId,
+                ruleName: ruleResult.ruleName,
+                actionType: action.type,
+                target: action.target,
+                reason: "awaiting-approval",
+              });
               continue;
             }
             if (action.type === "snapshot") {
@@ -167,14 +252,74 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
                 .then(snap => result.forensicSnapshotIds.push(snap.id))
                 .catch(err => console.warn(`[guardian] Rule forensic snapshot failed:`, err.message));
               result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: snapshot captured`);
+              await recordRuleEvent({
+                kind: "action_taken",
+                guardianAccountId: cloudAccount.guardianAccountId,
+                cloudAccountId: cloudAccount._id.toString(),
+                ruleId: ruleResult.ruleId,
+                ruleName: ruleResult.ruleName,
+                actionType: "snapshot",
+                target: action.target,
+                success: true,
+              });
+              continue;
+            }
+            const ruleHealth = await getHealth();
+            if (!ruleHealth.healthy) {
+              // Skip kills when the kill-action API surface is degraded.
+              // Firing into a half-broken cloud could amplify an outage; the
+              // user's KILL_SWITCH_SDK_FEEDBACK_2026_05_01 doc calls this
+              // "the bug was already there" — kill switches mask, not heal,
+              // pre-existing failures.
+              result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: ${action.type} skipped — provider degraded (${ruleHealth.reason})`);
+              await recordRuleEvent({
+                kind: "action_skipped",
+                guardianAccountId: cloudAccount.guardianAccountId,
+                cloudAccountId: cloudAccount._id.toString(),
+                ruleId: ruleResult.ruleId,
+                ruleName: ruleResult.ruleName,
+                actionType: action.type,
+                target: action.target,
+                reason: "provider-degraded",
+                details: ruleHealth.reason,
+              });
               continue;
             }
             try {
-              const killResult = await provider.executeKillSwitch(credential, action.target, action.type as KillAction);
+              const killContext: KillContext = {
+                ruleId: ruleResult.ruleId,
+                ruleName: ruleResult.ruleName,
+                reason: `rule:${ruleResult.ruleId}`,
+                triggeredAt: Date.now(),
+              };
+              const raw = await provider.executeKillSwitch(credential, action.target, action.type as KillAction, killContext);
+              const killResult = withSentinel(raw, killContext);
               result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: ${killResult.details}`);
+              await recordRuleEvent({
+                kind: "action_taken",
+                guardianAccountId: cloudAccount.guardianAccountId,
+                cloudAccountId: cloudAccount._id.toString(),
+                ruleId: ruleResult.ruleId,
+                ruleName: ruleResult.ruleName,
+                actionType: action.type,
+                target: action.target,
+                success: killResult.success,
+                details: killResult.details,
+              });
             } catch (err: any) {
               console.warn(`[guardian] Rule action failed (${ruleResult.ruleId}/${action.type}):`, err.message);
               result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: ${action.type} failed — ${err.message}`);
+              await recordRuleEvent({
+                kind: "action_skipped",
+                guardianAccountId: cloudAccount.guardianAccountId,
+                cloudAccountId: cloudAccount._id.toString(),
+                ruleId: ruleResult.ruleId,
+                ruleName: ruleResult.ruleName,
+                actionType: action.type,
+                target: action.target,
+                reason: "exec-failed",
+                details: err.message,
+              });
             }
           }
         }
@@ -194,13 +339,45 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
 
       // Execute kill switch for non-protected services
       for (const violation of usage.violations) {
+        // Health probe runs once per cycle on the first kill site that needs
+        // it; subsequent violations hit the cached result.
+        const thresholdHealth = await getHealth();
+        if (!thresholdHealth.healthy) {
+          result.actionsTaken.push(`SKIPPED: ${violation.serviceName} — provider degraded (${thresholdHealth.reason})`);
+          await recordRuleEvent({
+            kind: "action_skipped",
+            guardianAccountId: cloudAccount.guardianAccountId,
+            cloudAccountId: cloudAccount._id.toString(),
+            actionType: "threshold-kill",
+            target: violation.serviceName,
+            reason: "provider-degraded",
+            details: thresholdHealth.reason,
+          });
+          continue;
+        }
         if (cloudAccount.protectedServices.includes(violation.serviceName)) {
           result.actionsTaken.push(`PROTECTED: ${violation.serviceName}`);
+          await recordRuleEvent({
+            kind: "action_skipped",
+            guardianAccountId: cloudAccount.guardianAccountId,
+            cloudAccountId: cloudAccount._id.toString(),
+            actionType: "threshold-kill",
+            target: violation.serviceName,
+            reason: "protected-service",
+            details: `Threshold breached but ${violation.serviceName} is on the protected-services list`,
+          });
           continue;
         }
 
+        const buildThresholdContext = (killAction: KillAction): KillContext => ({
+          reason: `threshold:${violation.metricName}`,
+          triggeredAt: Date.now(),
+        });
+
         if (cloudAccount.autoDelete && violation.severity === "critical") {
-          const action = await provider.executeKillSwitch(credential, violation.serviceName, "delete");
+          const ctx = buildThresholdContext("delete");
+          const raw = await provider.executeKillSwitch(credential, violation.serviceName, "delete", ctx);
+          const action = withSentinel(raw, ctx);
           result.actionsTaken.push(action.details);
           // Capture forensic snapshot for evidence and compliance
           captureSnapshot(credential, violation.serviceName, `kill-switch:delete:${violation.metricName}`, cloudAccount._id.toString())
@@ -208,7 +385,9 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
             .catch(err => console.warn(`[guardian] Forensic snapshot failed for ${violation.serviceName}:`, err.message));
         } else if (cloudAccount.autoDisconnect) {
           const killAction = getDefaultKillAction(cloudAccount.provider as ProviderId);
-          const action = await provider.executeKillSwitch(credential, violation.serviceName, killAction);
+          const ctx = buildThresholdContext(killAction);
+          const raw = await provider.executeKillSwitch(credential, violation.serviceName, killAction, ctx);
+          const action = withSentinel(raw, ctx);
           result.actionsTaken.push(action.details);
           // Capture forensic snapshot for evidence and compliance
           captureSnapshot(credential, violation.serviceName, `kill-switch:${killAction}:${violation.metricName}`, cloudAccount._id.toString())
@@ -217,18 +396,35 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
         }
       }
 
-      // Send alerts
+      // Send alerts — deduped so we don't re-alert the same violations every 5 min.
+      // Same violation hash + sent within cooldown window → skip. New violations
+      // (different services/metrics) always re-alert immediately.
       const guardianAccount = await GuardianAccountModel.findById(cloudAccount.guardianAccountId);
       if (guardianAccount && guardianAccount.alertChannels.length > 0) {
-        const summary = `${provider.name} cost alert: ${usage.violations.length} service(s) exceeded thresholds on ${cloudAccount.name}`;
-        await sendAlerts(guardianAccount.alertChannels, summary, "critical", {
-          provider: cloudAccount.provider,
-          accountName: cloudAccount.name,
-          cloudAccountId: cloudAccount._id.toString(),
-          violations: usage.violations,
-          actionsTaken: result.actionsTaken,
-          totalEstimatedDailyCost: usage.totalEstimatedDailyCostUSD,
-        });
+        const alertHash = hashViolations(usage.violations);
+        const now = Date.now();
+        const sameAsLast = cloudAccount.lastAlertHash === alertHash;
+        const stillInCooldown = cloudAccount.lastAlertedAt && (now - cloudAccount.lastAlertedAt) < ALERT_COOLDOWN_MS;
+        const shouldSkip = sameAsLast && stillInCooldown;
+
+        if (shouldSkip) {
+          console.log(`[guardian] Skipping alert for ${cloudAccount.name} (same violations, cooldown active until ${new Date((cloudAccount.lastAlertedAt ?? 0) + ALERT_COOLDOWN_MS).toISOString()})`);
+        } else {
+          const summary = `${provider.name} cost alert: ${usage.violations.length} service(s) exceeded thresholds on ${cloudAccount.name}`;
+          await sendAlerts(guardianAccount.alertChannels, summary, "critical", {
+            provider: cloudAccount.provider,
+            accountName: cloudAccount.name,
+            cloudAccountId: cloudAccount._id.toString(),
+            violations: usage.violations,
+            actionsTaken: result.actionsTaken,
+            totalEstimatedDailyCost: usage.totalEstimatedDailyCostUSD,
+          });
+          // Persist dedup state so the next tick in the cooldown window skips
+          await CloudAccountModel.findByIdAndUpdate(cloudAccount._id, {
+            lastAlertHash: alertHash,
+            lastAlertedAt: now,
+          });
+        }
       }
     }
 

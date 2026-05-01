@@ -103,6 +103,20 @@ export interface ActionResult {
   forensicSnapshotId?: string;
 }
 
+/**
+ * Context passed to executeKillSwitch so providers can stamp killed resources
+ * with sentinel tags/labels and ActionResult.details with a [killed-by=...] prefix.
+ *
+ * Why: when a resource is later found dead, the next engineer needs to know
+ * *why* in 5 seconds — not chase logs back through a check cycle.
+ */
+export interface KillContext {
+  ruleId?: string;          // Custom rule that fired; absent for threshold-based kills
+  ruleName?: string;
+  reason?: string;          // Human-readable: "cost-runaway", "ddos", "threshold:doRequestsPerDay"
+  triggeredAt?: number;     // Unix ms; defaults to Date.now() in providers
+}
+
 export interface ValidationResult {
   valid: boolean;
   accountId?: string;
@@ -312,6 +326,42 @@ export interface ForensicSnapshot {
   integrityHash: string;
 }
 
+// ─── Rule Event Telemetry ───────────────────────────────────────────────────
+
+/**
+ * Structured rule-evaluation events. Fire on every decision point so that
+ * "no events for rule X" itself becomes a signal — it means traffic never
+ * reached the evaluator (config bug, missed cron, broken filter), as opposed
+ * to "rule fired and the action ran." Inspired by the Kill-Switch SDK
+ * feedback doc 2026-05-01: silent regressions look identical to inert flags.
+ */
+export type RuleEventKind =
+  | "evaluated"      // Rule was considered (whether or not its conditions matched)
+  | "matched"        // Rule conditions matched — about to fire actions
+  | "action_taken"   // Action executed against a target (success or fail in `success`)
+  | "action_skipped";// Action did NOT run; `reason` says why (cooldown, protected-service, etc.)
+
+export type RuleSkipReason =
+  | "cooldown"
+  | "protected-service"
+  | "awaiting-approval"
+  | "provider-degraded"
+  | "exec-failed"
+  | "dry-run";
+
+export interface RuleEvent {
+  kind: RuleEventKind;
+  guardianAccountId: string;
+  cloudAccountId: string;
+  ruleId?: string;
+  ruleName?: string;
+  actionType?: string;       // KillAction or "threshold-kill" / "snapshot"
+  target?: string;
+  reason?: RuleSkipReason | string;
+  success?: boolean;
+  details?: string;
+}
+
 // ─── Kill Switch Rule Engine ────────────────────────────────────────────────
 
 export type RuleTrigger = "cost" | "security" | "custom" | "api" | "agent";
@@ -359,8 +409,20 @@ export interface CloudProvider {
   executeKillSwitch(
     credential: DecryptedCredential,
     serviceName: string,
-    action: KillAction
+    action: KillAction,
+    context?: KillContext
   ): Promise<ActionResult>;
+
+  /**
+   * Lightweight upstream-health probe used as a pre-flight before kill actions.
+   * If unhealthy, the monitoring engine skips the kill (and emits a
+   * rule_action_skipped event with reason=provider-degraded) — the assumption
+   * is that a degraded upstream means our usage signal is unreliable, so
+   * firing a kill could be addressing a phantom problem.
+   */
+  checkHealth?(
+    credential: DecryptedCredential
+  ): Promise<{ healthy: boolean; reason?: string }>;
 
   /** Validate that credentials work and have required permissions */
   validateCredential(

@@ -4,7 +4,53 @@
  * Common functions used across multiple kill-switch providers.
  */
 
-import type { ServiceUsage, Violation, ThresholdConfig } from "./types.js";
+import type { ServiceUsage, Violation, ThresholdConfig, KillContext, ActionResult } from "./types.js";
+
+/**
+ * Sentinel prefix for ActionResult.details. Lets future investigators answer
+ * "why is this resource dead?" by reading a single line — without chasing
+ * timestamps back through a check cycle. Idempotent: a re-applied prefix is
+ * a no-op so double-wrapping is safe.
+ */
+export function formatKillSentinel(context?: KillContext): string {
+  if (!context) return "";
+  const parts: string[] = [];
+  if (context.ruleId) parts.push(`rule=${context.ruleId}`);
+  if (context.ruleName) parts.push(`name=${context.ruleName.replace(/[\|\]]/g, "_")}`);
+  if (context.reason) parts.push(`reason=${context.reason}`);
+  parts.push(`at=${context.triggeredAt ?? Date.now()}`);
+  return parts.length ? `[ks:${parts.join("|")}] ` : "";
+}
+
+/**
+ * Idempotently prefix an ActionResult's `details` with the sentinel token.
+ * If the details string already starts with `[ks:`, leave it alone.
+ */
+export function withSentinel(result: ActionResult, context?: KillContext): ActionResult {
+  if (!context) return result;
+  if (result.details.startsWith("[ks:")) return result;
+  const sentinel = formatKillSentinel(context);
+  return sentinel ? { ...result, details: sentinel + result.details } : result;
+}
+
+/**
+ * Build cloud-native label/tag values from a KillContext. Keys are lowercase
+ * dashed for GCP-label compatibility (which forbids uppercase + most punct).
+ * AWS tag keys allow more characters but match these for cross-cloud parity.
+ */
+export function killContextToLabels(context: KillContext): Record<string, string> {
+  const labels: Record<string, string> = { "kill-switch-killed": "true" };
+  if (context.ruleId)   labels["kill-switch-rule-id"] = sanitizeLabelValue(context.ruleId);
+  if (context.ruleName) labels["kill-switch-rule-name"] = sanitizeLabelValue(context.ruleName);
+  if (context.reason)   labels["kill-switch-reason"] = sanitizeLabelValue(context.reason);
+  labels["kill-switch-killed-at"] = String(context.triggeredAt ?? Date.now());
+  return labels;
+}
+
+/** GCP labels: lowercase, [a-z0-9-_], max 63 chars. AWS tags are looser but accept this subset. */
+function sanitizeLabelValue(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 63);
+}
 
 /**
  * Evaluate threshold violations across services and daily cost.

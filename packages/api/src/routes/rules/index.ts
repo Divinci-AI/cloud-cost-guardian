@@ -11,13 +11,213 @@
  */
 
 import { Router } from "express";
-import { PRESET_RULES } from "../../services/rule-engine.js";
+import { PRESET_RULES, evaluateRules } from "../../services/rule-engine.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { logActivity } from "../../services/activity-logger.js";
 import { KillSwitchRuleModel } from "../../models/kill-switch-rule/schema.js";
-import type { KillSwitchRule } from "../../providers/types.js";
+import { CloudAccountModel } from "../../models/cloud-account/schema.js";
+import { getCredential } from "../../models/encrypted-credential/schema.js";
+import { getProvider } from "../../providers/index.js";
+import type { KillSwitchRule, UsageResult, ServiceUsage } from "../../providers/types.js";
 
 export const rulesRouter = Router();
+
+/**
+ * POST /rules/preflight — Simulate a rule against current usage
+ *
+ * Pure read: no DB writes, no kill actions. Walks every cloud account in the
+ * org, runs a fresh checkUsage against each, evaluates the candidate rule,
+ * resolves target services, projects cost saved, and surfaces:
+ *   - protected-service collisions ("rule would target a protected resource")
+ *   - provider-health warnings ("we'd refuse to fire because cloud API is degraded")
+ *   - cooldown state ("rule recently fired and is still cooling")
+ *
+ * Why: the user's KILL_SWITCH_SDK_FEEDBACK_2026_05_01 doc — "before flipping a
+ * kill-switch, the SDK should auto-run probes ... and refuse to flip if the
+ * baseline already failed." The preflight is the equivalent here.
+ *
+ * Body: { rule: KillSwitchRule } OR { ruleId: string } (load from DB)
+ */
+rulesRouter.post("/preflight", requirePermission("rules:read"), async (req, res, next) => {
+  try {
+    const accountId = (req as any).guardianAccountId;
+    let rule: KillSwitchRule | null = null;
+
+    if (req.body?.ruleId) {
+      const doc = await KillSwitchRuleModel.findOne({ guardianAccountId: accountId, id: req.body.ruleId }).lean();
+      if (!doc) return res.status(404).json({ error: `Rule not found: ${req.body.ruleId}` });
+      rule = docToRule(doc);
+    } else if (req.body?.rule) {
+      rule = req.body.rule as KillSwitchRule;
+    }
+
+    if (!rule || !rule.conditions?.length || !rule.actions?.length) {
+      return res.status(400).json({ error: "Body must contain rule (or ruleId) with conditions and actions" });
+    }
+
+    const cloudAccounts = await CloudAccountModel.find({ guardianAccountId: accountId, status: "active" }).lean();
+    // The rule may be disabled in the DB; preflight is a "what-if" so we
+    // force enabled+no-cooldown to bypass evaluator filters. We separately
+    // surface the saved cooldown state so the operator can see whether a
+    // real fire would actually run.
+    const wasDisabled = rule.enabled === false;
+    const cooldownActive = rule.cooldownMinutes > 0
+      && rule.lastFiredAt !== undefined
+      && (Date.now() < rule.lastFiredAt + rule.cooldownMinutes * 60 * 1000);
+    const cooldownExpiresAt = (rule.lastFiredAt && rule.cooldownMinutes)
+      ? rule.lastFiredAt + rule.cooldownMinutes * 60 * 1000
+      : undefined;
+    const sim: KillSwitchRule = { ...rule, enabled: true, lastFiredAt: undefined };
+    const ruleClosure = rule;
+
+    // Run accounts in parallel (bounded concurrency) — sequential was bursting
+    // past the Cloud Run 60s timeout for orgs with >5 accounts since each
+    // checkUsage can take 5-30s.
+    const CONCURRENCY = 5;
+    const perAccount: any[] = [];
+    for (let i = 0; i < cloudAccounts.length; i += CONCURRENCY) {
+      const batch = cloudAccounts.slice(i, i + CONCURRENCY);
+      const settled = await Promise.allSettled(batch.map(ca => simulateOneAccount(ca, sim, ruleClosure, cooldownActive)));
+      for (let j = 0; j < settled.length; j++) {
+        const outcome = settled[j];
+        if (outcome.status === "fulfilled") {
+          perAccount.push(outcome.value);
+        } else {
+          perAccount.push({
+            cloudAccountId: (batch[j] as any)._id.toString(),
+            accountName: (batch[j] as any).name,
+            provider: (batch[j] as any).provider,
+            error: outcome.reason?.message || String(outcome.reason),
+          });
+        }
+      }
+    }
+
+    let totalSavings = 0;
+    let triggeredCount = 0;
+    let wouldFireCount = 0;
+    let collisionCount = 0;
+    let degradedCount = 0;
+    for (const a of perAccount) {
+      if (a.triggered) triggeredCount++;
+      if (a.wouldFire) wouldFireCount++;
+      if (a.providerHealth && !a.providerHealth.healthy) degradedCount++;
+      for (const act of a.actions || []) {
+        if (a.wouldFire) totalSavings += act.estimatedDailySavingsUSD;
+        collisionCount += (act.protectedCollisions?.length ?? 0);
+      }
+    }
+
+    res.json({
+      rule: { id: rule.id, name: rule.name, wasDisabled, cooldownActive, cooldownExpiresAt },
+      perAccount,
+      summary: {
+        accountsConsidered: cloudAccounts.length,
+        accountsTriggered: triggeredCount,
+        accountsWouldFire: wouldFireCount,
+        totalEstimatedDailySavingsUSD: Math.round(totalSavings * 100) / 100,
+        protectedCollisions: collisionCount,
+        degradedProviders: degradedCount,
+      },
+    });
+  } catch (e) { next(e); }
+});
+
+/**
+ * Simulate one cloud account's preflight. Pulled out so the route can run
+ * accounts in parallel — sequential was timing out on orgs with >5 accounts.
+ */
+async function simulateOneAccount(
+  cloudAccount: any,
+  simRule: KillSwitchRule,
+  savedRule: KillSwitchRule,
+  cooldownActive: boolean
+): Promise<any> {
+  const account: any = {
+    cloudAccountId: cloudAccount._id.toString(),
+    accountName: cloudAccount.name,
+    provider: cloudAccount.provider,
+  };
+
+  const provider = getProvider(cloudAccount.provider);
+  if (!provider) {
+    account.error = `Unknown provider: ${cloudAccount.provider}`;
+    return account;
+  }
+
+  try {
+    const credential = await getCredential(cloudAccount.credentialId);
+    if (!credential) {
+      account.error = "Credential missing";
+      return account;
+    }
+
+    // Fresh usage snapshot — preflight has to reflect *current* state, not
+    // a stale cached snapshot, because the operator is about to make a
+    // policy decision based on this output.
+    const usage: UsageResult = await provider.checkUsage(credential, cloudAccount.thresholds);
+
+    const [evalResult] = evaluateRules([simRule], usage);
+    account.triggered = evalResult?.triggered ?? false;
+    account.conditionsMatched = evalResult?.conditionsMatched ?? [];
+
+    if (typeof provider.checkHealth === "function") {
+      try {
+        account.providerHealth = await provider.checkHealth(credential);
+      } catch (e: any) {
+        account.providerHealth = { healthy: false, reason: e.message };
+      }
+    } else {
+      account.providerHealth = { healthy: true };
+    }
+
+    // Resolve target services per action and project cost saved
+    const protectedServices: string[] = cloudAccount.protectedServices || [];
+    let anyAwaitingApproval = false;
+    account.actions = savedRule.actions.map(action => {
+      const target = action.target || "*";
+      let resolvedTargets: string[] = [];
+      if (target === "*") {
+        resolvedTargets = usage.services.map(s => s.serviceName);
+      } else {
+        const match = usage.services.find(s => s.serviceName === target);
+        resolvedTargets = match ? [match.serviceName] : [];
+      }
+      const protectedCollisions = resolvedTargets.filter(t => protectedServices.includes(t));
+      const billable = resolvedTargets.filter(t => !protectedCollisions.includes(t));
+      const savings = billable.reduce(
+        (sum, name) => sum + (usage.services.find((s: ServiceUsage) => s.serviceName === name)?.estimatedDailyCostUSD ?? 0),
+        0
+      );
+      if (action.requireApproval) anyAwaitingApproval = true;
+      return {
+        type: action.type,
+        target,
+        resolvedTargets,
+        protectedCollisions,
+        estimatedDailySavingsUSD: Math.round(savings * 100) / 100,
+        requiresApproval: action.requireApproval || false,
+      };
+    });
+
+    // The headline number: would the rule, *as saved*, actually fire right
+    // now? Triggered alone is misleading because cooldown / health / approval
+    // all gate at runtime. Combining them gives the operator the answer they
+    // want without having to mentally AND four fields.
+    account.wouldFire = account.triggered
+      && account.providerHealth.healthy
+      && !cooldownActive
+      && !anyAwaitingApproval;
+    account.wouldNotFireReasons = [];
+    if (!account.triggered) account.wouldNotFireReasons.push("conditions-not-matched");
+    if (!account.providerHealth.healthy) account.wouldNotFireReasons.push("provider-degraded");
+    if (cooldownActive) account.wouldNotFireReasons.push("cooldown-active");
+    if (anyAwaitingApproval) account.wouldNotFireReasons.push("awaiting-approval");
+  } catch (e: any) {
+    account.error = e.message;
+  }
+  return account;
+}
 
 /**
  * GET /rules — List all rules for the account
