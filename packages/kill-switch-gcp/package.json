@@ -1,11 +1,16 @@
 {
   "name": "gcp-billing-kill-switch",
-  "version": "1.0.0",
-  "description": "Selectively disable GCP Cloud Run services when spending exceeds budget thresholds. Pages PagerDuty until acknowledged.",
+  "version": "1.1.0",
+  "description": "Selectively disable GCP Cloud Run services when spending exceeds budget thresholds. Pages PagerDuty until acknowledged. Includes a sibling daily-rate watcher that catches 24h spend spikes the monthly-budget kill switch misses.",
   "main": "index.js",
   "license": "MIT",
+  "scripts": {
+    "test": "node --test 'test/*.test.js'"
+  },
   "dependencies": {
+    "@google-cloud/bigquery": "^7.9.4",
     "@google-cloud/billing": "^5.1.1",
+    "@google-cloud/pubsub": "^4.10.0",
     "@google-cloud/run": "^3.2.0"
   }
 }
