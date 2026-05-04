@@ -79,6 +79,21 @@ exports.dailyRateWatcher = async (req, res) => {
       res.status(200).json({ status: "config-error", message: msg });
       return;
     }
+    // A typo'd numeric env (e.g. DAILY_RATE_THRESHOLD_USD="abc") parses to NaN;
+    // `total >= NaN` is always false, which silently disables the watcher.
+    // Detect and return config-error instead.
+    if (!Number.isFinite(DAILY_RATE_THRESHOLD_USD) || DAILY_RATE_THRESHOLD_USD <= 0) {
+      const msg = `invalid DAILY_RATE_THRESHOLD_USD: ${process.env.DAILY_RATE_THRESHOLD_USD} (must be a positive number)`;
+      console.error(`[daily-rate] ${msg}`);
+      res.status(200).json({ status: "config-error", message: msg });
+      return;
+    }
+    if (!Number.isFinite(DAILY_RATE_WINDOW_HOURS) || DAILY_RATE_WINDOW_HOURS <= 0) {
+      const msg = `invalid DAILY_RATE_WINDOW_HOURS: ${process.env.DAILY_RATE_WINDOW_HOURS} (must be a positive number)`;
+      console.error(`[daily-rate] ${msg}`);
+      res.status(200).json({ status: "config-error", message: msg });
+      return;
+    }
 
     const breakdown = await queryCostBreakdown({
       projectId: PROJECT_ID,

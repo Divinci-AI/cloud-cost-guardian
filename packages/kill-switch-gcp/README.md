@@ -180,9 +180,37 @@ gcloud scheduler jobs create http daily-rate-watcher-hourly \
   --schedule="0 * * * *" \
   --uri="$FUNCTION_URL" \
   --http-method=POST \
+  --max-retry-attempts=3 \
+  --max-retry-duration=300s \
   --oidc-service-account-email="daily-rate-scheduler@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
   --project=YOUR_PROJECT_ID
 ```
+
+> Without `--max-retry-attempts`, Cloud Scheduler defaults to **0 retries** — a single transient BigQuery hiccup silently loses that hour's check.
+
+### ⚠ Self-protection (REQUIRED)
+
+The watcher is deployed as a **gen2** Cloud Function, which means it's also a Cloud Run service named `daily-rate-watcher`. When the watcher publishes a breach, the existing kill switch handler runs `scaleDownCloudRunServices()` against **every** Cloud Run service in the project — and `scaleDownCloudFunctions()` against every Cloud Function.
+
+**If `daily-rate-watcher` is not in `PROTECTED_SERVICES` and `PROTECTED_FUNCTIONS`, it will silently disable itself on the first kill** — and subsequent spikes will go undetected until you manually scale it back up.
+
+Update your existing kill switch deployment to add the watcher (and the kill switch itself) to both protection lists:
+
+```bash
+gcloud functions deploy gcp-billing-kill-switch \
+  --gen2 --region=us-central1 --project=YOUR_PROJECT_ID \
+  --update-env-vars="\
+PROTECTED_SERVICES=daily-rate-watcher;gcp-billing-kill-switch;<your-other-protected>,\
+PROTECTED_FUNCTIONS=daily-rate-watcher;gcp-billing-kill-switch"
+```
+
+### How the threshold interacts with the existing handler
+
+The watcher publishes `costAmount = past-24h spend` and `budgetAmount = DAILY_RATE_THRESHOLD_USD`, then the existing handler computes `costRatio = costAmount / budgetAmount` and only kills if `costRatio >= KILL_THRESHOLD` (default `0.8`).
+
+A daily-rate breach always sends `costRatio ≥ 1.0`, so kill always fires under default config. **But** if you've customized `KILL_THRESHOLD > 1.0`, a daily-rate breach will land in the warning bracket (PagerDuty page only, no scale-down). Keep `KILL_THRESHOLD ≤ 1.0` if you want daily-rate breaches to actually trigger the kill.
+
+The watcher itself is **binary** — it doesn't have a warning level the way the monthly handler does (50% / 80%). It's silent below threshold and fully publishes at/above. If you want a warning-only tier, set a lower-threshold sibling watcher with `DAILY_RATE_DRY_RUN=true` (logs without publishing).
 
 ### Daily-rate watcher configuration
 
@@ -212,7 +240,9 @@ npm test
 The test suite uses [`node:test`](https://nodejs.org/api/test.html) (no extra dependencies) with stubbed BigQuery + Pub/Sub clients. Tests cover:
 - BigQuery SQL builder (window-hours, identifier safety, aggregation shape)
 - Cost breakdown aggregation (totals, per-service rollup, edge cases)
-- Handler decision flow (no breach, breach + publish, dry-run, threshold equality, missing config)
+- Handler decision flow (no breach, breach + publish, dry-run, threshold equality)
+- Config-error paths (missing required env, non-numeric / zero / negative threshold, invalid window)
+- Failure propagation (BigQuery query errors, Pub/Sub publish errors, SQL identifier safety)
 
 ## Part of Kill Switch
 

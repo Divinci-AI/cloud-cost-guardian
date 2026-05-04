@@ -1,6 +1,5 @@
-const { describe, it, beforeEach, afterEach } = require("node:test");
+const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
-const Module = require("node:module");
 
 // We test the handler in isolation by stubbing the BigQuery and PubSub clients
 // at require-time. The handler reads env vars at call-time of the exported
@@ -9,7 +8,7 @@ const Module = require("node:module");
 
 const ORIGINAL_ENV = { ...process.env };
 
-function loadFreshHandler({ env, bqRows = [], publishedMessages = null }) {
+function loadFreshHandler({ env, bqRows = [], bqError = null, publishError = null, publishedMessages = null }) {
   // Reset env
   for (const k of Object.keys(process.env)) {
     if (k.startsWith("DAILY_RATE_") || k.startsWith("BILLING_") || k === "GCP_PROJECT_ID") {
@@ -28,7 +27,10 @@ function loadFreshHandler({ env, bqRows = [], publishedMessages = null }) {
     loaded: true,
     exports: {
       BigQuery: class FakeBigQuery {
-        async query() { return [bqRows]; }
+        async query() {
+          if (bqError) throw bqError;
+          return [bqRows];
+        }
       },
     },
   };
@@ -41,6 +43,7 @@ function loadFreshHandler({ env, bqRows = [], publishedMessages = null }) {
         topic() {
           return {
             publishMessage: async ({ data }) => {
+              if (publishError) throw publishError;
               if (publishedMessages) publishedMessages.push(JSON.parse(data.toString()));
               return "fake-message-id-123";
             },
@@ -176,5 +179,96 @@ describe("dailyRateWatcher", () => {
     await handler({}, res);
     assert.equal(res.body.status, "breach-published");
     assert.equal(published.length, 1);
+  });
+
+  it("returns config-error on non-numeric DAILY_RATE_THRESHOLD_USD (instead of silently never firing)", async () => {
+    const handler = loadFreshHandler({
+      env: {
+        GCP_PROJECT_ID: "test",
+        BILLING_EXPORT_DATASET: "billing_export",
+        BILLING_EXPORT_TABLE: "gcp_billing_export_resource_v1_01ABCD_234567_8901AB",
+        DAILY_RATE_THRESHOLD_USD: "not-a-number",
+      },
+      bqRows: [{ service: "Cloud Run", cost_usd: 9999 }],
+    });
+    const res = fakeRes();
+    await handler({}, res);
+    assert.equal(res.body.status, "config-error");
+    assert.match(res.body.message, /DAILY_RATE_THRESHOLD_USD/);
+  });
+
+  it("returns config-error on zero/negative DAILY_RATE_THRESHOLD_USD (would always-breach)", async () => {
+    const handler = loadFreshHandler({
+      env: {
+        GCP_PROJECT_ID: "test",
+        BILLING_EXPORT_DATASET: "billing_export",
+        BILLING_EXPORT_TABLE: "gcp_billing_export_resource_v1_01ABCD_234567_8901AB",
+        DAILY_RATE_THRESHOLD_USD: "0",
+      },
+      bqRows: [],
+    });
+    const res = fakeRes();
+    await handler({}, res);
+    assert.equal(res.body.status, "config-error");
+    assert.match(res.body.message, /DAILY_RATE_THRESHOLD_USD/);
+  });
+
+  it("returns config-error on invalid DAILY_RATE_WINDOW_HOURS", async () => {
+    const handler = loadFreshHandler({
+      env: {
+        GCP_PROJECT_ID: "test",
+        BILLING_EXPORT_DATASET: "billing_export",
+        BILLING_EXPORT_TABLE: "gcp_billing_export_resource_v1_01ABCD_234567_8901AB",
+        DAILY_RATE_WINDOW_HOURS: "abc",
+      },
+      bqRows: [],
+    });
+    const res = fakeRes();
+    await handler({}, res);
+    assert.equal(res.body.status, "config-error");
+    assert.match(res.body.message, /DAILY_RATE_WINDOW_HOURS/);
+  });
+
+  it("propagates BigQuery query failures so Cloud Functions logs + Scheduler retries", async () => {
+    const handler = loadFreshHandler({
+      env: {
+        GCP_PROJECT_ID: "test",
+        BILLING_EXPORT_DATASET: "billing_export",
+        BILLING_EXPORT_TABLE: "gcp_billing_export_resource_v1_01ABCD_234567_8901AB",
+      },
+      bqError: new Error("BigQuery: Quota exceeded"),
+    });
+    const res = fakeRes();
+    await assert.rejects(handler({}, res), /Quota exceeded/);
+  });
+
+  it("propagates Pub/Sub publish failures on breach (so retries can happen)", async () => {
+    const handler = loadFreshHandler({
+      env: {
+        GCP_PROJECT_ID: "test",
+        BILLING_EXPORT_DATASET: "billing_export",
+        BILLING_EXPORT_TABLE: "gcp_billing_export_resource_v1_01ABCD_234567_8901AB",
+        DAILY_RATE_THRESHOLD_USD: "50",
+      },
+      bqRows: [{ service: "Vertex AI", cost_usd: 200 }],
+      publishError: new Error("Pub/Sub: PERMISSION_DENIED"),
+    });
+    const res = fakeRes();
+    await assert.rejects(handler({}, res), /PERMISSION_DENIED/);
+  });
+
+  it("rejects unsafe identifier env vars (defense-in-depth against SQL injection)", async () => {
+    // The SQL builder rejects unsafe characters in identifiers. Verify the
+    // handler surfaces that as a non-200 throw rather than silently running.
+    const handler = loadFreshHandler({
+      env: {
+        GCP_PROJECT_ID: "test",
+        BILLING_EXPORT_DATASET: "billing_export; DROP TABLE foo --",
+        BILLING_EXPORT_TABLE: "gcp_billing_export_resource_v1_01ABCD",
+      },
+      bqRows: [],
+    });
+    const res = fakeRes();
+    await assert.rejects(handler({}, res), /unsafe characters/);
   });
 });
