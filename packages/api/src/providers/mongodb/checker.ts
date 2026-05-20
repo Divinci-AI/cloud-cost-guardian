@@ -17,6 +17,7 @@ import type {
   ActionResult,
   ValidationResult,
   ServiceUsage,
+  UsageMetric,
   Violation,
   MongoDBSubType,
 } from "../types.js";
@@ -76,6 +77,18 @@ function getMongoDBCredentials(credential: DecryptedCredential): MongoDBCreds {
 // ─── Atlas API ────────────────────────────────────────────────────────────
 
 const ATLAS_BASE = "https://cloud.mongodb.com/api/atlas/v2";
+
+// Map Atlas tier name → numeric value for the Tier metric.
+// Atlas tiers follow `M<n>` or `N<n>` (N = NVMe variant of M<n>):
+// M0/M2/M5 = shared, M10/M20/M30/M40/M50/M60/M80/M140/M200/M300/M400/M700.
+// Returns 0 for unrecognized values (e.g. SERVERLESS, REPLICASET).
+// 0 lets downstream code distinguish "categorical tier I can't compare numerically"
+// from a normal numeric value; the human-readable name still lives in the unit field.
+export function parseTierNumeric(tierName: string | undefined): number {
+  if (!tierName) return 0;
+  const match = tierName.match(/^[MN](\d+)$/i);
+  return match ? parseInt(match[1], 10) : 0;
+}
 
 // MongoDB Atlas REST API requires HTTP Digest auth, not Basic.
 // Basic returns 401 "You are not authorized for this resource."
@@ -241,14 +254,30 @@ async function checkAtlas(creds: MongoDBCreds): Promise<ServiceUsage[]> {
     // Billing API may not be available
   }
 
+  const metrics: UsageMetric[] = [
+    { name: "Storage", value: storageGB, unit: "GB", thresholdKey: "mongodbStorageSizeGB" },
+    { name: "Active Connections", value: connections, unit: "connections", thresholdKey: "mongodbActiveConnections" },
+    { name: "Operations/sec", value: Math.round(opsPerSec), unit: "ops/sec", thresholdKey: "mongodbOpsPerSec" },
+  ];
+
+  // Tier metric is meaningful only when the cluster is running. When paused
+  // there's no active compute, so omit the metric rather than show a
+  // misleading `value: 0, unit: "M30 (PAUSED)"` (the old shape stuffed a
+  // categorical string into the unit field and made the numeric value lie).
+  // The `paused` flag at service level already conveys the paused state for
+  // any downstream consumer that needs it.
+  if (!paused) {
+    metrics.push({
+      name: "Tier",
+      value: parseTierNumeric(tier),
+      unit: tier,
+      thresholdKey: "",
+    });
+  }
+
   return [{
     serviceName: `cluster:${creds.clusterName}`,
-    metrics: [
-      { name: "Storage", value: storageGB, unit: "GB", thresholdKey: "mongodbStorageSizeGB" },
-      { name: "Active Connections", value: connections, unit: "connections", thresholdKey: "mongodbActiveConnections" },
-      { name: "Operations/sec", value: Math.round(opsPerSec), unit: "ops/sec", thresholdKey: "mongodbOpsPerSec" },
-      { name: "Tier", value: 0, unit: `${tier}${paused ? " (PAUSED)" : ""}`, thresholdKey: "" },
-    ],
+    metrics,
     estimatedDailyCostUSD: paused ? 0 : dailyCost,
     paused,
   }];

@@ -208,6 +208,74 @@ describe("MongoDB Provider", () => {
       // And the paused cluster's cost is forced to 0 so cost-runaway doesn't fire either
       expect(result.totalEstimatedDailyCostUSD).toBe(0);
     });
+
+    it("includes Tier metric with parsed numeric value when running", async () => {
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ providerSettings: { instanceSizeName: "M30" }, diskSizeGB: 50, paused: false }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ amountBilledCents: 9000 }) });
+
+      const result = await mongodbProvider.checkUsage({
+        provider: "mongodb",
+        mongodbSubType: "atlas",
+        atlasPublicKey: "pub",
+        atlasPrivateKey: "priv",
+        atlasProjectId: "proj-123",
+        atlasClusterName: "Cluster0",
+      }, defaultThresholds);
+
+      const tierMetric = result.services[0].metrics.find(m => m.name === "Tier");
+      expect(tierMetric).toBeDefined();
+      expect(tierMetric!.value).toBe(30);
+      expect(tierMetric!.unit).toBe("M30");
+    });
+
+    it("omits Tier metric when cluster is paused (no signal value)", async () => {
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ providerSettings: { instanceSizeName: "M30" }, diskSizeGB: 50, paused: true }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ amountBilledCents: 9000 }) });
+
+      const result = await mongodbProvider.checkUsage({
+        provider: "mongodb",
+        mongodbSubType: "atlas",
+        atlasPublicKey: "pub",
+        atlasPrivateKey: "priv",
+        atlasProjectId: "proj-123",
+        atlasClusterName: "Cluster0",
+      }, defaultThresholds);
+
+      expect(result.services[0].paused).toBe(true);
+      expect(result.services[0].metrics.find(m => m.name === "Tier")).toBeUndefined();
+      // The other metrics still present
+      expect(result.services[0].metrics.find(m => m.name === "Storage")).toBeDefined();
+      expect(result.services[0].metrics.find(m => m.name === "Active Connections")).toBeDefined();
+      expect(result.services[0].metrics.find(m => m.name === "Operations/sec")).toBeDefined();
+    });
+  });
+
+  describe("parseTierNumeric", () => {
+    it("parses M-prefix tiers to their numeric value", async () => {
+      const { parseTierNumeric } = await import("../../src/providers/mongodb/checker.js");
+      expect(parseTierNumeric("M10")).toBe(10);
+      expect(parseTierNumeric("M30")).toBe(30);
+      expect(parseTierNumeric("M300")).toBe(300);
+    });
+
+    it("parses N-prefix NVMe variants", async () => {
+      const { parseTierNumeric } = await import("../../src/providers/mongodb/checker.js");
+      expect(parseTierNumeric("N40")).toBe(40);
+      expect(parseTierNumeric("N60")).toBe(60);
+    });
+
+    it("returns 0 for non-tier strings", async () => {
+      const { parseTierNumeric } = await import("../../src/providers/mongodb/checker.js");
+      expect(parseTierNumeric("SERVERLESS")).toBe(0);
+      expect(parseTierNumeric("REPLICASET")).toBe(0);
+      expect(parseTierNumeric("unknown")).toBe(0);
+      expect(parseTierNumeric(undefined)).toBe(0);
+      expect(parseTierNumeric("")).toBe(0);
+    });
   });
 
   describe("executeKillSwitch", () => {
