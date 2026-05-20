@@ -105,7 +105,7 @@ const PROVIDER_HELP: Record<string, { name: string; fields: string; howToGet: st
   MongoDB Atlas:
     1. Go to Organization > Access Manager > API Keys
     2. Create a key with "Project Read Only" + "Project Cluster Manager" roles
-    Use: --atlas-public-key PUB --atlas-private-key PRIV --atlas-project-id PROJ --cluster-name Cluster0
+    Use: --atlas-public-key PUB --atlas-private-key PRIV --atlas-project-id PROJ --atlas-cluster-name Cluster0
 
   Self-hosted MongoDB:
     Provide a URI: --mongodb-uri mongodb+srv://user:pass@host/db`,
@@ -186,12 +186,15 @@ const AVAILABLE_SHIELDS = [
   "exfiltration", "gpu-runaway", "lambda-loop", "aws-cost-runaway",
 ];
 
+const ONBOARDABLE_PROVIDERS = ["cloudflare", "gcp", "aws", "runpod", "neo4j", "mongodb"];
+const ONBOARDABLE_LIST = ONBOARDABLE_PROVIDERS.join(", ");
+
 export function registerOnboardCommands(program: Command, createClient: ClientFactory) {
   program
     .command("onboard")
     .alias("setup")
     .description("Quick setup: connect a cloud provider, apply protection, configure alerts")
-    .option("--provider <provider>", "Cloud provider: cloudflare, gcp, aws")
+    .option("--provider <provider>", "Cloud provider: cloudflare, gcp, aws, runpod, neo4j, mongodb")
     .option("--name <name>", "Account name (e.g., Production)")
     .option("--token <token>", "API token (Cloudflare)")
     .option("--account-id <id>", "Account ID (Cloudflare)")
@@ -204,6 +207,13 @@ export function registerOnboardCommands(program: Command, createClient: ClientFa
     .option("--neo4j-client-id <id>", "Client ID (Neo4j Aura)")
     .option("--neo4j-client-secret <secret>", "Client Secret (Neo4j Aura)")
     .option("--neo4j-instance-id <id>", "Instance ID (Neo4j Aura, optional)")
+    .option("--mongodb-subtype <type>", "MongoDB sub-type: atlas | self-hosted (inferred if omitted)")
+    .option("--atlas-public-key <key>", "Public key (MongoDB Atlas API)")
+    .option("--atlas-private-key <key>", "Private key (MongoDB Atlas API)")
+    .option("--atlas-project-id <id>", "Project ID (MongoDB Atlas)")
+    .option("--atlas-cluster-name <name>", "Cluster name (MongoDB Atlas, optional)")
+    .option("--mongodb-uri <uri>", "Connection URI (self-hosted MongoDB)")
+    .option("--mongodb-database <name>", "Database name (self-hosted MongoDB, optional)")
     .option("--shields <presets>", "Comma-separated shield presets to apply (default: cost-runaway)")
     .option("--alert-pagerduty <key>", "PagerDuty Events API v2 routing key (recommended)")
     .option("--alert-email <email>", "Email address for alerts")
@@ -247,7 +257,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
       if (opts.helpProvider) {
         const help = PROVIDER_HELP[opts.helpProvider];
         if (!help) {
-          outputError(`Unknown provider: ${opts.helpProvider}. Use: cloudflare, gcp, aws, runpod`, json);
+          outputError(`Unknown provider: ${opts.helpProvider}. Use: ${ONBOARDABLE_LIST}`, json);
           process.exit(1);
         }
         if (json) {
@@ -268,7 +278,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
         // Interactive mode if no provider specified
         if (!provider) {
           if (json) {
-            outputError("--provider is required in JSON mode. Use: cloudflare, gcp, aws, runpod", json);
+            outputError(`--provider is required in JSON mode. Use: ${ONBOARDABLE_LIST}`, json);
             process.exit(1);
           }
 
@@ -281,14 +291,15 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           console.log("  3. aws         — EC2, Lambda, RDS, ECS, S3");
           console.log("  4. runpod      — GPU Pods, Serverless Endpoints, Network Volumes");
           console.log("  5. neo4j       — Neo4j Aura graph databases");
+          console.log("  6. mongodb     — MongoDB Atlas, self-hosted MongoDB");
           console.log();
 
-          const choice = await ask("Choose a provider (1-5 or name): ");
-          provider = { "1": "cloudflare", "2": "gcp", "3": "aws", "4": "runpod", "5": "neo4j" }[choice] || choice;
+          const choice = await ask("Choose a provider (1-6 or name): ");
+          provider = { "1": "cloudflare", "2": "gcp", "3": "aws", "4": "runpod", "5": "neo4j", "6": "mongodb" }[choice] || choice;
         }
 
         if (!PROVIDER_HELP[provider]) {
-          outputError(`Unknown provider: ${provider}. Use: cloudflare, gcp, aws, runpod`, json);
+          outputError(`Unknown provider: ${provider}. Use: ${ONBOARDABLE_LIST}`, json);
           process.exit(1);
         }
 
@@ -393,6 +404,73 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           credential.neo4jClientId = neo4jClientId;
           credential.neo4jClientSecret = neo4jClientSecret;
           if (neo4jInstanceId) credential.neo4jInstanceId = neo4jInstanceId;
+        } else if (provider === "mongodb") {
+          const hasAtlasFlags = !!(opts.atlasPublicKey || opts.atlasPrivateKey || opts.atlasProjectId);
+          const hasSelfHostedFlag = !!opts.mongodbUri;
+
+          if (hasAtlasFlags && hasSelfHostedFlag) {
+            outputError("MongoDB: pass either Atlas keys (--atlas-public-key/--atlas-private-key/--atlas-project-id) or --mongodb-uri, not both.", json);
+            process.exit(1);
+          }
+
+          let subType: "atlas" | "self-hosted" | undefined =
+            opts.mongodbSubtype === "atlas" || opts.mongodbSubtype === "self-hosted"
+              ? opts.mongodbSubtype
+              : hasAtlasFlags ? "atlas" : hasSelfHostedFlag ? "self-hosted" : undefined;
+
+          if (!subType && !json) {
+            const answer = (await ask("MongoDB type — [a]tlas or [s]elf-hosted? ")).toLowerCase();
+            subType = answer.startsWith("s") ? "self-hosted" : "atlas";
+          }
+          if (!subType) {
+            outputError("MongoDB requires --mongodb-subtype atlas|self-hosted (or provide credentials inferring the type)", json);
+            process.exit(1);
+          }
+
+          credential.mongodbSubType = subType;
+
+          if (subType === "atlas") {
+            let publicKey = opts.atlasPublicKey;
+            let privateKey = opts.atlasPrivateKey;
+            let projectId = opts.atlasProjectId;
+            let clusterName = opts.atlasClusterName;
+
+            if (!publicKey && !json) {
+              console.log("\n  Tip: Create at Atlas > Access Manager > API Keys (Project-level)");
+              console.log("  Roles: Project Read Only + Project Cluster Manager");
+              publicKey = await ask("  Atlas Public Key: ");
+            }
+            if (!privateKey && !json) {
+              privateKey = await ask("  Atlas Private Key: ");
+            }
+            if (!projectId && !json) {
+              console.log("\n  Tip: Project ID is in the URL: cloud.mongodb.com/v2/<PROJECT_ID>");
+              projectId = await ask("  Atlas Project ID: ");
+            }
+            if (!clusterName && !json) {
+              clusterName = await ask("  Cluster name (Enter to monitor first cluster in project): ");
+            }
+            if (!publicKey || !privateKey || !projectId) {
+              outputError(`MongoDB Atlas requires ${PROVIDER_HELP.mongodb.fields}`, json);
+              process.exit(1);
+            }
+            credential.atlasPublicKey = publicKey;
+            credential.atlasPrivateKey = privateKey;
+            credential.atlasProjectId = projectId;
+            if (clusterName) credential.atlasClusterName = clusterName;
+          } else {
+            let uri = opts.mongodbUri;
+            if (!uri && !json) {
+              console.log("\n  Tip: Format mongodb+srv://user:pass@host/db or mongodb://...");
+              uri = await ask("  MongoDB Connection URI: ");
+            }
+            if (!uri) {
+              outputError("MongoDB self-hosted requires --mongodb-uri", json);
+              process.exit(1);
+            }
+            credential.mongodbUri = uri;
+            if (opts.mongodbDatabase) credential.mongodbDatabaseName = opts.mongodbDatabase;
+          }
         }
 
         // 1. Connect cloud account
