@@ -5,6 +5,7 @@ import { outputJson, formatObject, outputError, handleError, spinner, success, f
 import { ask } from "../prompts.js";
 import { execFile } from "child_process";
 import { hostname } from "os";
+import { CLI_VERSION } from "../version.js";
 import type { ClientFactory } from "../types.js";
 
 function openBrowser(url: string): void {
@@ -139,8 +140,7 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
 
       // Device flow \u2014 default path
       try {
-        const cliVersion = "0.2.0";
-        const apiKey = await runDeviceFlow(apiUrl, cliVersion, json);
+        const apiKey = await runDeviceFlow(apiUrl, CLI_VERSION, json);
         const client = new KillSwitchClient({ apiKey, baseUrl: apiUrl });
         const result = await client.account.me();
         saveConfig({ apiKey, apiUrl });
@@ -171,7 +171,7 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
           process.exit(1);
         }
         try {
-          key = await runDeviceFlow(apiUrl, "0.2.0", json);
+          key = await runDeviceFlow(apiUrl, CLI_VERSION, json);
         } catch (err) {
           handleError(err, json);
           return;

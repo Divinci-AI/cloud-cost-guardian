@@ -126,21 +126,19 @@ type PollResult =
 
 export async function consumeCliCode(code: string): Promise<PollResult> {
   // Atomic claim: only the first poll that sees status=approved AND polledOnceAt=null
-  // wins the plaintext key. Subsequent polls fall through to the "consumed" branch.
+  // wins the plaintext key. The same operation marks the code consumed AND scrubs
+  // the plaintext from storage — so even a crash between observation and return
+  // can't leave a key plaintext in the DB that's still claimable.
+  // `new: false` returns the document *before* the update so we can read the
+  // plaintext one last time after it has been removed from storage.
   const claimed = await CliAuthCodeModel.findOneAndUpdate(
     { code, status: "approved", polledOnceAt: null },
-    { $set: { polledOnceAt: new Date() } },
+    { $set: { polledOnceAt: new Date() }, $unset: { apiKeyPlaintext: "" } },
     { new: false },
   );
 
   if (claimed?.apiKeyPlaintext) {
-    const apiKey = claimed.apiKeyPlaintext;
-    // Scrub the plaintext from storage now that we've handed it off.
-    await CliAuthCodeModel.updateOne(
-      { _id: claimed._id },
-      { $unset: { apiKeyPlaintext: "" } },
-    );
-    return { status: "approved", apiKey };
+    return { status: "approved", apiKey: claimed.apiKeyPlaintext };
   }
 
   const doc = await CliAuthCodeModel.findOne({ code });
