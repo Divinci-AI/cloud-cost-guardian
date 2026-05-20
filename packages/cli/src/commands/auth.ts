@@ -4,8 +4,8 @@ import { saveConfig, deleteConfig, resolveApiKey, resolveApiUrl } from "../confi
 import { outputJson, formatObject, outputError, handleError, spinner, success, fail } from "../output.js";
 import { ask } from "../prompts.js";
 import { execFile } from "child_process";
-import { hostname } from "os";
 import { CLI_VERSION } from "../version.js";
+import { runDeviceFlow, defaultDeviceFlowDeps } from "../device-flow.js";
 import type { ClientFactory } from "../types.js";
 
 function openBrowser(url: string): void {
@@ -13,74 +13,16 @@ function openBrowser(url: string): void {
   execFile(cmd, [url], () => {});
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(r => setTimeout(r, ms));
-}
-
-interface DeviceFlowStart {
-  code: string;
-  verification_url: string;
-  expires_in: number;
-  polling_interval: number;
-}
-
-async function runDeviceFlow(apiUrl: string, cliVersion: string, json: boolean): Promise<string> {
-  // 1. Start session
-  const startResp = await fetch(`${apiUrl}/auth/cli/start`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hostname: hostname(), cliVersion }),
+// Wires the device-flow helper to this command's spinner + console output.
+// Kept here (not in device-flow.ts) so the helper stays free of CLI-specific
+// presentation concerns and remains pure for unit testing.
+function deviceFlowWithSpinner() {
+  let sp: ReturnType<typeof spinner> | null = null;
+  return defaultDeviceFlowDeps({
+    log: (line) => console.log(line),
+    spinnerStart: (label) => { sp = spinner(label).start(); },
+    spinnerStop: () => { sp?.stop(); sp = null; },
   });
-  if (!startResp.ok) {
-    throw new Error(`Failed to start CLI auth (${startResp.status}): ${await startResp.text().then(t => t.slice(0, 200))}`);
-  }
-  const start = (await startResp.json()) as DeviceFlowStart;
-
-  if (!json) {
-    console.log("\n⚡ Kill Switch CLI Login\n");
-    console.log("Open this URL in your browser to authorize:");
-    console.log(`  ${start.verification_url}\n`);
-    console.log("Confirm this code matches what you see on the page:");
-    console.log(`  ${start.code}\n`);
-  }
-
-  openBrowser(start.verification_url);
-
-  // 2. Poll until approved / denied / expired
-  const deadline = Date.now() + start.expires_in * 1000;
-  const intervalMs = Math.max(1, start.polling_interval) * 1000;
-  const sp = json ? null : spinner("Waiting for browser authorization...").start();
-
-  try {
-    while (Date.now() < deadline) {
-      await sleep(intervalMs);
-      const pollResp = await fetch(`${apiUrl}/auth/cli/poll`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: start.code }),
-      });
-      const body = (await pollResp.json().catch(() => ({}))) as any;
-
-      if (pollResp.status === 200 && body.api_key) {
-        sp?.stop();
-        return body.api_key;
-      }
-      if (pollResp.status === 410) {
-        sp?.stop();
-        throw new Error(`CLI login ${body.status || "ended"} — please run \`ks auth login\` again.`);
-      }
-      if (pollResp.status === 404) {
-        sp?.stop();
-        throw new Error("CLI login code expired before any response was recorded.");
-      }
-      // 202 pending → loop
-    }
-    sp?.stop();
-    throw new Error("CLI login timed out after 10 minutes. Run `ks auth login` to try again.");
-  } catch (e) {
-    sp?.stop();
-    throw e;
-  }
 }
 
 export function registerAuthCommands(program: Command, createClient: ClientFactory) {
@@ -140,7 +82,7 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
 
       // Device flow \u2014 default path
       try {
-        const apiKey = await runDeviceFlow(apiUrl, CLI_VERSION, json);
+        const apiKey = await runDeviceFlow(apiUrl, CLI_VERSION, json, deviceFlowWithSpinner());
         const client = new KillSwitchClient({ apiKey, baseUrl: apiUrl });
         const result = await client.account.me();
         saveConfig({ apiKey, apiUrl });
@@ -171,7 +113,7 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
           process.exit(1);
         }
         try {
-          key = await runDeviceFlow(apiUrl, CLI_VERSION, json);
+          key = await runDeviceFlow(apiUrl, CLI_VERSION, json, deviceFlowWithSpinner());
         } catch (err) {
           handleError(err, json);
           return;
