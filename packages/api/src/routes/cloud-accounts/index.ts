@@ -100,6 +100,7 @@ cloudAccountRouter.get("/", requirePermission("cloud_accounts:read"), async (req
         thresholds: a.thresholds,
         protectedServices: a.protectedServices,
         autoDisconnect: a.autoDisconnect,
+        autoKillCategories: a.autoKillCategories,
         lastCheckAt: a.lastCheckAt,
         lastCheckStatus: a.lastCheckStatus,
         lastCheckError: a.lastCheckError,
@@ -132,13 +133,24 @@ cloudAccountRouter.get("/:id", requirePermission("cloud_accounts:read"), async (
  */
 cloudAccountRouter.put("/:id", requirePermission("cloud_accounts:write"), async (req, res, next) => {
   try {
-    const { thresholds, protectedServices, autoDisconnect, autoDelete, name, status } = req.body;
+    const { thresholds, protectedServices, autoDisconnect, autoDelete, autoKillCategories, name, status } = req.body;
     const update: any = {};
 
     if (thresholds) update.thresholds = thresholds;
     if (protectedServices) update.protectedServices = protectedServices;
     if (autoDisconnect !== undefined) update.autoDisconnect = autoDisconnect;
     if (autoDelete !== undefined) update.autoDelete = autoDelete;
+    if (Array.isArray(autoKillCategories)) {
+      // Validate every entry is a known MetricCategory; reject otherwise so a
+      // typo doesn't silently disable kills.
+      const allowed = new Set(["cost", "load", "storage", "count", "security"]);
+      for (const cat of autoKillCategories) {
+        if (!allowed.has(cat)) {
+          return res.status(400).json({ error: `Unknown MetricCategory: ${cat}. Allowed: ${[...allowed].join(", ")}` });
+        }
+      }
+      update.autoKillCategories = autoKillCategories;
+    }
     if (name) update.name = name;
     if (status && ["active", "paused"].includes(status)) update.status = status;
 

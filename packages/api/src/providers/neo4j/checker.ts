@@ -187,7 +187,11 @@ export const neo4jProvider: CloudProvider = {
       });
     }
 
-    const violations = evaluateViolations(services, thresholds, totalDailyCost, "neo4jDailyCostUSD", "neo4j-billing");
+    const violations = evaluateViolations(services, thresholds, totalDailyCost, "neo4jDailyCostUSD", "neo4j-billing", {
+      neo4jInstanceCount: "count",
+      neo4jMemoryGB: "storage",
+      neo4jStorageGB: "storage",
+    });
 
     return {
       provider: "neo4j",

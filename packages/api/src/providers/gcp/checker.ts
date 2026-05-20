@@ -18,8 +18,23 @@ import type {
   SecurityEvent,
   KillAction,
   KillContext,
+  MetricCategory,
 } from "../types.js";
 import { killContextToLabels } from "../shared.js";
+
+// `cost` violations auto-disconnect; other categories alert-only by default.
+const GCP_METRIC_CATEGORIES: Record<string, MetricCategory> = {
+  gcpDailyCostUSD: "cost",
+  monthlySpendLimitUSD: "cost",
+  gcpCPU: "count",
+  gcpMinInstances: "count",
+  gcpMaxInstances: "count",
+  computeInstanceCount: "count",
+  computeGPUCount: "count",
+  gkeNodeCount: "count",
+  cloudFunctionInvocationsPerDay: "load",
+  bigqueryBytesPerDay: "load",
+};
 
 // ─── JWT Authentication ─────────────────────────────────────────────────────
 
@@ -608,6 +623,7 @@ export const gcpProvider: CloudProvider = {
             threshold,
             unit: metric.unit,
             severity: metric.value > threshold * 2 ? "critical" : "warning",
+            category: GCP_METRIC_CATEGORIES[metric.thresholdKey],
           });
         }
       }
@@ -625,6 +641,7 @@ export const gcpProvider: CloudProvider = {
         threshold: dailyLimit,
         unit: "USD",
         severity: totalDailyCost > dailyLimit * 2 ? "critical" : "warning",
+        category: "cost",
       });
     }
 
@@ -638,6 +655,7 @@ export const gcpProvider: CloudProvider = {
           threshold: monthlyLimit,
           unit: "USD",
           severity: projectedMonthlyCost > monthlyLimit * 1.5 ? "critical" : "warning",
+          category: "cost",
         });
       }
     }

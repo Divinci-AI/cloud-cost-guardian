@@ -20,8 +20,24 @@ import type {
   SecurityEvent,
   KillAction,
   KillContext,
+  MetricCategory,
 } from "../types.js";
 import { killContextToLabels } from "../shared.js";
+
+// ─── Metric categories for routing kill decisions ─────────────────────────
+// `cost` violations auto-disconnect. Other categories alert-only by default
+// — operators can opt in via account.autoKillCategories.
+const AWS_METRIC_CATEGORIES: Record<string, MetricCategory> = {
+  awsDailyCostUSD: "cost",
+  ec2InstanceCount: "count",
+  ec2GPUInstanceCount: "count",
+  ecsTaskCount: "count",
+  eksNodeCount: "count",
+  rdsInstanceCount: "count",
+  sagemakerEndpointCount: "count",
+  lambdaConcurrentExecutions: "load",
+  lambdaInvocationsPerDay: "load",
+};
 
 // ─── AWS SDK Imports ────────────────────────────────────────────────────────
 
@@ -564,6 +580,7 @@ export const awsProvider: CloudProvider = {
             threshold,
             unit: metric.unit,
             severity: metric.value > threshold * 2 ? "critical" : "warning",
+            category: AWS_METRIC_CATEGORIES[metric.thresholdKey],
           });
         }
       }

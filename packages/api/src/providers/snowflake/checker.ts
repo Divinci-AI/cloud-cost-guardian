@@ -73,7 +73,11 @@ export const snowflakeProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost, "snowflakeDailyCostUSD", "snowflake-billing");
+    const violations = evaluateViolations(services, thresholds, totalCost, "snowflakeDailyCostUSD", "snowflake-billing", {
+      // Snowflake credits ARE the cost metric (priced per-credit), so this
+      // gets the kill semantic that "load" alone wouldn't.
+      snowflakeCreditsPerDay: "cost",
+    });
     return {
       provider: "snowflake", accountId: credential.snowflakeAccountName || "snowflake",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,

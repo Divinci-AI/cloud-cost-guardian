@@ -55,7 +55,9 @@ export const anthropicProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost, "anthropicDailyCostUSD", "anthropic-billing");
+    const violations = evaluateViolations(services, thresholds, totalCost, "anthropicDailyCostUSD", "anthropic-billing", {
+      anthropicTokensPerDay: "load",
+    });
     return {
       provider: "anthropic", accountId: credential.anthropicWorkspaceId || "anthropic",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,

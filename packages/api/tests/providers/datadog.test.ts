@@ -95,7 +95,8 @@ describe("Datadog Provider — checkUsage", () => {
       expect.any(Object),
       expect.any(Number),
       "datadogDailyCostUSD",
-      "datadog-billing"
+      "datadog-billing",
+      expect.any(Object)
     );
   });
 

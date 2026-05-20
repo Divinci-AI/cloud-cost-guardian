@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import type { ProviderId, ThresholdConfig } from "../../providers/types.js";
+import type { ProviderId, ThresholdConfig, MetricCategory } from "../../providers/types.js";
 
 export interface CloudAccountProps {
   guardianAccountId: string;
@@ -12,6 +12,16 @@ export interface CloudAccountProps {
   protectedServices: string[];
   autoDisconnect: boolean;
   autoDelete: boolean;
+  /**
+   * Which violation categories fire an auto-kill action.
+   * Default: ["cost"] — only cost-runaway breaches kill. Operators wanting
+   * kill-on-storage / kill-on-load semantics can extend this list (e.g.
+   * ["cost", "storage"]). An empty array disables auto-kill entirely
+   * (alert-only mode). Defaulting at the schema level means existing
+   * accounts that don't have this field automatically get the safer
+   * cost-only behavior on the next check cycle.
+   */
+  autoKillCategories: MetricCategory[];
   lastCheckAt?: number;
   lastCheckStatus?: "ok" | "violation" | "error";
   lastCheckError?: string;
@@ -37,6 +47,11 @@ const cloudAccountSchema = new Schema<CloudAccountDocument>({
   protectedServices: { type: [String], default: [] },
   autoDisconnect: { type: Boolean, default: true },
   autoDelete: { type: Boolean, default: false },
+  autoKillCategories: {
+    type: [String],
+    enum: ["cost", "load", "storage", "count", "security"],
+    default: ["cost"],
+  },
   lastCheckAt: { type: Number },
   lastCheckStatus: { type: String, enum: ["ok", "violation", "error"] },
   lastCheckError: { type: String },

@@ -53,7 +53,9 @@ export const xaiProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost, "xaiDailyCostUSD", "xai-billing");
+    const violations = evaluateViolations(services, thresholds, totalCost, "xaiDailyCostUSD", "xai-billing", {
+      xaiTokensPerDay: "load",
+    });
     return {
       provider: "xai", accountId: "xai",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,

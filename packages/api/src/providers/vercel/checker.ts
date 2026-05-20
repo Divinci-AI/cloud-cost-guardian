@@ -58,7 +58,10 @@ export const vercelProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost, "vercelDailyCostUSD", "vercel-billing");
+    const violations = evaluateViolations(services, thresholds, totalCost, "vercelDailyCostUSD", "vercel-billing", {
+      vercelBandwidthGBPerDay: "load",
+      vercelFunctionInvocationsPerDay: "load",
+    });
     return {
       provider: "vercel", accountId: teamId || "vercel",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,

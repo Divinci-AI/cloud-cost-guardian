@@ -14,9 +14,24 @@ import type {
   ValidationResult,
   ServiceUsage,
   Violation,
+  MetricCategory,
 } from "../types.js";
 
 const CF_API = "https://api.cloudflare.com/client/v4";
+
+// `cost` violations auto-disconnect; other categories alert-only by default.
+const CLOUDFLARE_METRIC_CATEGORIES: Record<string, MetricCategory> = {
+  doRequestsPerDay: "load",
+  doWalltimeHoursPerDay: "load",
+  workerRequestsPerDay: "load",
+  r2OpsPerDay: "load",
+  d1RowsReadPerDay: "load",
+  d1RowsWrittenPerDay: "load",
+  queueOpsPerDay: "load",
+  streamMinutesPerDay: "load",
+  argoGBPerDay: "load",
+  r2StorageGB: "storage",
+};
 const CF_GRAPHQL = `${CF_API}/graphql`;
 
 async function cfFetch(path: string, token: string, options: RequestInit = {}): Promise<Response> {
@@ -468,6 +483,7 @@ export const cloudflareProvider: CloudProvider = {
             threshold,
             unit: metric.unit,
             severity: metric.value > threshold * 2 ? "critical" : "warning",
+            category: CLOUDFLARE_METRIC_CATEGORIES[metric.thresholdKey],
           });
         }
       }

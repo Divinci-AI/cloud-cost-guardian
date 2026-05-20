@@ -100,7 +100,8 @@ describe("Snowflake Provider — checkUsage", () => {
       expect.any(Object),
       expect.any(Number),
       "snowflakeDailyCostUSD",
-      "snowflake-billing"
+      "snowflake-billing",
+      expect.any(Object)
     );
   });
 

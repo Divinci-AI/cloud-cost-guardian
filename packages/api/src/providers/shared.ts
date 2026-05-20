@@ -4,7 +4,7 @@
  * Common functions used across multiple kill-switch providers.
  */
 
-import type { ServiceUsage, Violation, ThresholdConfig, KillContext, ActionResult } from "./types.js";
+import type { ServiceUsage, Violation, ThresholdConfig, KillContext, ActionResult, MetricCategory } from "./types.js";
 
 /**
  * Sentinel prefix for ActionResult.details. Lets future investigators answer
@@ -55,13 +55,21 @@ function sanitizeLabelValue(value: string): string {
 /**
  * Evaluate threshold violations across services and daily cost.
  * Used by all providers — avoids duplicating this logic per checker.
+ *
+ * `categories` is a per-provider lookup mapping each metric.thresholdKey to
+ * its high-level MetricCategory. The monitoring engine reads this to decide
+ * whether a violation is auto-killable ("cost") or alert-only ("storage" /
+ * "load" / "count" / "security"). Pass an empty map for legacy providers
+ * not yet migrated — their violations land with category=undefined, which
+ * preserves the pre-categorization "kill on any violation" behavior.
  */
 export function evaluateViolations(
   services: ServiceUsage[],
   thresholds: ThresholdConfig,
   totalDailyCost: number,
   dailyCostThresholdKey: string,
-  billingServiceName: string
+  billingServiceName: string,
+  categories: Record<string, MetricCategory> = {},
 ): Violation[] {
   const violations: Violation[] = [];
   for (const service of services) {
@@ -76,12 +84,14 @@ export function evaluateViolations(
           threshold,
           unit: metric.unit,
           severity: metric.value >= threshold * 2 ? "critical" : "warning",
+          category: categories[metric.thresholdKey],
         });
       }
     }
   }
   const costThreshold = thresholds[dailyCostThresholdKey];
   if (costThreshold && totalDailyCost > costThreshold) {
+    // Daily-cost violations are by definition cost-category — no lookup needed.
     violations.push({
       serviceName: billingServiceName,
       metricName: "Daily Cost",
@@ -89,6 +99,7 @@ export function evaluateViolations(
       threshold: costThreshold,
       unit: "USD",
       severity: totalDailyCost >= costThreshold * 2 ? "critical" : "warning",
+      category: "cost",
     });
   }
   return violations;
