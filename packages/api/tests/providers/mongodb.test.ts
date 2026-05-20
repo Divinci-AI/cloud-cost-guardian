@@ -163,6 +163,22 @@ describe("MongoDB Provider", () => {
       expect(result.violations[0].metricName).toBe("Active Connections");
       expect(result.violations[0].severity).toBe("critical"); // 45 > 20*2
     });
+
+    it("tags each violation with the right MetricCategory", async () => {
+      // Force violations on every metric type by setting tiny thresholds
+      const result = await mongodbProvider.checkUsage(credential, {
+        mongodbStorageSizeGB: 0,        // storage
+        mongodbActiveConnections: 0,    // load
+        mongodbOpsPerSec: 0,            // load
+        mongodbCollectionCount: 0,      // count
+        mongodbDailyCostUSD: 0,         // cost (won't trigger for self-hosted but tests the mapping)
+      });
+      const byMetric = Object.fromEntries(result.violations.map(v => [v.metricName, v.category]));
+      expect(byMetric["Storage"]).toBe("storage");
+      expect(byMetric["Active Connections"]).toBe("load");
+      expect(byMetric["Operations/sec"]).toBe("load");
+      expect(byMetric["Collections"]).toBe("count");
+    });
   });
 
   describe("checkUsage — Atlas", () => {

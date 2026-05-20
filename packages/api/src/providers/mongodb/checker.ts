@@ -428,6 +428,21 @@ async function shutdownSelfHosted(creds: MongoDBCreds): Promise<ActionResult> {
   }
 }
 
+// ─── Metric category mapping ──────────────────────────────────────────────
+
+// Maps each mongodb threshold key to its high-level category. The monitoring
+// engine uses this to decide whether a violation is auto-killable. Only
+// `cost` violations trigger auto-disconnect; `storage`/`load`/`count`
+// violations alert the operator but don't fire kill actions.
+const MONGODB_METRIC_CATEGORIES: Record<string, import("../types.js").MetricCategory> = {
+  mongodbDailyCostUSD: "cost",
+  monthlySpendLimitUSD: "cost",
+  mongodbStorageSizeGB: "storage",
+  mongodbActiveConnections: "load",
+  mongodbOpsPerSec: "load",
+  mongodbCollectionCount: "count",
+};
+
 // ─── Provider Export ──────────────────────────────────────────────────────
 
 export const mongodbProvider: CloudProvider = {
@@ -470,6 +485,7 @@ export const mongodbProvider: CloudProvider = {
             threshold,
             unit: metric.unit,
             severity: metric.value > threshold * 2 ? "critical" : "warning",
+            category: MONGODB_METRIC_CATEGORIES[metric.thresholdKey],
           });
         }
       }
@@ -484,6 +500,7 @@ export const mongodbProvider: CloudProvider = {
         threshold: thresholds.mongodbDailyCostUSD,
         unit: "USD",
         severity: totalDailyCost > thresholds.mongodbDailyCostUSD * 2 ? "critical" : "warning",
+        category: "cost",
       });
     }
 
