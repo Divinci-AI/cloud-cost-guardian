@@ -8,6 +8,7 @@
  * Kill actions: kill-connections, isolate, scale-down, pause-cluster, delete.
  */
 
+import { createHash, randomBytes } from "node:crypto";
 import type {
   CloudProvider,
   DecryptedCredential,
@@ -16,6 +17,7 @@ import type {
   ActionResult,
   ValidationResult,
   ServiceUsage,
+  UsageMetric,
   Violation,
   MongoDBSubType,
 } from "../types.js";
@@ -76,18 +78,112 @@ function getMongoDBCredentials(credential: DecryptedCredential): MongoDBCreds {
 
 const ATLAS_BASE = "https://cloud.mongodb.com/api/atlas/v2";
 
-async function atlasRequest(creds: MongoDBCreds, method: string, path: string, body?: any): Promise<any> {
-  const auth = Buffer.from(`${creds.atlasPublicKey}:${creds.atlasPrivateKey}`).toString("base64");
-  const url = `${ATLAS_BASE}/groups/${creds.atlasProjectId}${path}`;
+// Map Atlas tier name → numeric value for the Tier metric.
+// Atlas tiers follow `M<n>` or `N<n>` (N = NVMe variant of M<n>):
+// M0/M2/M5 = shared, M10/M20/M30/M40/M50/M60/M80/M140/M200/M300/M400/M700.
+// Returns 0 for unrecognized values (e.g. SERVERLESS, REPLICASET).
+// 0 lets downstream code distinguish "categorical tier I can't compare numerically"
+// from a normal numeric value; the human-readable name still lives in the unit field.
+export function parseTierNumeric(tierName: string | undefined): number {
+  if (!tierName) return 0;
+  const match = tierName.match(/^[MN](\d+)$/i);
+  return match ? parseInt(match[1], 10) : 0;
+}
 
+// MongoDB Atlas REST API requires HTTP Digest auth, not Basic.
+// Basic returns 401 "You are not authorized for this resource."
+// We hand-roll the digest handshake here so we don't take an extra
+// dependency. RFC 7616 §3.4; Atlas uses qop=auth with MD5.
+function parseDigestChallenge(headerValue: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  // header looks like: Digest realm="MMS Public API", nonce="abc", qop="auth", algorithm=MD5, opaque="xyz"
+  const stripped = headerValue.replace(/^Digest\s+/i, "");
+  for (const part of stripped.split(/,\s*(?=[A-Za-z][A-Za-z0-9_-]*=)/)) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    const k = part.slice(0, eq).trim();
+    let v = part.slice(eq + 1).trim();
+    if (v.startsWith("\"") && v.endsWith("\"")) v = v.slice(1, -1);
+    out[k.toLowerCase()] = v;
+  }
+  return out;
+}
+
+function md5(s: string): string {
+  return createHash("md5").update(s).digest("hex");
+}
+
+function buildDigestAuthorization(
+  username: string,
+  password: string,
+  method: string,
+  uri: string,
+  challenge: Record<string, string>,
+): string {
+  const realm = challenge.realm || "";
+  const nonce = challenge.nonce || "";
+  const qop = challenge.qop || "auth";
+  const opaque = challenge.opaque;
+  const algorithm = (challenge.algorithm || "MD5").toUpperCase();
+  if (!algorithm.startsWith("MD5")) {
+    throw new Error(`Atlas Digest algorithm not supported: ${algorithm}`);
+  }
+  const nc = "00000001";
+  const cnonce = randomBytes(8).toString("hex");
+  const ha1 = md5(`${username}:${realm}:${password}`);
+  const ha2 = md5(`${method}:${uri}`);
+  const response = md5(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`);
+
+  const parts = [
+    `username="${username}"`,
+    `realm="${realm}"`,
+    `nonce="${nonce}"`,
+    `uri="${uri}"`,
+    `qop=${qop}`,
+    `nc=${nc}`,
+    `cnonce="${cnonce}"`,
+    `response="${response}"`,
+    `algorithm=${algorithm}`,
+  ];
+  if (opaque) parts.push(`opaque="${opaque}"`);
+  return `Digest ${parts.join(", ")}`;
+}
+
+async function atlasRequest(creds: MongoDBCreds, method: string, path: string, body?: any): Promise<any> {
+  const url = `${ATLAS_BASE}/groups/${creds.atlasProjectId}${path}`;
+  const uriPath = new URL(url).pathname + new URL(url).search;
+  const accept = "application/vnd.atlas.2023-11-15+json";
+  const bodyStr = body ? JSON.stringify(body) : undefined;
+  const baseHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": accept,
+  };
+
+  // Round 1: unauthenticated request to extract the WWW-Authenticate challenge.
+  const challengeResp = await fetch(url, { method, headers: baseHeaders, body: bodyStr });
+  if (challengeResp.ok) {
+    // Some endpoints don't require auth — return immediately if 200.
+    return challengeResp.json();
+  }
+  if (challengeResp.status !== 401) {
+    const text = await challengeResp.text();
+    console.error(`[guardian] Atlas API error: ${challengeResp.status}`, text.substring(0, 500));
+    throw new Error(`Atlas API error: ${challengeResp.status}`);
+  }
+  const wwwAuth = challengeResp.headers.get("www-authenticate");
+  if (!wwwAuth) {
+    throw new Error("Atlas API returned 401 without WWW-Authenticate header");
+  }
+  const challenge = parseDigestChallenge(wwwAuth);
+
+  // Round 2: retry with computed Digest response.
+  const authHeader = buildDigestAuthorization(
+    creds.atlasPublicKey!, creds.atlasPrivateKey!, method, uriPath, challenge,
+  );
   const resp = await fetch(url, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Basic ${auth}`,
-      "Accept": "application/vnd.atlas.2023-11-15+json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { ...baseHeaders, "Authorization": authHeader },
+    body: bodyStr,
   });
 
   if (!resp.ok) {
@@ -158,15 +254,32 @@ async function checkAtlas(creds: MongoDBCreds): Promise<ServiceUsage[]> {
     // Billing API may not be available
   }
 
+  const metrics: UsageMetric[] = [
+    { name: "Storage", value: storageGB, unit: "GB", thresholdKey: "mongodbStorageSizeGB" },
+    { name: "Active Connections", value: connections, unit: "connections", thresholdKey: "mongodbActiveConnections" },
+    { name: "Operations/sec", value: Math.round(opsPerSec), unit: "ops/sec", thresholdKey: "mongodbOpsPerSec" },
+  ];
+
+  // Tier metric is meaningful only when the cluster is running. When paused
+  // there's no active compute, so omit the metric rather than show a
+  // misleading `value: 0, unit: "M30 (PAUSED)"` (the old shape stuffed a
+  // categorical string into the unit field and made the numeric value lie).
+  // The `paused` flag at service level already conveys the paused state for
+  // any downstream consumer that needs it.
+  if (!paused) {
+    metrics.push({
+      name: "Tier",
+      value: parseTierNumeric(tier),
+      unit: tier,
+      thresholdKey: "",
+    });
+  }
+
   return [{
     serviceName: `cluster:${creds.clusterName}`,
-    metrics: [
-      { name: "Storage", value: storageGB, unit: "GB", thresholdKey: "mongodbStorageSizeGB" },
-      { name: "Active Connections", value: connections, unit: "connections", thresholdKey: "mongodbActiveConnections" },
-      { name: "Operations/sec", value: Math.round(opsPerSec), unit: "ops/sec", thresholdKey: "mongodbOpsPerSec" },
-      { name: "Tier", value: 0, unit: `${tier}${paused ? " (PAUSED)" : ""}`, thresholdKey: "" },
-    ],
-    estimatedDailyCostUSD: dailyCost,
+    metrics,
+    estimatedDailyCostUSD: paused ? 0 : dailyCost,
+    paused,
   }];
 }
 
@@ -315,6 +428,21 @@ async function shutdownSelfHosted(creds: MongoDBCreds): Promise<ActionResult> {
   }
 }
 
+// ─── Metric category mapping ──────────────────────────────────────────────
+
+// Maps each mongodb threshold key to its high-level category. The monitoring
+// engine uses this to decide whether a violation is auto-killable. Only
+// `cost` violations trigger auto-disconnect; `storage`/`load`/`count`
+// violations alert the operator but don't fire kill actions.
+const MONGODB_METRIC_CATEGORIES: Record<string, import("../types.js").MetricCategory> = {
+  mongodbDailyCostUSD: "cost",
+  monthlySpendLimitUSD: "cost",
+  mongodbStorageSizeGB: "storage",
+  mongodbActiveConnections: "load",
+  mongodbOpsPerSec: "load",
+  mongodbCollectionCount: "count",
+};
+
 // ─── Provider Export ──────────────────────────────────────────────────────
 
 export const mongodbProvider: CloudProvider = {
@@ -342,6 +470,10 @@ export const mongodbProvider: CloudProvider = {
 
     for (const service of services) {
       totalDailyCost += service.estimatedDailyCostUSD;
+      // Skip per-metric threshold violations for paused services — no cost or
+      // harm to mitigate and a kill action would be wasted noise. We still
+      // surface the service in `services` so dashboards show its state.
+      if (service.paused) continue;
       for (const metric of service.metrics) {
         if (!metric.thresholdKey) continue;
         const threshold = thresholds[metric.thresholdKey];
@@ -353,6 +485,7 @@ export const mongodbProvider: CloudProvider = {
             threshold,
             unit: metric.unit,
             severity: metric.value > threshold * 2 ? "critical" : "warning",
+            category: MONGODB_METRIC_CATEGORIES[metric.thresholdKey],
           });
         }
       }
@@ -367,6 +500,7 @@ export const mongodbProvider: CloudProvider = {
         threshold: thresholds.mongodbDailyCostUSD,
         unit: "USD",
         severity: totalDailyCost > thresholds.mongodbDailyCostUSD * 2 ? "critical" : "warning",
+        category: "cost",
       });
     }
 
@@ -387,7 +521,18 @@ export const mongodbProvider: CloudProvider = {
     switch (action) {
       case "kill-connections": {
         if (creds.subType === "self-hosted") return killConnectionsSelfHosted(creds);
-        return { success: false, action, serviceName, details: "Atlas does not support direct connection killing. Use isolate or pause-cluster instead." };
+        // Atlas managed clusters expose no direct connection-killing API.
+        // The closest "stop-the-bleeding" semantic that Atlas DOES support is
+        // pause-cluster — it halts all cluster activity (and reduces billing
+        // to the paused rate) without removing IP allowlist entries the way
+        // `isolate` would (which can break unrelated legitimate clients).
+        // The returned ActionResult reports the actual action performed so
+        // the kill audit log reflects what really happened.
+        const paused = await pauseAtlas(creds);
+        return {
+          ...paused,
+          details: `kill-connections unavailable on Atlas managed clusters — fell through to pause-cluster: ${paused.details}`,
+        };
       }
       case "isolate": {
         if (creds.subType === "atlas") return isolateAtlas(creds);
@@ -481,13 +626,19 @@ export const mongodbProvider: CloudProvider = {
   },
 
   getDefaultThresholds(): ThresholdConfig {
+    // Defaults tuned for typical production clusters. The previous values
+    // (10GB storage, 200 connections, 5000 ops/sec, 30 USD/day) fired
+    // critical violations on every realistic Atlas tier — a 33GB Dedicated
+    // M30 immediately triggered a storage kill on onboarding. New values
+    // accommodate small-prod through M40 territory; users with much
+    // larger workloads should still raise these explicitly.
     return {
-      mongodbStorageSizeGB: 10,
-      mongodbActiveConnections: 200,
-      mongodbOpsPerSec: 5000,
-      mongodbCollectionCount: 500,
-      mongodbDailyCostUSD: 30,
-      monthlySpendLimitUSD: 900,
+      mongodbStorageSizeGB: 500,
+      mongodbActiveConnections: 1000,
+      mongodbOpsPerSec: 10000,
+      mongodbCollectionCount: 1000,
+      mongodbDailyCostUSD: 100,
+      monthlySpendLimitUSD: 3000,
     };
   },
 };

@@ -18,6 +18,7 @@ import { databaseRouter } from "./routes/database/index.js";
 import { billingRouter } from "./routes/billing/index.js";
 import { teamRouter } from "./routes/team/index.js";
 import { authRouter } from "./routes/auth/index.js";
+import { cliAuthRouter } from "./routes/cli-auth/index.js";
 import { GuardianAccountModel } from "./models/guardian-account/schema.js";
 import { requireAuth, resolveOrg } from "./middleware/auth.js";
 import { requirePermission } from "./middleware/permissions.js";
@@ -98,8 +99,17 @@ export function createApp() {
     // Per-user key generator: uses authenticated userId if available, falls back to IP
     const perUserKey = (req: any) => req.userId || req.ip;
     const rlOpts = { validate: { trustProxy: false, xForwardedForHeader: false } };
-    // General: 100 requests per 15 minutes per IP
-    app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false, ...rlOpts }));
+    // General: 100 requests per 15 minutes per IP — but skip /auth/cli/poll
+    // which legitimately polls every 2s for up to 10 min (=300 polls per flow).
+    // That path has its own narrower per-IP limit below.
+    app.use(rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 100,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => req.path.startsWith("/auth/cli/poll"),
+      ...rlOpts,
+    }));
     // Strict per-user limits on sensitive endpoints
     app.use("/providers", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: perUserKey, ...rlOpts }));
     app.use("/database/kill", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: perUserKey, ...rlOpts }));
@@ -109,6 +119,13 @@ export function createApp() {
     app.use("/agent/report", rateLimit({ windowMs: 15 * 60 * 1000, max: 30, ...rlOpts }));
     // /check triggers external cloud API calls — tight per-user limit to prevent amplification
     app.use("/check", rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyGenerator: perUserKey, ...rlOpts }));
+    // CLI device-flow code creation — anonymous endpoint, IP-keyed
+    app.use("/auth/cli/start", rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, ...rlOpts }));
+    // CLI device-flow polling — anonymous, IP-keyed. The CLI polls every 2s
+    // for up to 10 min so legitimate use is ~300 polls per flow. 500 per
+    // 15min = ~33/min ≈ 1 every 1.8s caps brute-force code-guessing well
+    // below what's needed to enumerate the 31^8 ≈ 10^12 code space.
+    app.use("/auth/cli/poll", rateLimit({ windowMs: 15 * 60 * 1000, max: 500, standardHeaders: true, legacyHeaders: false, ...rlOpts }));
   }
 
   // Skip morgan in test
@@ -155,6 +172,11 @@ export function createApp() {
       ],
     });
   });
+
+  // CLI device-flow auth — must be mounted BEFORE the /auth authStack below.
+  // /start and /poll are public (CLI has no creds yet); /approve and /deny
+  // apply their own auth middleware at the route level.
+  app.use("/auth/cli", cliAuthRouter);
 
   // Auth middleware for protected routes
   const authStack = [requireAuth, resolveOrg];

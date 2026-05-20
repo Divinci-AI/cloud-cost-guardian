@@ -28,6 +28,7 @@ import { OnboardingPage } from "./pages/Onboarding/OnboardingPage";
 import { SettingsPage } from "./pages/Settings/SettingsPage";
 import { AcceptInvitePage } from "./pages/Team/AcceptInvitePage";
 import { ActivityPage } from "./pages/Activity/ActivityPage";
+import { CliAuthPage } from "./pages/CliAuth/CliAuthPage";
 
 function AuthenticatedApp() {
   const { getToken, isLoaded } = useAuth();
@@ -65,6 +66,12 @@ function AuthenticatedApp() {
         <p>Loading...</p>
       </div>
     );
+  }
+
+  // CLI device-flow auth: full-screen, no nav, bypasses onboarding gate so
+  // first-time CLI users can authorize without finishing the wizard first.
+  if (location.pathname === "/cli-auth") {
+    return <CliAuthPage />;
   }
 
   // Show onboarding wizard for new users (full-screen, no nav)

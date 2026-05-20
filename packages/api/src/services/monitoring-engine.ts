@@ -410,7 +410,29 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
           }
         };
 
-        if (cloudAccount.autoDelete && violation.severity === "critical") {
+        // Gate auto-kill on the violation's category.
+        // - "cost" (or undefined for not-yet-migrated providers) → kill IS
+        //    the cost-runaway response, fire the default kill action.
+        // - "load" / "storage" / "count" / "security" → ALERT-ONLY by default.
+        //    These violations still flow to the alert pipeline (PagerDuty,
+        //    email, etc.) below — the engine just doesn't auto-kill. That
+        //    decision belongs to an operator-configured rule. Prevents the
+        //    bug where e.g. a storage-threshold breach on a paused cluster
+        //    auto-fires a kill that doesn't make sense for the metric type.
+        const isAutoKillable = violation.category === undefined || violation.category === "cost";
+
+        if (!isAutoKillable) {
+          result.actionsTaken.push(`ALERT_ONLY: ${violation.serviceName} ${violation.metricName} (category=${violation.category})`);
+          await recordRuleEvent({
+            kind: "action_skipped",
+            guardianAccountId: cloudAccount.guardianAccountId,
+            cloudAccountId: cloudAccount._id.toString(),
+            actionType: "threshold-kill",
+            target: violation.serviceName,
+            reason: "non-cost-category",
+            details: `Violation category=${violation.category} — alert-only, no kill action`,
+          });
+        } else if (cloudAccount.autoDelete && violation.severity === "critical") {
           await fireThresholdKill("delete");
         } else if (cloudAccount.autoDisconnect) {
           await fireThresholdKill(getDefaultKillAction(cloudAccount.provider as ProviderId));

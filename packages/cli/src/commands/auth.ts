@@ -1,9 +1,11 @@
 import { Command } from "commander";
 import { KillSwitchClient } from "@kill-switch/sdk";
 import { saveConfig, deleteConfig, resolveApiKey, resolveApiUrl } from "../config.js";
-import { outputJson, formatObject, outputError, handleError, spinner, success } from "../output.js";
+import { outputJson, formatObject, outputError, handleError, spinner, success, fail } from "../output.js";
 import { ask } from "../prompts.js";
 import { execFile } from "child_process";
+import { CLI_VERSION } from "../version.js";
+import { runDeviceFlow, defaultDeviceFlowDeps } from "../device-flow.js";
 import type { ClientFactory } from "../types.js";
 
 function openBrowser(url: string): void {
@@ -11,13 +13,26 @@ function openBrowser(url: string): void {
   execFile(cmd, [url], () => {});
 }
 
+// Wires the device-flow helper to this command's spinner + console output.
+// Kept here (not in device-flow.ts) so the helper stays free of CLI-specific
+// presentation concerns and remains pure for unit testing.
+function deviceFlowWithSpinner() {
+  let sp: ReturnType<typeof spinner> | null = null;
+  return defaultDeviceFlowDeps({
+    log: (line) => console.log(line),
+    spinnerStart: (label) => { sp = spinner(label).start(); },
+    spinnerStop: () => { sp?.stop(); sp = null; },
+  });
+}
+
 export function registerAuthCommands(program: Command, createClient: ClientFactory) {
   const auth = program.command("auth").description("Manage authentication");
 
   auth
     .command("setup")
-    .description("Create an API key (opens browser to sign in, then paste the key)")
-    .action(async () => {
+    .description("Authenticate via your browser (opens a one-time approval page)")
+    .option("--manual", "Manual flow: open Settings page, paste the key yourself")
+    .action(async (opts) => {
       const json = program.opts().json;
       const existing = resolveApiKey();
 
@@ -27,7 +42,7 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
           const result = await client.account.me();
           if (!json) {
             console.log(`Already authenticated as ${result.name || result._id}.`);
-            const proceed = await ask("Create a new API key anyway? (y/N): ");
+            const proceed = await ask("Re-authenticate anyway? (y/N): ");
             if (proceed.toLowerCase() !== "y") return;
           }
         } catch {
@@ -35,59 +50,74 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
         }
       }
 
-      if (!json) {
-        console.log("\n\u26a1 Kill Switch CLI Setup\n");
-        console.log("Opening app.kill-switch.net in your browser...");
-        console.log("1. Sign in (or create an account)");
-        console.log("2. Go to Settings > API Keys");
-        console.log("3. Click 'Create API Key'");
-        console.log("4. Copy the key and paste it below\n");
+      const apiUrl = resolveApiUrl();
+
+      // Manual flow \u2014 original copy/paste path for offline / scripted setups
+      if (opts.manual) {
+        if (!json) {
+          console.log("\n\u26a1 Kill Switch CLI Setup (manual)\n");
+          console.log("1. Sign in at app.kill-switch.net");
+          console.log("2. Go to Settings > API Keys");
+          console.log("3. Click 'Create API Key'");
+          console.log("4. Copy the key and paste it below\n");
+        }
+        openBrowser("https://app.kill-switch.net/settings");
+        const key = await ask("Paste your API key (ks_live_...): ");
+        if (!key.startsWith("ks_")) {
+          outputError("API key must start with 'ks_'.", json);
+          process.exit(1);
+        }
+        try {
+          const client = new KillSwitchClient({ apiKey: key, baseUrl: apiUrl });
+          const result = await client.account.me();
+          saveConfig({ apiKey: key, apiUrl });
+          if (json) outputJson({ authenticated: true, account: result.name || result._id });
+          else {
+            success(`Authenticated as ${result.name || result._id}`);
+            console.log("API key saved to ~/.kill-switch/config.json");
+          }
+        } catch (err) { handleError(err, json); }
+        return;
       }
 
-      openBrowser("https://app.kill-switch.net/settings");
-
-      const key = await ask("Paste your API key (ks_live_...): ");
-
-      if (!key.startsWith("ks_")) {
-        outputError("API key must start with 'ks_'. Try again.", json);
-        process.exit(1);
-      }
-
+      // Device flow \u2014 default path
       try {
-        // Validate with a fresh client using the provided key
-        const client = new KillSwitchClient({
-          apiKey: key,
-          baseUrl: resolveApiUrl(),
-        });
+        const apiKey = await runDeviceFlow(apiUrl, CLI_VERSION, json, deviceFlowWithSpinner());
+        const client = new KillSwitchClient({ apiKey, baseUrl: apiUrl });
         const result = await client.account.me();
-        saveConfig({ apiKey: key, apiUrl: resolveApiUrl() });
+        saveConfig({ apiKey, apiUrl });
 
         if (json) {
           outputJson({ authenticated: true, account: result.name || result._id });
         } else {
           success(`Authenticated as ${result.name || result._id}`);
           console.log("API key saved to ~/.kill-switch/config.json\n");
-          console.log("Next: ks onboard --provider cloudflare --help-provider cloudflare");
+          console.log("Next: ks onboard --help-provider mongodb");
         }
-      } catch (err) {
-        handleError(err, json);
-      }
+      } catch (err) { handleError(err, json); }
     });
 
   auth
     .command("login")
-    .description("Authenticate with an existing API key")
-    .option("--api-key <key>", "Personal API key (starts with ks_)")
+    .description("Authenticate (browser device flow by default, or pass --api-key for direct)")
+    .option("--api-key <key>", "Personal API key (starts with ks_) — skips browser flow")
     .action(async (opts) => {
       const json = program.opts().json;
+      const apiUrl = resolveApiUrl();
       let key = opts.apiKey;
 
+      // Device flow when no --api-key. JSON mode requires --api-key (no browser).
       if (!key) {
         if (json) {
           outputError("--api-key is required in JSON mode", json);
           process.exit(1);
         }
-        key = await ask("API key (ks_live_...): ");
+        try {
+          key = await runDeviceFlow(apiUrl, CLI_VERSION, json, deviceFlowWithSpinner());
+        } catch (err) {
+          handleError(err, json);
+          return;
+        }
       }
 
       if (!key.startsWith("ks_")) {
@@ -99,11 +129,11 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
       try {
         const client = new KillSwitchClient({
           apiKey: key,
-          baseUrl: resolveApiUrl(),
+          baseUrl: apiUrl,
         });
         const result = await client.account.me();
         s?.stop();
-        saveConfig({ apiKey: key, apiUrl: resolveApiUrl() });
+        saveConfig({ apiKey: key, apiUrl });
 
         if (json) {
           outputJson({ authenticated: true, account: result.name || result._id });

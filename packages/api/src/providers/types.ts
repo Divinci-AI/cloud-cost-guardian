@@ -24,6 +24,13 @@ export interface ServiceUsage {
   serviceName: string;
   metrics: UsageMetric[];
   estimatedDailyCostUSD: number;
+  /**
+   * Optional: when true, the service is paused/stopped and not actively running.
+   * The monitoring engine should skip per-metric threshold violations for
+   * paused services — there's no cost or harm to mitigate, and a kill action
+   * would be pointless noise.
+   */
+  paused?: boolean;
 }
 
 export interface UsageResult {
@@ -36,6 +43,27 @@ export interface UsageResult {
   securityEvents: SecurityEvent[];
 }
 
+/**
+ * High-level kind of metric, used by the monitoring engine to decide whether
+ * a violation is auto-killable (e.g. `cost` runaway) or alert-only (e.g.
+ * `storage` growth — alert the operator but don't kill the resource).
+ *
+ * - `cost`     — dollars/credits spent. Auto-disconnect on breach IS the
+ *                "cost-runaway" semantic. Examples: awsDailyCostUSD,
+ *                mongodbDailyCostUSD, snowflakeCreditsPerDay.
+ * - `load`     — request/op rate. Indicates traffic intensity. Examples:
+ *                workerRequestsPerDay, mongodbOpsPerSec, lambdaConcurrent.
+ * - `storage`  — data-at-rest size. Examples: r2StorageGB, mongodbStorageSizeGB.
+ * - `count`    — provisioned-resource count. Examples: ec2InstanceCount.
+ * - `security` — security-event count (brute-force, exfiltration).
+ *
+ * Backwards-compat: when undefined, the engine treats the violation as the
+ * legacy "any violation = killable" semantic (i.e. cost-class). This keeps
+ * existing provider behavior unchanged. New / migrated providers should
+ * always set a category.
+ */
+export type MetricCategory = "cost" | "load" | "storage" | "count" | "security";
+
 export interface Violation {
   serviceName: string;
   metricName: string;
@@ -43,6 +71,8 @@ export interface Violation {
   threshold: number;
   unit: string;
   severity: "warning" | "critical";
+  /** See {@link MetricCategory}. Undefined → legacy "kill on any" behavior. */
+  category?: MetricCategory;
 }
 
 // ─── Security Monitoring ────────────────────────────────────────────────────

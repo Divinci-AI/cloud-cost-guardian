@@ -31,13 +31,14 @@ import { registerWatchCommand } from "./commands/watch.js";
 import { registerProviderCommands } from "./commands/providers.js";
 
 import type { ClientFactory } from "./types.js";
+import { CLI_VERSION } from "./version.js";
 
 const program = new Command();
 
 program
   .name("kill-switch")
   .description("Monitor cloud spending, kill runaway services, protect your infrastructure")
-  .version("0.1.0")
+  .version(CLI_VERSION)
   .option("--json", "Output as JSON (for automation/scripting)")
   .option("--api-key <key>", "API key (overrides config and env)")
   .option("--api-url <url>", "API URL (overrides config and env)")
