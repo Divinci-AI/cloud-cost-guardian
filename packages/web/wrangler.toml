@@ -4,6 +4,7 @@ main = "src/worker.ts"
 
 # Serve built React SPA from ./dist
 [assets]
+binding = "ASSETS"
 directory = "./dist"
 not_found_handling = "single-page-application"
 
