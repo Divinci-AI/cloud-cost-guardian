@@ -39,6 +39,23 @@ function canManageApiKeys(role: string): boolean {
   return role === "owner" || role === "admin" || role === "member";
 }
 
+// localStorage key for the last-chosen org on this page. Per-browser, not
+// per-user (Clerk session changes don't clear it), but that's fine since the
+// dropdown only shows orgs the current user has access to anyway — a stale
+// id that the user no longer has access to just falls through to the next
+// default in the resolver below.
+const LAST_ORG_LS_KEY = "kill-switch:cli-auth:lastOrgId";
+
+function readLastOrgFromStorage(): string | null {
+  try { return localStorage.getItem(LAST_ORG_LS_KEY); }
+  catch { return null; }
+}
+
+function saveLastOrgToStorage(orgId: string): void {
+  try { localStorage.setItem(LAST_ORG_LS_KEY, orgId); }
+  catch { /* private-browsing or quota-exceeded; non-critical */ }
+}
+
 export function CliAuthPage() {
   const { user } = useUser();
   const [params] = useSearchParams();
@@ -54,10 +71,23 @@ export function CliAuthPage() {
     if (!code) return;
     setState("loading-orgs");
     api.listOrgs()
-      .then((res: { orgs: Org[] }) => {
+      .then((res: { orgs: Org[]; activeOrgId?: string }) => {
         const eligible = (res.orgs || []).filter(o => canManageApiKeys(o.role));
         setOrgs(eligible);
-        if (eligible.length > 0) setSelectedOrgId(eligible[0].id);
+
+        // Default resolution order, most-specific to least:
+        //   1. Last-chosen org from localStorage (this page only) — preserves
+        //      the user's previous decision so a re-auth doesn't ask again.
+        //   2. Server's activeOrgId from UserProfile — the user's "primary"
+        //      org as set elsewhere in the dashboard.
+        //   3. First eligible org — last-resort fallback.
+        // Any stage that points at an id not in `eligible` falls through.
+        const lastSaved = readLastOrgFromStorage();
+        const fromStorage = lastSaved && eligible.find(o => o.id === lastSaved) ? lastSaved : null;
+        const fromActive = res.activeOrgId && eligible.find(o => o.id === res.activeOrgId) ? res.activeOrgId : null;
+        const defaultId = fromStorage || fromActive || eligible[0]?.id;
+        if (defaultId) setSelectedOrgId(defaultId);
+
         setState("idle");
       })
       .catch((err: Error) => {
@@ -80,6 +110,9 @@ export function CliAuthPage() {
     setError(null);
     try {
       await api.cliApprove(code, selectedOrgId, keyName.trim() || defaultKeyName);
+      // Persist the chosen org so the next CLI auth from this browser
+      // defaults to the same org without asking again.
+      saveLastOrgToStorage(selectedOrgId);
       setState("approved");
     } catch (err: any) {
       setError(err.message || "Approval failed");
