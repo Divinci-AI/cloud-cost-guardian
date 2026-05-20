@@ -8,6 +8,7 @@
  * Kill actions: kill-connections, isolate, scale-down, pause-cluster, delete.
  */
 
+import { createHash, randomBytes } from "node:crypto";
 import type {
   CloudProvider,
   DecryptedCredential,
@@ -76,18 +77,100 @@ function getMongoDBCredentials(credential: DecryptedCredential): MongoDBCreds {
 
 const ATLAS_BASE = "https://cloud.mongodb.com/api/atlas/v2";
 
-async function atlasRequest(creds: MongoDBCreds, method: string, path: string, body?: any): Promise<any> {
-  const auth = Buffer.from(`${creds.atlasPublicKey}:${creds.atlasPrivateKey}`).toString("base64");
-  const url = `${ATLAS_BASE}/groups/${creds.atlasProjectId}${path}`;
+// MongoDB Atlas REST API requires HTTP Digest auth, not Basic.
+// Basic returns 401 "You are not authorized for this resource."
+// We hand-roll the digest handshake here so we don't take an extra
+// dependency. RFC 7616 §3.4; Atlas uses qop=auth with MD5.
+function parseDigestChallenge(headerValue: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  // header looks like: Digest realm="MMS Public API", nonce="abc", qop="auth", algorithm=MD5, opaque="xyz"
+  const stripped = headerValue.replace(/^Digest\s+/i, "");
+  for (const part of stripped.split(/,\s*(?=[A-Za-z][A-Za-z0-9_-]*=)/)) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    const k = part.slice(0, eq).trim();
+    let v = part.slice(eq + 1).trim();
+    if (v.startsWith("\"") && v.endsWith("\"")) v = v.slice(1, -1);
+    out[k.toLowerCase()] = v;
+  }
+  return out;
+}
 
+function md5(s: string): string {
+  return createHash("md5").update(s).digest("hex");
+}
+
+function buildDigestAuthorization(
+  username: string,
+  password: string,
+  method: string,
+  uri: string,
+  challenge: Record<string, string>,
+): string {
+  const realm = challenge.realm || "";
+  const nonce = challenge.nonce || "";
+  const qop = challenge.qop || "auth";
+  const opaque = challenge.opaque;
+  const algorithm = (challenge.algorithm || "MD5").toUpperCase();
+  if (!algorithm.startsWith("MD5")) {
+    throw new Error(`Atlas Digest algorithm not supported: ${algorithm}`);
+  }
+  const nc = "00000001";
+  const cnonce = randomBytes(8).toString("hex");
+  const ha1 = md5(`${username}:${realm}:${password}`);
+  const ha2 = md5(`${method}:${uri}`);
+  const response = md5(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`);
+
+  const parts = [
+    `username="${username}"`,
+    `realm="${realm}"`,
+    `nonce="${nonce}"`,
+    `uri="${uri}"`,
+    `qop=${qop}`,
+    `nc=${nc}`,
+    `cnonce="${cnonce}"`,
+    `response="${response}"`,
+    `algorithm=${algorithm}`,
+  ];
+  if (opaque) parts.push(`opaque="${opaque}"`);
+  return `Digest ${parts.join(", ")}`;
+}
+
+async function atlasRequest(creds: MongoDBCreds, method: string, path: string, body?: any): Promise<any> {
+  const url = `${ATLAS_BASE}/groups/${creds.atlasProjectId}${path}`;
+  const uriPath = new URL(url).pathname + new URL(url).search;
+  const accept = "application/vnd.atlas.2023-11-15+json";
+  const bodyStr = body ? JSON.stringify(body) : undefined;
+  const baseHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": accept,
+  };
+
+  // Round 1: unauthenticated request to extract the WWW-Authenticate challenge.
+  const challengeResp = await fetch(url, { method, headers: baseHeaders, body: bodyStr });
+  if (challengeResp.ok) {
+    // Some endpoints don't require auth — return immediately if 200.
+    return challengeResp.json();
+  }
+  if (challengeResp.status !== 401) {
+    const text = await challengeResp.text();
+    console.error(`[guardian] Atlas API error: ${challengeResp.status}`, text.substring(0, 500));
+    throw new Error(`Atlas API error: ${challengeResp.status}`);
+  }
+  const wwwAuth = challengeResp.headers.get("www-authenticate");
+  if (!wwwAuth) {
+    throw new Error("Atlas API returned 401 without WWW-Authenticate header");
+  }
+  const challenge = parseDigestChallenge(wwwAuth);
+
+  // Round 2: retry with computed Digest response.
+  const authHeader = buildDigestAuthorization(
+    creds.atlasPublicKey!, creds.atlasPrivateKey!, method, uriPath, challenge,
+  );
   const resp = await fetch(url, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Basic ${auth}`,
-      "Accept": "application/vnd.atlas.2023-11-15+json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { ...baseHeaders, "Authorization": authHeader },
+    body: bodyStr,
   });
 
   if (!resp.ok) {
