@@ -249,7 +249,8 @@ async function checkAtlas(creds: MongoDBCreds): Promise<ServiceUsage[]> {
       { name: "Operations/sec", value: Math.round(opsPerSec), unit: "ops/sec", thresholdKey: "mongodbOpsPerSec" },
       { name: "Tier", value: 0, unit: `${tier}${paused ? " (PAUSED)" : ""}`, thresholdKey: "" },
     ],
-    estimatedDailyCostUSD: dailyCost,
+    estimatedDailyCostUSD: paused ? 0 : dailyCost,
+    paused,
   }];
 }
 
@@ -425,6 +426,10 @@ export const mongodbProvider: CloudProvider = {
 
     for (const service of services) {
       totalDailyCost += service.estimatedDailyCostUSD;
+      // Skip per-metric threshold violations for paused services — no cost or
+      // harm to mitigate and a kill action would be wasted noise. We still
+      // surface the service in `services` so dashboards show its state.
+      if (service.paused) continue;
       for (const metric of service.metrics) {
         if (!metric.thresholdKey) continue;
         const threshold = thresholds[metric.thresholdKey];
@@ -470,7 +475,18 @@ export const mongodbProvider: CloudProvider = {
     switch (action) {
       case "kill-connections": {
         if (creds.subType === "self-hosted") return killConnectionsSelfHosted(creds);
-        return { success: false, action, serviceName, details: "Atlas does not support direct connection killing. Use isolate or pause-cluster instead." };
+        // Atlas managed clusters expose no direct connection-killing API.
+        // The closest "stop-the-bleeding" semantic that Atlas DOES support is
+        // pause-cluster — it halts all cluster activity (and reduces billing
+        // to the paused rate) without removing IP allowlist entries the way
+        // `isolate` would (which can break unrelated legitimate clients).
+        // The returned ActionResult reports the actual action performed so
+        // the kill audit log reflects what really happened.
+        const paused = await pauseAtlas(creds);
+        return {
+          ...paused,
+          details: `kill-connections unavailable on Atlas managed clusters — fell through to pause-cluster: ${paused.details}`,
+        };
       }
       case "isolate": {
         if (creds.subType === "atlas") return isolateAtlas(creds);
@@ -564,13 +580,19 @@ export const mongodbProvider: CloudProvider = {
   },
 
   getDefaultThresholds(): ThresholdConfig {
+    // Defaults tuned for typical production clusters. The previous values
+    // (10GB storage, 200 connections, 5000 ops/sec, 30 USD/day) fired
+    // critical violations on every realistic Atlas tier — a 33GB Dedicated
+    // M30 immediately triggered a storage kill on onboarding. New values
+    // accommodate small-prod through M40 territory; users with much
+    // larger workloads should still raise these explicitly.
     return {
-      mongodbStorageSizeGB: 10,
-      mongodbActiveConnections: 200,
-      mongodbOpsPerSec: 5000,
-      mongodbCollectionCount: 500,
-      mongodbDailyCostUSD: 30,
-      monthlySpendLimitUSD: 900,
+      mongodbStorageSizeGB: 500,
+      mongodbActiveConnections: 1000,
+      mongodbOpsPerSec: 10000,
+      mongodbCollectionCount: 1000,
+      mongodbDailyCostUSD: 100,
+      monthlySpendLimitUSD: 3000,
     };
   },
 };

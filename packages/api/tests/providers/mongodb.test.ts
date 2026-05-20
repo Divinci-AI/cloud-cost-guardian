@@ -45,14 +45,14 @@ describe("MongoDB Provider", () => {
   });
 
   describe("getDefaultThresholds", () => {
-    it("returns sensible defaults", () => {
+    it("returns production-friendly defaults", () => {
       const t = mongodbProvider.getDefaultThresholds();
-      expect(t.mongodbStorageSizeGB).toBe(10);
-      expect(t.mongodbActiveConnections).toBe(200);
-      expect(t.mongodbOpsPerSec).toBe(5000);
-      expect(t.mongodbCollectionCount).toBe(500);
-      expect(t.mongodbDailyCostUSD).toBe(30);
-      expect(t.monthlySpendLimitUSD).toBe(900);
+      expect(t.mongodbStorageSizeGB).toBe(500);
+      expect(t.mongodbActiveConnections).toBe(1000);
+      expect(t.mongodbOpsPerSec).toBe(10000);
+      expect(t.mongodbCollectionCount).toBe(1000);
+      expect(t.mongodbDailyCostUSD).toBe(100);
+      expect(t.monthlySpendLimitUSD).toBe(3000);
     });
   });
 
@@ -185,6 +185,29 @@ describe("MongoDB Provider", () => {
       expect(result.services[0].metrics.find(m => m.name === "Storage")?.value).toBe(50);
       expect(result.totalEstimatedDailyCostUSD).toBeCloseTo(3, 0); // 9000 cents / 100 / 30
     });
+
+    it("skips per-metric violations for paused clusters", async () => {
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ providerSettings: { instanceSizeName: "M30" }, diskSizeGB: 9999, paused: true }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ results: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ amountBilledCents: 9000 }) });
+
+      const result = await mongodbProvider.checkUsage({
+        provider: "mongodb",
+        mongodbSubType: "atlas",
+        atlasPublicKey: "pub",
+        atlasPrivateKey: "priv",
+        atlasProjectId: "proj-123",
+        atlasClusterName: "Cluster0",
+      }, { mongodbStorageSizeGB: 10 }); // even with a tiny threshold...
+
+      // ...storage = 9999 GB should NOT produce a violation because the cluster is paused
+      expect(result.services).toHaveLength(1);
+      expect(result.services[0].paused).toBe(true);
+      expect(result.violations).toHaveLength(0);
+      // And the paused cluster's cost is forced to 0 so cost-runaway doesn't fire either
+      expect(result.totalEstimatedDailyCostUSD).toBe(0);
+    });
   });
 
   describe("executeKillSwitch", () => {
@@ -225,6 +248,25 @@ describe("MongoDB Provider", () => {
 
       expect(result.success).toBe(true);
       expect(result.details).toContain("paused");
+    });
+
+    it("falls through Atlas kill-connections to pause-cluster", async () => {
+      // Atlas doesn't expose direct connection killing; the checker should
+      // automatically route to pause-cluster instead of returning a no-op error.
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+
+      const result = await mongodbProvider.executeKillSwitch({
+        provider: "mongodb",
+        mongodbSubType: "atlas",
+        atlasPublicKey: "pub",
+        atlasPrivateKey: "priv",
+        atlasProjectId: "proj-123",
+        atlasClusterName: "Cluster0",
+      }, "cluster:Cluster0", "kill-connections");
+
+      expect(result.success).toBe(true);
+      expect(result.action).toBe("pause-cluster");
+      expect(result.details).toContain("fell through to pause-cluster");
     });
 
     it("returns error for unsupported action", async () => {

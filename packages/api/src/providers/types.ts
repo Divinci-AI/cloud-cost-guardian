@@ -24,6 +24,13 @@ export interface ServiceUsage {
   serviceName: string;
   metrics: UsageMetric[];
   estimatedDailyCostUSD: number;
+  /**
+   * Optional: when true, the service is paused/stopped and not actively running.
+   * The monitoring engine should skip per-metric threshold violations for
+   * paused services — there's no cost or harm to mitigate, and a kill action
+   * would be pointless noise.
+   */
+  paused?: boolean;
 }
 
 export interface UsageResult {
