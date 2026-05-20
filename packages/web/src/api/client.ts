@@ -228,6 +228,32 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  // CLI device-flow auth (org context comes from the orgId arg, NOT activeOrgId)
+  cliApprove: async (code: string, orgId: string, keyName?: string) => {
+    const prev = getActiveOrgId();
+    setActiveOrgId(orgId);
+    try {
+      return await guardianFetch<{ approved: true }>("/auth/cli/approve", {
+        method: "POST",
+        body: JSON.stringify({ code, keyName }),
+      });
+    } finally {
+      setActiveOrgId(prev);
+    }
+  },
+  cliDeny: async (code: string, orgId: string) => {
+    const prev = getActiveOrgId();
+    setActiveOrgId(orgId);
+    try {
+      return await guardianFetch<{ denied: true }>("/auth/cli/deny", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      });
+    } finally {
+      setActiveOrgId(prev);
+    }
+  },
+
   // Activity Log
   getActivity: (params?: {
     page?: number; limit?: number; action?: string;

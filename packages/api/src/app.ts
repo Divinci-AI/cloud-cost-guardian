@@ -18,6 +18,7 @@ import { databaseRouter } from "./routes/database/index.js";
 import { billingRouter } from "./routes/billing/index.js";
 import { teamRouter } from "./routes/team/index.js";
 import { authRouter } from "./routes/auth/index.js";
+import { cliAuthRouter } from "./routes/cli-auth/index.js";
 import { GuardianAccountModel } from "./models/guardian-account/schema.js";
 import { requireAuth, resolveOrg } from "./middleware/auth.js";
 import { requirePermission } from "./middleware/permissions.js";
@@ -109,6 +110,8 @@ export function createApp() {
     app.use("/agent/report", rateLimit({ windowMs: 15 * 60 * 1000, max: 30, ...rlOpts }));
     // /check triggers external cloud API calls — tight per-user limit to prevent amplification
     app.use("/check", rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyGenerator: perUserKey, ...rlOpts }));
+    // CLI device-flow code creation — anonymous endpoint, IP-keyed
+    app.use("/auth/cli/start", rateLimit({ windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, ...rlOpts }));
   }
 
   // Skip morgan in test
@@ -155,6 +158,11 @@ export function createApp() {
       ],
     });
   });
+
+  // CLI device-flow auth — must be mounted BEFORE the /auth authStack below.
+  // /start and /poll are public (CLI has no creds yet); /approve and /deny
+  // apply their own auth middleware at the route level.
+  app.use("/auth/cli", cliAuthRouter);
 
   // Auth middleware for protected routes
   const authStack = [requireAuth, resolveOrg];
