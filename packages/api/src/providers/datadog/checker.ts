@@ -55,7 +55,10 @@ export const datadogProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost, "datadogDailyCostUSD", "datadog-billing");
+    const violations = evaluateViolations(services, thresholds, totalCost, "datadogDailyCostUSD", "datadog-billing", {
+      datadogHostCount: "count",
+      datadogLogIngestGBPerDay: "load",
+    });
     return {
       provider: "datadog", accountId: credential.datadogSite === "eu" ? "datadog-eu" : "datadog-us",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,

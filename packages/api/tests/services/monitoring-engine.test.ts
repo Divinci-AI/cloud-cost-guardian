@@ -514,4 +514,116 @@ describe("Monitoring Engine", () => {
       expect.objectContaining({ reason: expect.any(String) })
     );
   });
+
+  // ─── autoKillCategories gating ─────────────────────────────────────────
+  // Verifies the per-account opt-in for which violation categories trigger
+  // auto-kill. Default ["cost"] means storage/load/count violations alert
+  // only — operators must add the category explicitly to enable kill.
+
+  function setupCategoryTest(opts: {
+    accountAutoKillCategories: string[] | undefined;
+    violationCategory: string | undefined;
+  }) {
+    const mockProvider = {
+      id: "mongodb",
+      name: "MongoDB",
+      checkUsage: vi.fn().mockResolvedValue({
+        provider: "mongodb",
+        accountId: "test",
+        checkedAt: Date.now(),
+        services: [],
+        totalEstimatedDailyCostUSD: 0,
+        violations: [{
+          serviceName: "cluster:test",
+          metricName: "Storage",
+          currentValue: 99,
+          threshold: 50,
+          unit: "GB",
+          severity: "critical",
+          category: opts.violationCategory,
+        }],
+      }),
+      executeKillSwitch: vi.fn().mockResolvedValue({ success: true, action: "kill-connections", serviceName: "cluster:test", details: "ok" }),
+      validateCredential: vi.fn(),
+      getDefaultThresholds: vi.fn(),
+    };
+
+    const account: any = {
+      _id: "acc-cat", provider: "mongodb", credentialId: "cred", thresholds: {},
+      protectedServices: [], autoDisconnect: true, autoDelete: false,
+      guardianAccountId: "ga1", name: "Mongo PE",
+    };
+    if (opts.accountAutoKillCategories !== undefined) {
+      account.autoKillCategories = opts.accountAutoKillCategories;
+    }
+
+    vi.mocked(CloudAccountModel.find).mockResolvedValue([account] as any);
+    vi.mocked(getCredential).mockResolvedValue({ provider: "mongodb", mongodbSubType: "atlas" });
+    vi.mocked(getProvider).mockReturnValue(mockProvider as any);
+    vi.mocked(GuardianAccountModel.findById).mockResolvedValue({ alertChannels: [] } as any);
+    vi.mocked(CloudAccountModel.findByIdAndUpdate).mockResolvedValue(null);
+
+    return mockProvider;
+  }
+
+  it("autoKillCategories defaults to cost-only: storage violation alerts but does NOT kill", async () => {
+    const p = setupCategoryTest({
+      accountAutoKillCategories: ["cost"], // explicit default
+      violationCategory: "storage",
+    });
+    const results = await runCheckCycle();
+    expect(p.executeKillSwitch).not.toHaveBeenCalled();
+    // Engine must still flag this in actionsTaken so the audit log shows what we skipped
+    expect(results[0].actionsTaken.some(s => s.startsWith("ALERT_ONLY:"))).toBe(true);
+  });
+
+  it("cost-category violation always fires the kill (default behavior preserved)", async () => {
+    const p = setupCategoryTest({
+      accountAutoKillCategories: ["cost"],
+      violationCategory: "cost",
+    });
+    await runCheckCycle();
+    expect(p.executeKillSwitch).toHaveBeenCalledTimes(1);
+  });
+
+  it("operator can opt-in: autoKillCategories=[cost,storage] kills on storage too", async () => {
+    const p = setupCategoryTest({
+      accountAutoKillCategories: ["cost", "storage"],
+      violationCategory: "storage",
+    });
+    await runCheckCycle();
+    expect(p.executeKillSwitch).toHaveBeenCalledTimes(1);
+  });
+
+  it("empty autoKillCategories disables all auto-kills (alert-only mode)", async () => {
+    const p = setupCategoryTest({
+      accountAutoKillCategories: [],
+      violationCategory: "cost", // even cost is skipped now
+    });
+    const results = await runCheckCycle();
+    expect(p.executeKillSwitch).not.toHaveBeenCalled();
+    expect(results[0].actionsTaken.some(s => s.startsWith("ALERT_ONLY:"))).toBe(true);
+  });
+
+  it("legacy accounts (no autoKillCategories field) default to cost-only", async () => {
+    // Older accounts in the DB don't have the field set at all.
+    // The engine's `?? ["cost"]` fallback should treat them as cost-only.
+    const p = setupCategoryTest({
+      accountAutoKillCategories: undefined, // omits field entirely
+      violationCategory: "storage",
+    });
+    await runCheckCycle();
+    expect(p.executeKillSwitch).not.toHaveBeenCalled();
+  });
+
+  it("violations with undefined category (not-yet-categorized providers) are treated as cost", async () => {
+    // Backward-compat path: if a provider hasn't tagged its violations, the
+    // engine treats them as cost-class so existing kill behavior is preserved.
+    const p = setupCategoryTest({
+      accountAutoKillCategories: ["cost"],
+      violationCategory: undefined,
+    });
+    await runCheckCycle();
+    expect(p.executeKillSwitch).toHaveBeenCalledTimes(1);
+  });
 });

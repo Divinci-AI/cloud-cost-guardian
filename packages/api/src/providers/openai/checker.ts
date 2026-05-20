@@ -60,7 +60,10 @@ export const openaiProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost, "openaiDailyCostUSD", "openai-billing");
+    const violations = evaluateViolations(services, thresholds, totalCost, "openaiDailyCostUSD", "openai-billing", {
+      openaiRequestsPerDay: "load",
+      openaiTokensPerDay: "load",
+    });
     return {
       provider: "openai", accountId: credential.openaiOrgId || "openai",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,

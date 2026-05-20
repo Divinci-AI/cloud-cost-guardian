@@ -19,7 +19,18 @@ import type {
   ServiceUsage,
   Violation,
   RedisSubType,
+  MetricCategory,
 } from "../types.js";
+
+// `cost` violations auto-disconnect; other categories alert-only by default.
+const REDIS_METRIC_CATEGORIES: Record<string, MetricCategory> = {
+  redisDailyCostUSD: "cost",
+  monthlySpendLimitUSD: "cost",
+  redisCommandsPerSec: "load",
+  redisConnectedClients: "load",
+  redisEvictedKeysPerDay: "load",
+  redisMemoryUsageMB: "storage",
+};
 
 // ─── SSRF Protection ──────────────────────────────────────────────────────
 
@@ -374,6 +385,7 @@ export const redisProvider: CloudProvider = {
             threshold,
             unit: metric.unit,
             severity: metric.value > threshold * 2 ? "critical" : "warning",
+            category: REDIS_METRIC_CATEGORIES[metric.thresholdKey],
           });
         }
       }
@@ -388,6 +400,7 @@ export const redisProvider: CloudProvider = {
         threshold: thresholds.redisDailyCostUSD,
         unit: "USD",
         severity: totalDailyCost > thresholds.redisDailyCostUSD * 2 ? "critical" : "warning",
+        category: "cost",
       });
     }
 

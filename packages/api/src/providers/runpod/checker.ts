@@ -16,7 +16,18 @@ import type {
   ValidationResult,
   ServiceUsage,
   Violation,
+  MetricCategory,
 } from "../types.js";
+
+// `cost` violations auto-disconnect; other categories alert-only by default.
+const RUNPOD_METRIC_CATEGORIES: Record<string, MetricCategory> = {
+  runpodDailyCostUSD: "cost",
+  monthlySpendLimitUSD: "cost",
+  runpodGPUPodCount: "count",
+  runpodSpotPodCount: "count",
+  runpodServerlessWorkers: "count",
+  runpodNetworkVolumeGB: "storage",
+};
 
 // ─── API Helpers ───────────────────────────────────────────────────────────
 
@@ -339,6 +350,7 @@ export const runpodProvider: CloudProvider = {
             threshold,
             unit: metric.unit,
             severity: metric.value > threshold * 2 ? "critical" : "warning",
+            category: RUNPOD_METRIC_CATEGORIES[metric.thresholdKey],
           });
         }
       }
@@ -355,6 +367,7 @@ export const runpodProvider: CloudProvider = {
         threshold: thresholds.runpodDailyCostUSD,
         unit: "USD",
         severity: totalDailyCost > thresholds.runpodDailyCostUSD * 2 ? "critical" : "warning",
+        category: "cost",
       });
     }
 

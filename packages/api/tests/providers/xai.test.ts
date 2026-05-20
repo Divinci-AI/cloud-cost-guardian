@@ -84,7 +84,8 @@ describe("xAI Provider — checkUsage", () => {
       expect.any(Object),
       expect.any(Number),
       "xaiDailyCostUSD",
-      "xai-billing"
+      "xai-billing",
+      expect.any(Object)
     );
   });
 

@@ -89,7 +89,8 @@ describe("Vercel Provider — checkUsage", () => {
       expect.any(Object),
       expect.any(Number),
       "vercelDailyCostUSD",
-      "vercel-billing"
+      "vercel-billing",
+      expect.any(Object)
     );
   });
 });

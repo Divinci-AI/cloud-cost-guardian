@@ -410,27 +410,29 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
           }
         };
 
-        // Gate auto-kill on the violation's category.
-        // - "cost" (or undefined for not-yet-migrated providers) → kill IS
-        //    the cost-runaway response, fire the default kill action.
-        // - "load" / "storage" / "count" / "security" → ALERT-ONLY by default.
-        //    These violations still flow to the alert pipeline (PagerDuty,
-        //    email, etc.) below — the engine just doesn't auto-kill. That
-        //    decision belongs to an operator-configured rule. Prevents the
-        //    bug where e.g. a storage-threshold breach on a paused cluster
-        //    auto-fires a kill that doesn't make sense for the metric type.
-        const isAutoKillable = violation.category === undefined || violation.category === "cost";
+        // Gate auto-kill on the violation's category, scoped per cloud account.
+        // - autoKillCategories defaults to ["cost"] at the schema level →
+        //    only cost-runaway breaches kill. Operators wanting wider kill
+        //    semantics can add categories: ["cost","storage"] kills on
+        //    storage growth too; [] is alert-only mode.
+        // - Violations from not-yet-categorized providers (category=undefined)
+        //    are treated as cost-class to preserve legacy behavior.
+        // Either way, non-killable violations still flow to the alert
+        // pipeline below — the engine just doesn't fire a kill action.
+        const killableCats = cloudAccount.autoKillCategories ?? ["cost"];
+        const effectiveCategory = violation.category ?? "cost";
+        const isAutoKillable = killableCats.includes(effectiveCategory);
 
         if (!isAutoKillable) {
-          result.actionsTaken.push(`ALERT_ONLY: ${violation.serviceName} ${violation.metricName} (category=${violation.category})`);
+          result.actionsTaken.push(`ALERT_ONLY: ${violation.serviceName} ${violation.metricName} (category=${violation.category ?? "cost"})`);
           await recordRuleEvent({
             kind: "action_skipped",
             guardianAccountId: cloudAccount.guardianAccountId,
             cloudAccountId: cloudAccount._id.toString(),
             actionType: "threshold-kill",
             target: violation.serviceName,
-            reason: "non-cost-category",
-            details: `Violation category=${violation.category} — alert-only, no kill action`,
+            reason: "category-not-in-autokill-list",
+            details: `Violation category=${violation.category ?? "cost"} not in account.autoKillCategories=[${killableCats.join(",")}] — alert-only`,
           });
         } else if (cloudAccount.autoDelete && violation.severity === "critical") {
           await fireThresholdKill("delete");

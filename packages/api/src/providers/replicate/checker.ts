@@ -53,7 +53,10 @@ export const replicateProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost, "replicateDailyCostUSD", "replicate-billing");
+    const violations = evaluateViolations(services, thresholds, totalCost, "replicateDailyCostUSD", "replicate-billing", {
+      replicateGpuHoursPerDay: "load",
+      replicatePredictionsPerDay: "load",
+    });
     return {
       provider: "replicate", accountId: "replicate",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,

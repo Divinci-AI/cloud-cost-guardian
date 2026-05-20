@@ -122,7 +122,11 @@ export const neonProvider: CloudProvider = {
       });
     }
 
-    const violations = evaluateViolations(services, thresholds, totalDailyCost, "neonDailyCostUSD", "neon-billing");
+    const violations = evaluateViolations(services, thresholds, totalDailyCost, "neonDailyCostUSD", "neon-billing", {
+      neonComputeHoursPerMonth: "load",
+      neonDataTransferGB: "load",
+      neonStorageMB: "storage",
+    });
     return {
       provider: "neon",
       accountId: credential.neonProjectId || "neon",

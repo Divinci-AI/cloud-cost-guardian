@@ -80,7 +80,8 @@ describe("Anthropic Provider — checkUsage", () => {
       expect.any(Object),
       expect.any(Number),
       "anthropicDailyCostUSD",
-      "anthropic-billing"
+      "anthropic-billing",
+      expect.any(Object)
     );
   });
 

@@ -81,7 +81,8 @@ describe("OpenAI Provider — checkUsage", () => {
       expect.any(Object),
       expect.any(Number),
       "openaiDailyCostUSD",
-      "openai-billing"
+      "openai-billing",
+      expect.any(Object)
     );
   });
 
