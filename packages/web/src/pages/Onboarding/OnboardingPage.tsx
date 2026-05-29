@@ -549,7 +549,7 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
             Set up alerts
           </h2>
           <p style={{ color: "#8b8fa3", marginBottom: "32px", fontSize: "15px" }}>
-            Get notified when a threshold is breached. You can add more channels later.
+            Get notified when a threshold is breached. PagerDuty, GitHub, and more channels are available later in Settings.
           </p>
           <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
             {(["email", "discord", "slack"] as const).map(type => (

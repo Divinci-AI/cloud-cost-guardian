@@ -44,6 +44,22 @@ export function BillingPage() {
     }
   }, [successParam, canceledParam, searchParams, setSearchParams]);
 
+  // After checkout, the tier is applied by an async Stripe webhook that may land after
+  // the redirect — refetch status a few times so the page reflects the new plan.
+  useEffect(() => {
+    if (successParam !== "true") return;
+    let tries = 0;
+    const iv = setInterval(async () => {
+      tries += 1;
+      try {
+        const d = await api.getBillingStatus();
+        setStatus(d);
+      } catch { /* ignore transient errors */ }
+      if (tries >= 4) clearInterval(iv);
+    }, 2500);
+    return () => clearInterval(iv);
+  }, [successParam]);
+
   const handleCheckout = async (planKey: string) => {
     try {
       const successUrl = `${window.location.origin}/billing?success=true`;

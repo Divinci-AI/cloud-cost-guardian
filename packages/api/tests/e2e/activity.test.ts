@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
+import { GuardianAccountModel } from "../../src/models/guardian-account/schema.js";
 import type { Express } from "express";
 
 vi.hoisted(() => { process.env.CLERK_ISSUER = "https://test.clerk.accounts.dev"; });
@@ -18,7 +19,7 @@ vi.mock("mongoose", () => {
   const createMockModel = (name: string) => ({
     create: vi.fn(async (data: any) => { const doc = { _id: `${name}-${idCounter++}`, ...data }; store.set(doc._id, doc); return doc; }),
     find: vi.fn(async () => []),
-    findById: vi.fn(async (id: string) => store.get(id) || null),
+    findById: vi.fn(async (id: string) => store.get(id) || (name === "GuardianAccount" ? { _id: id, tier: "team", settings: { checkIntervalMinutes: 5 } } : null)),
     findOne: vi.fn(async () => null),
     findByIdAndUpdate: vi.fn(async (id: string, update: any) => { const doc = store.get(id); if (doc && update.$set) Object.assign(doc, update.$set); return doc; }),
     findByIdAndDelete: vi.fn(async (id: string) => { const doc = store.get(id); store.delete(id); return doc; }),
@@ -154,6 +155,16 @@ describe("Activity Log API", () => {
         .set(auth("test-account", "admin-user", "admin"));
 
       expect(res.status).toBe(200);
+    });
+
+    it("denies access on free/pro tier (audit H1 — server-side tier gate)", async () => {
+      // Even an owner cannot read the audit log unless the account is team/enterprise.
+      const spy = vi.spyOn(GuardianAccountModel, "findById").mockResolvedValue({ _id: "test-account", tier: "pro" } as any);
+      const res = await request(app)
+        .get("/activity")
+        .set(auth("test-account"));
+      expect(res.status).toBe(403);
+      spy.mockRestore();
     });
   });
 });

@@ -37,12 +37,26 @@ if (process.env.NODE_ENV === "production" && STRIPE_SECRET_KEY) {
   }
 }
 
-const TIER_LIMITS: Record<GuardianTier, { cloudAccounts: number; checkIntervalMinutes: number; alertChannels: number }> = {
-  free: { cloudAccounts: 1, checkIntervalMinutes: 360, alertChannels: 1 },
-  pro: { cloudAccounts: 3, checkIntervalMinutes: 5, alertChannels: 10 },
-  team: { cloudAccounts: 10, checkIntervalMinutes: 5, alertChannels: 10 },
-  enterprise: { cloudAccounts: 100, checkIntervalMinutes: 1, alertChannels: 50 },
+const TIER_LIMITS: Record<GuardianTier, { cloudAccounts: number; checkIntervalMinutes: number; alertChannels: number; teamMembers: number }> = {
+  free: { cloudAccounts: 1, checkIntervalMinutes: 360, alertChannels: 1, teamMembers: 0 },
+  pro: { cloudAccounts: 3, checkIntervalMinutes: 5, alertChannels: 10, teamMembers: 0 },
+  team: { cloudAccounts: 10, checkIntervalMinutes: 5, alertChannels: 10, teamMembers: 10 },
+  enterprise: { cloudAccounts: 100, checkIntervalMinutes: 1, alertChannels: 50, teamMembers: 100 },
 };
+
+/**
+ * Map a Stripe subscription status to the action we take on the account.
+ * Pure + exported so the payment-lifecycle policy is unit-testable.
+ *   apply     → healthy: (re)apply the plan's tier + limits
+ *   downgrade → dead: drop to free
+ *   grace     → transient (e.g. past_due): keep current tier, just record status
+ */
+export type SubscriptionAction = "apply" | "downgrade" | "grace";
+export function classifySubscriptionStatus(status: string): SubscriptionAction {
+  if (status === "active" || status === "trialing") return "apply";
+  if (status === "unpaid" || status === "canceled" || status === "incomplete_expired") return "downgrade";
+  return "grace"; // past_due, incomplete, paused, …
+}
 
 export const billingRouter = Router();
 
@@ -298,7 +312,8 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
           const periodEnd = periodEndOf(subscription);
           if (periodEnd) account.currentPeriodEnd = periodEnd;
 
-          if (status === "active" || status === "trialing") {
+          const action = classifySubscriptionStatus(status);
+          if (action === "apply") {
             // Healthy subscription — (re)apply the plan's tier and limits.
             const priceId = subscription.items.data[0]?.price?.id;
             const plan = Object.values(PRICES).find(p => p.priceId === priceId);
@@ -306,13 +321,14 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
               account.tier = plan.tier;
               account.settings.checkIntervalMinutes = TIER_LIMITS[plan.tier].checkIntervalMinutes;
             }
-          } else if (status === "unpaid" || status === "canceled" || status === "incomplete_expired") {
+          } else if (action === "downgrade") {
             // Dunning exhausted / subscription dead → downgrade to free.
             account.tier = "free";
             account.settings.checkIntervalMinutes = TIER_LIMITS.free.checkIntervalMinutes;
           }
-          // "past_due" / "incomplete" → keep current tier (grace period); status is recorded above.
+          // "grace" (past_due / incomplete) → keep current tier; status is recorded above.
           await account.save();
+          if (account.tier === "free") await reconcileTierDowngrade(String(account._id), "free");
           console.log(`[guardian] Subscription ${account._id} status=${status} tier=${account.tier}`);
         }
         break;
@@ -345,6 +361,7 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
           account.subscriptionStatus = "canceled";
           account.settings.checkIntervalMinutes = TIER_LIMITS.free.checkIntervalMinutes;
           await account.save();
+          await reconcileTierDowngrade(String(account._id), "free");
           console.log(`[guardian] Subscription canceled: ${account._id} -> free`);
         }
         break;
@@ -364,7 +381,28 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
 /**
  * Middleware: Enforce tier limits
  */
-export function enforceTierLimits(resource: "cloudAccounts" | "alertChannels") {
+/**
+ * On downgrade, pause cloud accounts that exceed the new tier's limit so excess
+ * resources aren't left actively monitored under a plan that doesn't allow them.
+ * Keeps the oldest N (by createdAt) active; pausing is non-destructive and reversible.
+ */
+async function reconcileTierDowngrade(accountId: string, tier: GuardianTier): Promise<void> {
+  const limit = TIER_LIMITS[tier].cloudAccounts;
+  const { CloudAccountModel } = await import("../../models/cloud-account/schema.js");
+  const active = await CloudAccountModel.find({ guardianAccountId: accountId, status: "active" });
+  if (!Array.isArray(active) || active.length <= limit) return;
+  // Keep the oldest `limit` active; pause the rest. Sort in JS so we don't depend on query-builder chaining.
+  const sorted = [...active].sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const toPause = sorted.slice(limit);
+  for (const doc of toPause) {
+    (doc as any).status = "paused";
+    await (doc as any).save();
+  }
+  console.log(`[guardian] Downgrade reconcile: paused ${toPause.length} cloud account(s) for ${accountId} (limit ${limit})`);
+}
+
+// Alert-channel limits are enforced directly in routes/alerts/index.ts via TIER_LIMITS.
+export function enforceTierLimits(resource: "cloudAccounts") {
   return async (req: any, res: any, next: any) => {
     try {
       const account = await GuardianAccountModel.findById(req.guardianAccountId);

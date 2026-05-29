@@ -9,7 +9,7 @@ import { GuardianAccountModel } from "../../models/guardian-account/schema.js";
 import { sendAlerts } from "../../services/alerting.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { logActivity } from "../../services/activity-logger.js";
-import { enforceTierLimits, TIER_LIMITS } from "../billing/index.js";
+import { TIER_LIMITS } from "../billing/index.js";
 
 export const alertRouter = Router();
 
