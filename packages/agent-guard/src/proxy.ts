@@ -58,8 +58,8 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
   });
 }
 
-/** Parse a non-streaming JSON body into usage + model. */
-function parseJsonUsage(flavor: string, text: string): { model: string; usage: TokenUsage } | null {
+/** Parse a non-streaming JSON body into usage + model. Exported for testing. */
+export function parseJsonUsage(flavor: string, text: string): { model: string; usage: TokenUsage } | null {
   try {
     const body = JSON.parse(text);
     const u = body.usage;
@@ -84,8 +84,8 @@ function parseJsonUsage(flavor: string, text: string): { model: string; usage: T
   }
 }
 
-/** Parse accumulated SSE text into usage + model (Anthropic message_start/message_delta, OpenAI final chunk). */
-function parseStreamUsage(flavor: string, sse: string): { model: string; usage: TokenUsage } | null {
+/** Parse accumulated SSE text into usage + model (Anthropic message_start/message_delta, OpenAI final chunk). Exported for testing. */
+export function parseStreamUsage(flavor: string, sse: string): { model: string; usage: TokenUsage } | null {
   let model = "unknown";
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 };
   let found = false;
