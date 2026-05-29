@@ -59,7 +59,7 @@ stop for Claude Code; the proxy is the dumb hard backstop for everything else
 (Cursor, Aider, raw scripts). An **escape hatch** (`ks guard pause`, or
 `touch ~/.kill-switch/agent-guard/PAUSED`) always belongs to the human, never the agent.
 
-## Supported Providers (14)
+## Supported Providers (15)
 
 | Provider | Services Monitored | Kill Actions |
 |----------|-------------------|--------------|
@@ -77,6 +77,7 @@ stop for Claude Code; the proxy is the dumb hard backstop for everything else
 | **Vercel** | Function invocations, bandwidth, build minutes | Scale down, disable service |
 | **Datadog** | Host count, log ingestion, custom metrics | Rotate credentials, mute monitors |
 | **Neon** | Compute hours, storage, data transfer costs | Scale down, pause project |
+| **Neo4j Aura** | Graph DB instances, memory, storage, instance count | Pause instance, scale down, delete |
 
 ## Packages
 
