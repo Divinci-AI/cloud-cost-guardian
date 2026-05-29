@@ -35,6 +35,17 @@ agentGuardEventSchema.index({ guardianAccountId: 1, createdAt: -1 });
 // Retention: agent-guard events are high-volume telemetry (every warn/block,
 // every session). Auto-expire after 90 days via a TTL index so the collection
 // can't grow unbounded. Mongo's background TTL monitor deletes expired docs.
+//
+// ⚠ MIGRATION NOTE: the previous schema declared `createdAt: { index: true }`,
+// which builds a PLAIN index `createdAt_1`. This replaces it with a TTL index on
+// the same key. MongoDB will NOT redefine an existing index's options — if a
+// plain `createdAt_1` already exists in a collection, building this TTL index
+// fails with IndexOptionsConflict (code 85) and retention silently does nothing.
+// The prod `agentguardevents` collection is empty as of this change (no agent has
+// reported yet), so autoIndex builds the TTL index cleanly on deploy. If any
+// environment HAS accrued events under the old schema, drop the stale index once:
+//   db.agentguardevents.dropIndex("createdAt_1")
+// and the TTL index will build on the next boot.
 const RETENTION_DAYS = 90;
 agentGuardEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: RETENTION_DAYS * 24 * 60 * 60 });
 
