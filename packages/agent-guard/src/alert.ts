@@ -1,0 +1,94 @@
+/**
+ * Breach alerting — best-effort, fire-and-forget, never throws.
+ *
+ * On a soft/hard trip we:
+ *   1. Always append a line to ~/.kill-switch/agent-guard/events.jsonl (local audit trail).
+ *   2. POST to Slack if a webhook is configured.
+ *   3. POST to the Guardian API if an API key is configured, so the kill shows
+ *      up in the dashboard / existing alert channels alongside cloud-account kills.
+ *
+ * Everything network is wrapped in a short timeout; a down endpoint must not
+ * delay (or crash) the agent's tool call.
+ */
+
+import { appendFileSync } from "node:fs";
+import { eventsPath, ensureGuardDir, type GuardConfig } from "./config.js";
+import type { Verdict } from "./budget.js";
+import { fmtUSD } from "./cost.js";
+
+export interface AlertEvent {
+  ts: number;
+  source: "hook" | "proxy";
+  sessionId: string;
+  level: Verdict["level"];
+  sessionUSD: number;
+  dailyUSD: number;
+  reasons: string[];
+  action: string;
+  cwd?: string;
+}
+
+const TIMEOUT_MS = 2500;
+
+async function postJson(url: string, body: unknown, headers: Record<string, string> = {}): Promise<void> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+  } catch {
+    /* best-effort */
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function writeLocal(evt: AlertEvent): void {
+  try {
+    ensureGuardDir();
+    appendFileSync(eventsPath(), JSON.stringify(evt) + "\n");
+  } catch {
+    /* best-effort */
+  }
+}
+
+function slackText(evt: AlertEvent): string {
+  const icon = evt.level === "block" ? "🛑" : "⚠️";
+  const verb = evt.level === "block" ? "BLOCKED a coding agent" : "warning on a coding agent";
+  return [
+    `${icon} *Kill Switch ${verb}*`,
+    `• Session: ${fmtUSD(evt.sessionUSD)}  |  Daily (24h): ${fmtUSD(evt.dailyUSD)}`,
+    `• Action: ${evt.action}`,
+    evt.cwd ? `• Project: \`${evt.cwd}\`` : "",
+    ...evt.reasons.map((r) => `• ${r}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Dispatch an alert across all configured channels. Resolves once all attempts settle. */
+export async function dispatchAlert(cfg: GuardConfig, evt: AlertEvent): Promise<void> {
+  writeLocal(evt);
+
+  const tasks: Array<Promise<void>> = [];
+
+  if (cfg.slackWebhook) {
+    tasks.push(postJson(cfg.slackWebhook, { text: slackText(evt) }));
+  }
+
+  if (cfg.apiKey && cfg.apiUrl) {
+    tasks.push(
+      postJson(
+        `${cfg.apiUrl.replace(/\/$/, "")}/v1/agent-guard/events`,
+        evt,
+        { authorization: `Bearer ${cfg.apiKey}` },
+      ),
+    );
+  }
+
+  await Promise.allSettled(tasks);
+}

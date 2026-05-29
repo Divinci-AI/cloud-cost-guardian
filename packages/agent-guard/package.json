@@ -1,0 +1,53 @@
+{
+  "name": "@kill-switch/agent-guard",
+  "version": "0.1.0",
+  "description": "Kill Switch for coding agents — stop runaway Claude Code / Cursor / Aider sessions from racking up an LLM bill. Native hook + token-metering proxy with per-session and daily-rolling budgets.",
+  "type": "module",
+  "bin": {
+    "agent-guard": "./dist/cli.js",
+    "ksg": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "kill-switch",
+    "claude-code",
+    "coding-agent",
+    "llm-cost",
+    "token-budget",
+    "anthropic",
+    "openai",
+    "cursor",
+    "aider",
+    "finops",
+    "guardrail"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/divinci-ai/kill-switch",
+    "directory": "packages/agent-guard"
+  },
+  "homepage": "https://kill-switch.net",
+  "license": "MIT"
+}
