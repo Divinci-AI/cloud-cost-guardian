@@ -538,6 +538,83 @@
         .story-card .source {
             font-size: 12px; color: #6b7280;
         }
+        .story-card .source a {
+            color: #8b8d96; text-decoration: none;
+            border-bottom: 1px dotted rgba(255,255,255,0.25);
+        }
+        .story-card .source a:hover { color: #5ce2e7; border-bottom-color: #5ce2e7; }
+        /* ── Bill Shock Wall (live social embeds) ─────── */
+        .embed-wall {
+            display: flex;
+            gap: 20px;
+            align-items: start;
+            overflow-x: auto;
+            overflow-y: hidden;
+            margin: 28px -24px 0;          /* bleed to section edges for the scroll */
+            padding: 4px 24px 16px;
+            scroll-snap-type: x proximity;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(92,226,231,0.4) transparent;
+        }
+        .embed-wall::-webkit-scrollbar { height: 8px; }
+        .embed-wall::-webkit-scrollbar-thumb { background: rgba(92,226,231,0.35); border-radius: 999px; }
+        .embed-wall::-webkit-scrollbar-track { background: transparent; }
+        .embed-cell {
+            position: relative;
+            flex: 0 0 340px;               /* one tweet per slide in the row */
+            max-height: 560px;
+            overflow: hidden;
+            border-radius: 14px;
+            scroll-snap-align: start;
+        }
+        .embed-cell::after {
+            content: "";
+            position: absolute; left: 0; right: 0; bottom: 0; height: 96px;
+            background: linear-gradient(to bottom, rgba(12,18,41,0) 0%, rgba(12,18,41,0.96) 78%);
+            pointer-events: none; z-index: 1;
+        }
+        .embed-cell .embed-more {
+            position: absolute; bottom: 14px; left: 0; right: 0;
+            text-align: center; z-index: 2;
+        }
+        .embed-cell .embed-more a {
+            font-size: 13px; font-weight: 600; color: #5ce2e7;
+            text-decoration: none;
+            background: rgba(12,18,41,0.85);
+            border: 1px solid rgba(92,226,231,0.35);
+            border-radius: 999px; padding: 7px 16px;
+            backdrop-filter: blur(4px);
+        }
+        .embed-cell .embed-more a:hover { background: rgba(92,226,231,0.15); }
+        /* overflow story-cards in a single-row horizontal scroll */
+        .stories-scroll {
+            display: flex; gap: 20px;
+            overflow-x: auto; overflow-y: hidden;
+            margin: 20px -24px 0; padding: 4px 24px 14px;
+            scroll-snap-type: x proximity;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,107,107,0.4) transparent;
+        }
+        .stories-scroll .story-card { flex: 0 0 320px; scroll-snap-align: start; }
+        .stories-scroll::-webkit-scrollbar { height: 8px; }
+        .stories-scroll::-webkit-scrollbar-thumb { background: rgba(255,107,107,0.35); border-radius: 999px; }
+        .stories-scroll::-webkit-scrollbar-track { background: transparent; }
+        .scroll-hint {
+            font-size: 12px; color: #6b7280; margin: 22px 0 0;
+            text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;
+        }
+        /* let the header sit over the visible video (shorter top fade) */
+        .video-bg-section.show-video-top::before { height: 72px; }
+        .embed-wall .twitter-tweet,
+        .embed-wall .reddit-embed-bq {
+            margin: 0 auto !important;
+            width: 100% !important;
+        }
+        .embed-note {
+            text-align: center; font-size: 12px; color: #6b7280;
+            margin: 20px auto 0; max-width: 640px;
+        }
 
         /* ── Pricing ─────────────────────────────────── */
         .pricing-grid {
@@ -972,7 +1049,7 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
         </div>
     </section>
 
-    <div class="video-bg-section">
+    <div class="video-bg-section show-video-top">
         <video autoplay muted loop playsinline>
             <source src="assets/money-video.webm" type="video/webm">
             <source src="assets/money-video.mp4" type="video/mp4">
@@ -1000,15 +1077,116 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
                     <div class="cause">Uncontrolled writes from a retry loop bug. No native circuit breaker to stop it.</div>
                     <div class="source">Hacker News</div>
                 </div>
+                <div class="story-card">
+                    <div class="amount">$104,500</div>
+                    <div class="cause">Free-tier static site hit 60.7 TB of bandwidth in four days. One MP3 downloaded millions of times.</div>
+                    <div class="source"><a href="https://www.reddit.com/r/webdev/comments/1b14bty/netlify_just_sent_me_a_104k_bill_for_a_simple/" target="_blank" rel="noopener">r/webdev — Netlify bill →</a></div>
+                </div>
+                <div class="story-card">
+                    <div class="amount">$96,280</div>
+                    <div class="cause">Artist app Cara went viral; Vercel functions spiked to 56M invocations/day. Bootstrapped, no spending cap.</div>
+                    <div class="source"><a href="https://news.ycombinator.com/item?id=40618220" target="_blank" rel="noopener">Hacker News — Cara / Vercel →</a></div>
+                </div>
+                <div class="story-card">
+                    <div class="amount">$47,000</div>
+                    <div class="cause">Two AI agents locked in a recursive loop, exchanging clarification requests thousands of times around the clock.</div>
+                    <div class="source"><a href="https://dev.to/utibe_okodi_339fb47a13ef5/the-ai-agent-that-cost-47000-while-everyone-thought-it-was-working-1lg6" target="_blank" rel="noopener">DEV Community →</a></div>
+                </div>
             </div>
+            <p class="scroll-hint">More incidents — scroll →</p>
+            <div class="stories-scroll">
+                <div class="story-card">
+                    <div class="amount">$30,000</div>
+                    <div class="cause">AWS Bedrock + Claude Opus billed $30K despite a cost-cap setting the customer believed was enabled.</div>
+                    <div class="source"><a href="https://www.theregister.com/ai-ml/2026/05/18/surprise-ai-bills-leave-aws-and-google-cloud-users-aghast/" target="_blank" rel="noopener">The Register →</a></div>
+                </div>
+                <div class="story-card">
+                    <div class="amount">$6,000</div>
+                    <div class="cause">Someone left Claude Code running overnight. Token-based billing plus an agentic loop did the rest.</div>
+                    <div class="source"><a href="https://www.makeuseof.com/someone-left-claude-code-running-overnight-and-it-cost-6000/" target="_blank" rel="noopener">MakeUseOf →</a></div>
+                </div>
+            </div>
+
+            <!-- ── Bill Shock Wall: live posts from the community ── -->
+            <div class="section-label" style="margin-top: 72px;">Straight From the Source</div>
+            <div class="section-title" style="font-size: clamp(22px, 3vw, 30px);">People are posting these in real time</div>
+            <div class="section-desc">From founders, indie devs, and us — the bill-shock conversation in real time. Scroll →</div>
+            <div class="embed-wall">
+                <!-- Kill Switch — pinned -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/KillSwitchCloud/status/2060243063768068188"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/KillSwitchCloud/status/2060243063768068188" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- @mikeumus -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/mikeumus/status/2054083570189341095"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/mikeumus/status/2054083570189341095" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- Cara / Vercel — Jingna Zhang -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/zemotion/status/1798558292681343039"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/zemotion/status/1798558292681343039" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- Replit deleted prod DB — Jason Lemkin -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/jasonlk/status/1946069562723897802"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/jasonlk/status/1946069562723897802" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- Firebase ~$70k overnight — @tamarajtran -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/tamarajtran/status/1880036092906467841"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/tamarajtran/status/1880036092906467841" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- AWS billing horror / needs hard caps — @GergelyOrosz -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/GergelyOrosz/status/1542449611440328704"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/GergelyOrosz/status/1542449611440328704" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+            </div>
+            <p class="embed-note">Embedded directly from the original posts — nothing here is altered or out of context. Got a bill-shock story? <a href="https://x.com/intent/post?text=Hey%20%40KillSwitchCloud%2C%20here%27s%20my%20runaway%20cloud%2FAI%20bill%20story%3A%20" target="_blank" rel="noopener" style="color:#5ce2e7;">Tell @KillSwitchCloud</a>.</p>
+            <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+            <script>
+            /* Clip every embed to the first tweet's rendered height so the row is uniform.
+               Embed iframes load + resize async, so we re-measure on a short interval. */
+            (function () {
+                function equalize() {
+                    var cells = document.querySelectorAll('.embed-wall .embed-cell');
+                    if (!cells.length) return;
+                    var ref = cells[0];
+                    ref.style.height = 'auto';
+                    var h = ref.offsetHeight;
+                    if (h < 120) return; /* first embed not rendered yet */
+                    for (var i = 0; i < cells.length; i++) cells[i].style.height = h + 'px';
+                }
+                var ticks = 0;
+                var iv = setInterval(function () {
+                    equalize();
+                    if (++ticks > 24) clearInterval(iv); /* settle within ~12s */
+                }, 500);
+                window.addEventListener('resize', equalize);
+            }());
+            </script>
         </section>
     </div>
 
     <section id="pricing">
         <div class="section-label">Pricing</div>
         <div class="section-title">Simple, transparent pricing</div>
-        <div class="section-desc">Protect your cloud accounts in under 5 minutes. Plans start at $29/mo.</div>
+        <div class="section-desc">Start free and self-host the open source version, or go hands-off with a paid plan from $29/mo.</div>
         <div class="pricing-grid">
+            <div class="pricing-card">
+                <div class="plan-name">Free</div>
+                <div class="plan-desc">Open source &amp; self-host</div>
+                <div class="plan-price">$0<span class="per">/mo</span></div>
+                <ul class="plan-features">
+                    <li>1 cloud account</li>
+                    <li>6-hour check interval</li>
+                    <li>1 alert channel</li>
+                    <li>Self-host the open-source version</li>
+                    <li>Community support</li>
+                </ul>
+                <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-plan secondary">Start free</a>
+            </div>
             <div class="pricing-card featured">
                 <div class="plan-name">Pro</div>
                 <div class="plan-desc">For teams shipping fast</div>
