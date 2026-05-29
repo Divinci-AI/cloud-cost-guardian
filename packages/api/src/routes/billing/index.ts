@@ -7,13 +7,17 @@
 import { Router, raw } from "express";
 import Stripe from "stripe";
 import { GuardianAccountModel } from "../../models/guardian-account/schema.js";
+import { ProcessedStripeEventModel } from "../../models/stripe-event/schema.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import type { GuardianTier } from "../../models/guardian-account/schema.js";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_API_SECRET_KEY || "";
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET_GUARDIAN || "";
 
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+// Pin the API version so field locations (e.g. current_period_end) and behavior
+// don't shift on `npm update`. Matches the version pinned in app.ts.
+const STRIPE_API_VERSION = "2025-02-24.acacia";
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION as any }) : null;
 
 // Guardian Stripe price IDs — set via env vars for production, falls back to test mode IDs
 const PRICES: Record<string, { tier: GuardianTier; interval: string; priceId: string }> = {
@@ -23,12 +27,36 @@ const PRICES: Record<string, { tier: GuardianTier; interval: string; priceId: st
   guardian_team_annual: { tier: "team", interval: "year", priceId: process.env.STRIPE_PRICE_TEAM_ANNUAL || "price_1TE2hOIzNdoxvIKm9pprqge0" },
 };
 
-const TIER_LIMITS: Record<GuardianTier, { cloudAccounts: number; checkIntervalMinutes: number; alertChannels: number }> = {
-  free: { cloudAccounts: 1, checkIntervalMinutes: 360, alertChannels: 1 },
-  pro: { cloudAccounts: 3, checkIntervalMinutes: 5, alertChannels: 10 },
-  team: { cloudAccounts: 10, checkIntervalMinutes: 5, alertChannels: 10 },
-  enterprise: { cloudAccounts: 100, checkIntervalMinutes: 1, alertChannels: 50 },
+// Fail fast: in production with Stripe enabled, never silently fall back to the
+// baked-in test-mode price IDs. A misconfigured deploy must crash, not charge wrong prices.
+if (process.env.NODE_ENV === "production" && STRIPE_SECRET_KEY) {
+  const missing = (["STRIPE_PRICE_PRO_MONTHLY", "STRIPE_PRICE_PRO_ANNUAL", "STRIPE_PRICE_TEAM_MONTHLY", "STRIPE_PRICE_TEAM_ANNUAL"] as const)
+    .filter((k) => !process.env[k]);
+  if (missing.length) {
+    throw new Error(`[guardian] Stripe is enabled in production but price env vars are missing: ${missing.join(", ")}`);
+  }
+}
+
+const TIER_LIMITS: Record<GuardianTier, { cloudAccounts: number; checkIntervalMinutes: number; alertChannels: number; teamMembers: number }> = {
+  free: { cloudAccounts: 1, checkIntervalMinutes: 360, alertChannels: 1, teamMembers: 0 },
+  pro: { cloudAccounts: 3, checkIntervalMinutes: 5, alertChannels: 10, teamMembers: 0 },
+  team: { cloudAccounts: 10, checkIntervalMinutes: 5, alertChannels: 10, teamMembers: 10 },
+  enterprise: { cloudAccounts: 100, checkIntervalMinutes: 1, alertChannels: 50, teamMembers: 100 },
 };
+
+/**
+ * Map a Stripe subscription status to the action we take on the account.
+ * Pure + exported so the payment-lifecycle policy is unit-testable.
+ *   apply     → healthy: (re)apply the plan's tier + limits
+ *   downgrade → dead: drop to free
+ *   grace     → transient (e.g. past_due): keep current tier, just record status
+ */
+export type SubscriptionAction = "apply" | "downgrade" | "grace";
+export function classifySubscriptionStatus(status: string): SubscriptionAction {
+  if (status === "active" || status === "trialing") return "apply";
+  if (status === "unpaid" || status === "canceled" || status === "incomplete_expired") return "downgrade";
+  return "grace"; // past_due, incomplete, paused, …
+}
 
 export const billingRouter = Router();
 
@@ -84,7 +112,10 @@ billingRouter.get("/status", requirePermission("billing:read"), async (req, res,
       subscription: subscription ? {
         id: subscription.id,
         status: subscription.status,
-        currentPeriodEnd: subscription.current_period_end,
+        // current_period_end moved onto subscription items in recent API versions;
+        // read top-level first, then fall back to the first item so the UI gets a real value.
+        currentPeriodEnd: (subscription as any).current_period_end
+          ?? (subscription.items?.data?.[0] as any)?.current_period_end,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
       } : null,
     });
@@ -213,6 +244,16 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  // Idempotency: Stripe re-delivers events on retry. Skip ones we've already handled.
+  const alreadyProcessed = await ProcessedStripeEventModel.findOne({ eventId: event.id });
+  if (alreadyProcessed) {
+    return res.json({ received: true, deduped: true });
+  }
+
+  // current_period_end moved onto subscription items in recent API versions — read defensively.
+  const periodEndOf = (sub: Stripe.Subscription): number | undefined =>
+    (sub as any).current_period_end ?? (sub.items?.data?.[0] as any)?.current_period_end;
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -222,9 +263,13 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
         // Derive tier from the subscription's price ID instead of trusting metadata
         const VALID_PAID_TIERS = new Set(Object.values(PRICES).map(p => p.tier));
         let tier: GuardianTier = "pro"; // safe default
+        let subStatus: string | undefined;
+        let periodEnd: number | undefined;
         if (session.subscription) {
           try {
             const sub = await stripe!.subscriptions.retrieve(session.subscription as string);
+            subStatus = sub.status;
+            periodEnd = periodEndOf(sub);
             const priceId = sub.items.data[0]?.price?.id;
             const matchedPlan = Object.values(PRICES).find(p => p.priceId === priceId);
             if (matchedPlan) {
@@ -249,9 +294,11 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
             tier,
             stripeCustomerId: session.customer as string,
             stripeSubscriptionId: session.subscription as string,
+            subscriptionStatus: subStatus ?? "active",
+            ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
             "settings.checkIntervalMinutes": TIER_LIMITS[tier].checkIntervalMinutes,
           });
-          console.error(`[guardian] Account ${accountId} upgraded to ${tier}`);
+          console.log(`[guardian] Account ${accountId} upgraded to ${tier}`);
         }
         break;
       }
@@ -259,15 +306,48 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
         const account = await GuardianAccountModel.findOne({ stripeSubscriptionId: subscription.id });
-        if (account && subscription.status === "active") {
-          const priceId = subscription.items.data[0]?.price?.id;
-          const plan = Object.values(PRICES).find(p => p.priceId === priceId);
-          if (plan) {
-            account.tier = plan.tier;
-            account.settings.checkIntervalMinutes = TIER_LIMITS[plan.tier].checkIntervalMinutes;
-            await account.save();
-            console.error(`[guardian] Subscription updated: ${account._id} -> ${plan.tier}`);
+        if (account) {
+          const status = subscription.status;
+          account.subscriptionStatus = status;
+          const periodEnd = periodEndOf(subscription);
+          if (periodEnd) account.currentPeriodEnd = periodEnd;
+
+          const action = classifySubscriptionStatus(status);
+          if (action === "apply") {
+            // Healthy subscription — (re)apply the plan's tier and limits.
+            const priceId = subscription.items.data[0]?.price?.id;
+            const plan = Object.values(PRICES).find(p => p.priceId === priceId);
+            if (plan) {
+              account.tier = plan.tier;
+              account.settings.checkIntervalMinutes = TIER_LIMITS[plan.tier].checkIntervalMinutes;
+            }
+          } else if (action === "downgrade") {
+            // Dunning exhausted / subscription dead → downgrade to free.
+            account.tier = "free";
+            account.settings.checkIntervalMinutes = TIER_LIMITS.free.checkIntervalMinutes;
           }
+          // "grace" (past_due / incomplete) → keep current tier; status is recorded above.
+          await account.save();
+          if (account.tier === "free") await reconcileTierDowngrade(String(account._id), "free");
+          console.log(`[guardian] Subscription ${account._id} status=${status} tier=${account.tier}`);
+        }
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        // Card failed — flag the account as past_due (grace). Final downgrade happens on the
+        // eventual subscription.updated(unpaid/canceled) or subscription.deleted event.
+        const invoice = event.data.object as Stripe.Invoice;
+        const subId = (invoice as any).subscription as string | undefined;
+        const account = subId
+          ? await GuardianAccountModel.findOne({ stripeSubscriptionId: subId })
+          : invoice.customer
+            ? await GuardianAccountModel.findOne({ stripeCustomerId: invoice.customer as string })
+            : null;
+        if (account) {
+          account.subscriptionStatus = "past_due";
+          await account.save();
+          console.log(`[guardian] Payment failed: ${account._id} flagged past_due`);
         }
         break;
       }
@@ -278,13 +358,18 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
         if (account) {
           account.tier = "free";
           account.stripeSubscriptionId = undefined;
+          account.subscriptionStatus = "canceled";
           account.settings.checkIntervalMinutes = TIER_LIMITS.free.checkIntervalMinutes;
           await account.save();
-          console.error(`[guardian] Subscription canceled: ${account._id} -> free`);
+          await reconcileTierDowngrade(String(account._id), "free");
+          console.log(`[guardian] Subscription canceled: ${account._id} -> free`);
         }
         break;
       }
     }
+
+    // Mark processed only after successful handling, so a failed handler is retried by Stripe.
+    await ProcessedStripeEventModel.create({ eventId: event.id, type: event.type }).catch(() => {});
   } catch (err: any) {
     console.error("[guardian] Webhook handler error:", err.message);
     return res.status(500).send("Webhook handler error");
@@ -296,7 +381,28 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
 /**
  * Middleware: Enforce tier limits
  */
-export function enforceTierLimits(resource: "cloudAccounts" | "alertChannels") {
+/**
+ * On downgrade, pause cloud accounts that exceed the new tier's limit so excess
+ * resources aren't left actively monitored under a plan that doesn't allow them.
+ * Keeps the oldest N (by createdAt) active; pausing is non-destructive and reversible.
+ */
+async function reconcileTierDowngrade(accountId: string, tier: GuardianTier): Promise<void> {
+  const limit = TIER_LIMITS[tier].cloudAccounts;
+  const { CloudAccountModel } = await import("../../models/cloud-account/schema.js");
+  const active = await CloudAccountModel.find({ guardianAccountId: accountId, status: "active" });
+  if (!Array.isArray(active) || active.length <= limit) return;
+  // Keep the oldest `limit` active; pause the rest. Sort in JS so we don't depend on query-builder chaining.
+  const sorted = [...active].sort((a: any, b: any) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const toPause = sorted.slice(limit);
+  for (const doc of toPause) {
+    (doc as any).status = "paused";
+    await (doc as any).save();
+  }
+  console.log(`[guardian] Downgrade reconcile: paused ${toPause.length} cloud account(s) for ${accountId} (limit ${limit})`);
+}
+
+// Alert-channel limits are enforced directly in routes/alerts/index.ts via TIER_LIMITS.
+export function enforceTierLimits(resource: "cloudAccounts") {
   return async (req: any, res: any, next: any) => {
     try {
       const account = await GuardianAccountModel.findById(req.guardianAccountId);

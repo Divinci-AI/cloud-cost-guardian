@@ -7,6 +7,7 @@
 
 import { Router } from "express";
 import { requirePermission } from "../../middleware/permissions.js";
+import { requireTier } from "../../middleware/tier.js";
 import { queryActivityLog } from "../../services/activity-logger.js";
 
 export const activityRouter = Router();
@@ -19,7 +20,7 @@ export const activityRouter = Router();
  *   action, resourceType, resourceId, actorUserId,
  *   from (ISO date), to (ISO date)
  */
-activityRouter.get("/", requirePermission("activity:read"), async (req: any, res, next) => {
+activityRouter.get("/", requireTier("team", "enterprise"), requirePermission("activity:read"), async (req: any, res, next) => {
   try {
     const result = await queryActivityLog(req.guardianAccountId, {
       page: parseInt(req.query.page as string) || undefined,

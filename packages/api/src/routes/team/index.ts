@@ -6,33 +6,19 @@
  */
 
 import { Router } from "express";
-import { GuardianAccountModel } from "../../models/guardian-account/schema.js";
 import { TeamMemberModel, TeamInvitationModel, generateInviteToken } from "../../models/team/schema.js";
 import { requirePermission } from "../../middleware/permissions.js";
+import { requireTier } from "../../middleware/tier.js";
+import { TIER_LIMITS } from "../billing/index.js";
 import { logActivity } from "../../services/activity-logger.js";
 import type { TeamRole } from "../../models/team/schema.js";
 
 export const teamRouter = Router();
 
-/** Tier check middleware — only team/enterprise can use team features */
-async function requireTeamTier(req: any, res: any, next: any) {
-  const account = await GuardianAccountModel.findById(req.guardianAccountId);
-  if (!account) return res.status(404).json({ error: "Account not found" });
-  if (account.tier !== "team" && account.tier !== "enterprise") {
-    return res.status(403).json({
-      error: "Team features require the Team or Enterprise plan",
-      currentTier: account.tier,
-      upgradeUrl: "/billing?plan=team",
-    });
-  }
-  (req as any).guardianAccount = account;
-  next();
-}
-
 /**
  * GET /team/members — List team members and pending invitations
  */
-teamRouter.get("/members", requireTeamTier, requirePermission("team:read"), async (req: any, res, next) => {
+teamRouter.get("/members", requireTier("team", "enterprise"), requirePermission("team:read"), async (req: any, res, next) => {
   try {
     const accountId = req.guardianAccountId;
     const account = req.guardianAccount;
@@ -77,7 +63,7 @@ teamRouter.get("/members", requireTeamTier, requirePermission("team:read"), asyn
 /**
  * POST /team/invite — Send a team invitation
  */
-teamRouter.post("/invite", requireTeamTier, requirePermission("team:manage"), async (req: any, res, next) => {
+teamRouter.post("/invite", requireTier("team", "enterprise"), requirePermission("team:manage"), async (req: any, res, next) => {
   try {
     const { email, role = "member" } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
@@ -112,8 +98,7 @@ teamRouter.post("/invite", requireTeamTier, requirePermission("team:manage"), as
     // Check team member limit based on tier
     const account = req.guardianAccount;
     const currentMemberCount = await TeamMemberModel.countDocuments({ guardianAccountId: accountId });
-    const limits: Record<string, number> = { team: 10, enterprise: 100 };
-    const maxMembers = limits[account.tier] || 10;
+    const maxMembers = TIER_LIMITS[account.tier as keyof typeof TIER_LIMITS]?.teamMembers ?? 0;
     if (currentMemberCount >= maxMembers) {
       return res.status(403).json({
         error: `Team member limit reached (${maxMembers} for ${account.tier} tier)`,
@@ -215,7 +200,7 @@ teamRouter.post("/invite/accept", async (req: any, res, next) => {
 /**
  * PATCH /team/members/:memberId — Update a team member's role
  */
-teamRouter.patch("/members/:memberId", requireTeamTier, requirePermission("team:manage"), async (req: any, res, next) => {
+teamRouter.patch("/members/:memberId", requireTier("team", "enterprise"), requirePermission("team:manage"), async (req: any, res, next) => {
   try {
     const { role } = req.body;
     const validRoles: TeamRole[] = ["admin", "member", "viewer"];
@@ -247,7 +232,7 @@ teamRouter.patch("/members/:memberId", requireTeamTier, requirePermission("team:
 /**
  * DELETE /team/members/:memberId — Remove a team member
  */
-teamRouter.delete("/members/:memberId", requireTeamTier, requirePermission("team:manage"), async (req: any, res, next) => {
+teamRouter.delete("/members/:memberId", requireTier("team", "enterprise"), requirePermission("team:manage"), async (req: any, res, next) => {
   try {
     const member = await TeamMemberModel.findOneAndDelete({
       _id: req.params.memberId,
@@ -280,7 +265,7 @@ teamRouter.delete("/members/:memberId", requireTeamTier, requirePermission("team
 /**
  * DELETE /team/invitations/:invitationId — Revoke a pending invitation
  */
-teamRouter.delete("/invitations/:invitationId", requireTeamTier, requirePermission("team:manage"), async (req: any, res, next) => {
+teamRouter.delete("/invitations/:invitationId", requireTier("team", "enterprise"), requirePermission("team:manage"), async (req: any, res, next) => {
   try {
     const invitation = await TeamInvitationModel.findOneAndUpdate(
       { _id: req.params.invitationId, guardianAccountId: req.guardianAccountId, status: "pending" },
