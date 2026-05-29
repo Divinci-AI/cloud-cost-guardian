@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
-import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useAuth, useUser } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, RedirectToSignIn, RedirectToSignUp, UserButton, useAuth, useUser } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { setTokenGetter, api } from "./api/client";
 import { OrgProvider } from "./context/OrgContext";
@@ -143,6 +143,20 @@ function AuthenticatedApp() {
   );
 }
 
+/**
+ * Logged-out visitors land on sign-IN by default, but marketing CTAs link with
+ * `?screen_hint=signup` (and /sign-up) to bring NEW users straight to the Clerk
+ * sign-UP view. Without this, RedirectToSignIn always shows "Sign in" and the
+ * hint is silently dropped — friction on the exact conversion step.
+ */
+function SignedOutRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const wantsSignup =
+    params.get("screen_hint") === "signup" ||
+    window.location.pathname.startsWith("/sign-up");
+  return wantsSignup ? <RedirectToSignUp /> : <RedirectToSignIn />;
+}
+
 export function App() {
   return (
     <BrowserRouter>
@@ -150,7 +164,7 @@ export function App() {
         <AuthenticatedApp />
       </SignedIn>
       <SignedOut>
-        <RedirectToSignIn />
+        <SignedOutRedirect />
       </SignedOut>
     </BrowserRouter>
   );
