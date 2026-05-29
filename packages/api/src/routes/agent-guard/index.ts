@@ -35,6 +35,16 @@ function fmtUSD(n: number): string {
   return `$${n.toFixed(n < 1 ? 4 : 2)}`;
 }
 
+// Input caps — an authenticated client could otherwise POST multi-MB strings
+// that get persisted and forwarded into alert payloads (Discord/PagerDuty).
+const MAX_STR = 512;
+const MAX_REASONS = 20;
+
+/** Clamp an untrusted string to a sane length (or undefined). */
+function clampStr(v: unknown, max = MAX_STR): string | undefined {
+  return typeof v === "string" ? v.slice(0, max) : undefined;
+}
+
 /**
  * POST /agent-guard/events — record a budget trip; fan out alerts on block.
  */
@@ -54,38 +64,43 @@ agentGuardRouter.post("/events", requirePermission("cloud_accounts:read"), async
     if (typeof body.sessionId !== "string" || !body.sessionId) {
       return res.status(400).json({ error: "sessionId is required" });
     }
-    if (typeof body.sessionUSD !== "number" || typeof body.dailyUSD !== "number") {
-      return res.status(400).json({ error: "sessionUSD and dailyUSD must be numbers" });
+    // Number.isFinite rejects NaN/Infinity, which would pass a bare typeof check
+    // and then persist / render as "$NaN".
+    if (!Number.isFinite(body.sessionUSD) || !Number.isFinite(body.dailyUSD)) {
+      return res.status(400).json({ error: "sessionUSD and dailyUSD must be finite numbers" });
     }
 
-    const reasons = Array.isArray(body.reasons) ? body.reasons.map(String) : [];
+    const reasons = (Array.isArray(body.reasons) ? body.reasons : [])
+      .slice(0, MAX_REASONS)
+      .map((r) => String(r).slice(0, MAX_STR));
 
     const doc = await AgentGuardEventModel.create({
       guardianAccountId,
       orgId,
-      ts: typeof body.ts === "number" ? body.ts : Date.now(),
+      ts: typeof body.ts === "number" && Number.isFinite(body.ts) ? body.ts : Date.now(),
       source: body.source,
-      sessionId: body.sessionId,
+      sessionId: clampStr(body.sessionId, 128),
       level: body.level,
       sessionUSD: body.sessionUSD,
       dailyUSD: body.dailyUSD,
       reasons,
-      action: typeof body.action === "string" ? body.action : "",
-      cwd: typeof body.cwd === "string" ? body.cwd : undefined,
+      action: clampStr(body.action) ?? "",
+      cwd: clampStr(body.cwd, 1024),
     });
 
     // Fan out only block-level events through the org's alert channels.
     if (body.level === "block") {
       const account = await GuardianAccountModel.findById(guardianAccountId);
       if (account && account.alertChannels.length > 0) {
-        const summary = `Coding agent BLOCKED — session ${fmtUSD(body.sessionUSD)}, daily ${fmtUSD(body.dailyUSD)}`;
+        const summary = `Coding agent BLOCKED — session ${fmtUSD(doc.sessionUSD)}, daily ${fmtUSD(doc.dailyUSD)}`;
+        // Use the persisted (clamped) values, never raw body, so alert payloads stay bounded.
         await sendAlerts(account.alertChannels, summary, "critical", {
-          source: `agent-guard:${body.source}`,
-          sessionId: body.sessionId,
-          sessionUSD: body.sessionUSD,
-          dailyUSD: body.dailyUSD,
-          project: body.cwd ?? "(unknown)",
-          action: body.action ?? "",
+          source: `agent-guard:${doc.source}`,
+          sessionId: doc.sessionId,
+          sessionUSD: doc.sessionUSD,
+          dailyUSD: doc.dailyUSD,
+          project: doc.cwd ?? "(unknown)",
+          action: doc.action ?? "",
           reasons,
         }).catch((e) => console.error("[guardian] agent-guard alert fan-out failed:", e?.message || e));
       }

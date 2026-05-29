@@ -189,6 +189,34 @@ describe("POST /agent-guard/events", () => {
     const missing = await authed(request(app).post("/agent-guard/events")).send({ source: "hook", level: "block" });
     expect(missing.status).toBe(400);
   });
+
+  it("rejects NaN/Infinity amounts (Number.isFinite, not bare typeof)", async () => {
+    const nan = await authed(request(app).post("/agent-guard/events"))
+      .send({ ...validBlock, sessionId: "nan-1", sessionUSD: "not-a-number" });
+    expect(nan.status).toBe(400);
+    // JSON can't carry Infinity literally; the string path above is the realistic vector.
+  });
+
+  it("clamps oversized strings/arrays before persisting", async () => {
+    // Stay under the global JSON body limit (which already 413s huge payloads)
+    // so we exercise the per-field clamp, not the body-parser cap.
+    const big = "x".repeat(5_000);
+    const res = await authed(request(app).post("/agent-guard/events")).send({
+      ...validBlock,
+      sessionId: "clamp-1",
+      level: "warn",
+      cwd: big,
+      reasons: Array.from({ length: 60 }, () => big),
+    });
+    expect(res.status).toBe(200);
+
+    const { AgentGuardEventModel } = await import("../../src/models/agent-guard-event/schema.js");
+    const stored = await (AgentGuardEventModel as any).find({ guardianAccountId: ACCT }).lean();
+    const rec = stored.find((s: any) => s.sessionId === "clamp-1");
+    expect(rec.cwd.length).toBeLessThanOrEqual(1024);
+    expect(rec.reasons.length).toBeLessThanOrEqual(20);
+    expect(rec.reasons[0].length).toBeLessThanOrEqual(512);
+  });
 });
 
 describe("GET /agent-guard/events", () => {
