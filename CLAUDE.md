@@ -73,7 +73,17 @@ ks accounts list
 
 # Get credential help
 ks onboard --help-provider cloudflare
+
+# Agent Guard — cap runaway coding-agent (Claude Code / Cursor / Aider) spend
+ks guard install                                  # wire the Claude Code hook into ./.claude/settings.json
+ks guard config --session-hard 30 --daily-hard 150
+ks guard status [--json]                          # session + daily spend vs budget
+ks guard pause --minutes 30                       # escape hatch (also: ks guard resume)
+ks guard proxy --flavor openai                    # hard 402 wall for non-Claude-Code agents
 ```
+
+> `ks guard` is the same engine as the standalone `agent-guard` / `ksg` binary
+> (see `packages/agent-guard`) — both share one ledger, budget, and escape hatch.
 
 ### For AI Agent Setup
 When setting up Kill Switch for another project:
