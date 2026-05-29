@@ -744,11 +744,11 @@ aws             43.45        1.44</code></pre>
         </div>
         <div class="cmd-group">
             <h4>ks config list</h4>
-            <p>Show all config values (API key is masked).</p>
+            <p>Show all config values. The API key is masked (in both table and <code>--json</code> output); pass <code>--reveal</code> to print it in full.</p>
         </div>
         <div class="cmd-group">
             <h4>ks config get &lt;key&gt;</h4>
-            <p>Get a single config value.</p>
+            <p>Get a single config value. Secret values (e.g. <code>apiKey</code>) are masked unless you pass <code>--reveal</code>.</p>
         </div>
         <div class="cmd-group">
             <h4>ks config set &lt;key&gt; &lt;value&gt;</h4>
