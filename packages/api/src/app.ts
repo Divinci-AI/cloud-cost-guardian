@@ -25,6 +25,7 @@ import { requirePermission } from "./middleware/permissions.js";
 import { logActivity } from "./services/activity-logger.js";
 import { activityRouter } from "./routes/activity/index.js";
 import { orgsRouter } from "./routes/orgs/index.js";
+import { agentGuardRouter } from "./routes/agent-guard/index.js";
 import { runCheckCycle } from "./services/monitoring-engine.js";
 import { openApiSpec } from "./routes/docs/openapi.js";
 import { getUsageHistory, getAlertHistory, getAnalyticsOverview } from "./globals/index.js";
@@ -117,6 +118,8 @@ export function createApp() {
     app.use("/alerts/test", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey, ...rlOpts }));
     app.use("/team/invite", rateLimit({ windowMs: 15 * 60 * 1000, max: 20, keyGenerator: perUserKey, ...rlOpts }));
     app.use("/agent/report", rateLimit({ windowMs: 15 * 60 * 1000, max: 30, ...rlOpts }));
+    // agent-guard event ingest — agents trip caps repeatedly, so allow a higher per-user rate
+    app.use("/agent-guard", rateLimit({ windowMs: 15 * 60 * 1000, max: 60, keyGenerator: perUserKey, ...rlOpts }));
     // /check triggers external cloud API calls — tight per-user limit to prevent amplification
     app.use("/check", rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyGenerator: perUserKey, ...rlOpts }));
     // CLI device-flow code creation — anonymous endpoint, IP-keyed
@@ -196,6 +199,7 @@ export function createApp() {
   app.use("/team", ...authStack);
   app.use("/auth", ...authStack);
   app.use("/activity", ...authStack);
+  app.use("/agent-guard", ...authStack);
   app.use("/orgs", requireAuth, resolveOrg);
 
   // Authenticated routes
@@ -207,6 +211,7 @@ export function createApp() {
   app.use("/team", teamRouter);
   app.use("/auth", authRouter);
   app.use("/activity", activityRouter);
+  app.use("/agent-guard", agentGuardRouter);
   app.use("/orgs", orgsRouter);
 
   // Manual check (requires auth — runs only the authenticated user's accounts)
