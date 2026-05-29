@@ -47,8 +47,11 @@ function clampStr(v: unknown, max = MAX_STR): string | undefined {
 
 /**
  * POST /agent-guard/events — record a budget trip; fan out alerts on block.
+ *
+ * Requires kill_switch:trigger (owner/admin/member): an agent block IS a
+ * kill-switch action, so reporting one is a write that viewers shouldn't make.
  */
-agentGuardRouter.post("/events", requirePermission("cloud_accounts:read"), async (req, res, next) => {
+agentGuardRouter.post("/events", requirePermission("kill_switch:trigger"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId as string;
     const orgId = guardianAccountId;

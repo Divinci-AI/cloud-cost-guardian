@@ -13,6 +13,26 @@ type Severity = "critical" | "error" | "warning" | "info";
 const GITHUB_API_HOST = "api.github.com";
 
 /**
+ * Escape a value for safe interpolation into HTML. Alert details can carry
+ * user-controlled strings (e.g. a cloud account's `name` from request body,
+ * or a violation's serviceName), and the email channel renders them into an
+ * HTML body — so every interpolated string must be escaped to prevent HTML
+ * injection. Non-string values are stringified first.
+ *
+ * Other channels (Slack/Discord/PagerDuty/webhook) transmit via JSON and render
+ * values as text, so they don't need this; Slack/Discord markdown formatting
+ * from a crafted string is cosmetic only.
+ */
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
  * SSRF Protection: Validate webhook URLs are safe to call.
  * Blocks private/internal IPs and non-HTTPS URLs.
  * Explicitly allows api.github.com for the remediation channel.
@@ -186,17 +206,17 @@ async function alertEmail(channel: AlertChannel, summary: string, severity: Seve
   const violationRows = violations.map((v: any) => {
     const multiplier = v.threshold > 0 ? `${Math.round(v.currentValue / v.threshold)}×` : "";
     return `<tr>
-      <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;">${v.serviceName ?? ""}</td>
-      <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;">${v.metricName ?? ""}</td>
-      <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;color:#ff6b6b;">${v.currentValue ?? ""}</td>
-      <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;">${v.threshold ?? ""}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;">${escapeHtml(v.serviceName)}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;">${escapeHtml(v.metricName)}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;color:#ff6b6b;">${escapeHtml(v.currentValue)}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;">${escapeHtml(v.threshold)}</td>
       <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;font-weight:bold;color:#ff6b6b;">${multiplier}</td>
     </tr>`;
   }).join("");
 
   const actionsTaken = (details.actionsTaken as string[] | undefined) ?? [];
   const actionsHtml = actionsTaken.length > 0
-    ? `<p style="color:#4ade80;"><strong>Kill Switch action taken:</strong> ${actionsTaken.join(", ")}</p>`
+    ? `<p style="color:#4ade80;"><strong>Kill Switch action taken:</strong> ${actionsTaken.map(escapeHtml).join(", ")}</p>`
     : "";
 
   const html = `<!DOCTYPE html>
@@ -212,11 +232,11 @@ async function alertEmail(channel: AlertChannel, summary: string, severity: Seve
     </p>
 
     <div style="background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.2);border-radius:8px;padding:16px;margin-bottom:24px;">
-      <p style="color:#fff;font-size:15px;font-weight:600;margin:0 0 4px;">${summary}</p>
+      <p style="color:#fff;font-size:15px;font-weight:600;margin:0 0 4px;">${escapeHtml(summary)}</p>
       <p style="color:#9ca3af;font-size:13px;margin:0;">
-        Provider: <strong style="color:#fff;">${String(details.provider ?? "")}</strong> ·
-        Account: <strong style="color:#fff;">${String(details.accountName ?? "")}</strong> ·
-        Severity: <strong style="color:#ff6b6b;">${severity}</strong>
+        Provider: <strong style="color:#fff;">${escapeHtml(details.provider)}</strong> ·
+        Account: <strong style="color:#fff;">${escapeHtml(details.accountName)}</strong> ·
+        Severity: <strong style="color:#ff6b6b;">${escapeHtml(severity)}</strong>
       </p>
     </div>
 
