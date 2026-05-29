@@ -94,6 +94,24 @@ export const openApiSpec = {
       post: { summary: "Run monitoring check on all accounts", operationId: "runCheck", tags: ["Monitoring"],
         responses: { "200": { description: "Check results for all accounts" } } },
     },
+    "/agent-guard/events": {
+      post: { summary: "Report a coding-agent budget trip (warn/block)", operationId: "createAgentGuardEvent", tags: ["Agent Guard"], security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: {
+          type: "object", required: ["source", "level", "sessionId", "sessionUSD", "dailyUSD"], properties: {
+            source: { type: "string", enum: ["hook", "proxy"] },
+            level: { type: "string", enum: ["warn", "block"] },
+            sessionId: { type: "string" },
+            sessionUSD: { type: "number" },
+            dailyUSD: { type: "number" },
+            ts: { type: "number", description: "Client epoch ms; defaults to server now" },
+            reasons: { type: "array", items: { type: "string" } },
+            action: { type: "string" },
+            cwd: { type: "string" },
+          } } } } },
+        responses: { "200": { description: "Event recorded; block-level events fan out to alert channels" }, "400": { description: "Malformed body" }, "401": { description: "Missing/invalid auth" } } },
+      get: { summary: "List this org's recent agent-guard events (newest first)", operationId: "listAgentGuardEvents", tags: ["Agent Guard"], security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Paginated events" } } },
+    },
     "/alerts/channels": {
       get: { summary: "List alert channels", operationId: "listAlertChannels", tags: ["Alerts"], security: [{ bearerAuth: [] }],
         responses: { "200": { description: "Configured alert channels" } } },
