@@ -26,6 +26,39 @@ ks onboard --provider cloudflare \
 ks check
 ```
 
+## Kill Switch for Coding Agents
+
+Cloud bills aren't the only runaway anymore. A coding agent (Claude Code, Cursor,
+Aider) runs a reasoning loop that **re-sends its entire accumulated context on
+every tool call**, so LLM spend compounds silently — the failure mode behind the
+$4,200-weekend, $87k-month, and reported $500M-month "after failing to put usage
+limits on Claude licenses" stories.
+
+[`agent-guard`](packages/agent-guard) caps that loop with **two surfaces sharing one
+budget** (per-session **and** daily-rolling, each with a soft warn + hard block):
+
+```bash
+# Through the main CLI:
+ks guard install                                  # wire the Claude Code hook
+ks guard config --session-hard 30 --daily-hard 150
+ks guard status                                   # spend vs budget
+
+# …or the standalone binary, for any agent:
+npm i -g @kill-switch/agent-guard
+agent-guard proxy   # ANTHROPIC_BASE_URL/OPENAI_BASE_URL → hard 402 wall at the cap
+```
+
+- **Hook** (Claude Code) — reads the live transcript, prices real token usage, warns
+  at the soft cap, **denies the next tool call** at the hard cap. Fails *open* on any
+  error, so a buggy guard never bricks your session.
+- **Proxy** (any agent) — a local metering reverse-proxy that returns **HTTP 402** at
+  the cap. The API literally stops answering — a wall the agent can't argue past.
+
+This works against **any** coding agent *by design*: the hook is the friendly native
+stop for Claude Code; the proxy is the dumb hard backstop for everything else
+(Cursor, Aider, raw scripts). An **escape hatch** (`ks guard pause`, or
+`touch ~/.kill-switch/agent-guard/PAUSED`) always belongs to the human, never the agent.
+
 ## Supported Providers (14)
 
 | Provider | Services Monitored | Kill Actions |
@@ -50,6 +83,7 @@ ks check
 | Package | Description | Deployment |
 |---------|-------------|------------|
 | [`packages/cli`](packages/cli) | CLI (`ks` / `kill-switch`) — onboard, monitor, kill from the terminal | npm: `@kill-switch/cli` |
+| [`packages/agent-guard`](packages/agent-guard) | Kill Switch for **coding agents** (`agent-guard` / `ksg`, also `ks guard`) — hook + token-metering proxy that cap per-session & daily LLM spend | npm: `@kill-switch/agent-guard` |
 | [`packages/api`](packages/api) | Kill Switch API — monitoring engine, rule engine, billing | GCP Cloud Run |
 | [`packages/web`](packages/web) | Dashboard — React SPA with Clerk auth | Cloudflare Workers |
 | [`packages/kill-switch-cf`](packages/kill-switch-cf) | Cloudflare Kill Switch — self-hosted cron Worker | Cloudflare Workers |
@@ -82,6 +116,11 @@ ks check
 │  ├── CF Worker (cron, GraphQL, auto-disconnect)                 │
 │  ├── GCP Cloud Function (budget alerts, multi-service shutdown) │
 │  └── AWS Lambda (budget alerts via SNS, EC2/Lambda/ECS kill)    │
+│                                                                  │
+│  Agent Guard (coding-agent LLM spend, runs on the dev's box)    │
+│  ├── Hook (Claude Code: transcript-priced, warn→deny tool use)  │
+│  ├── Proxy (any agent: meters responses, HTTP 402 at the cap)   │
+│  └── Reports trips ──→ API /agent-guard/events ──→ alerts + UI  │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
