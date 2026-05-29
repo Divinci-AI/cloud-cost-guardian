@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../api/client";
 
@@ -19,6 +19,7 @@ export function BillingPage() {
   const [status, setStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [annual, setAnnual] = useState(false);
+  const autoLaunched = useRef(false);
 
   const successParam = searchParams.get("success");
   const canceledParam = searchParams.get("canceled");
@@ -53,6 +54,17 @@ export function BillingPage() {
       alert(e.message);
     }
   };
+
+  // Deep-link intent: /billing?plan=pro|team launches checkout once (marketing "Upgrade" buttons).
+  useEffect(() => {
+    if (autoLaunched.current || loading) return;
+    if (successParam || canceledParam) return;
+    if (planParam !== "pro" && planParam !== "team") return;
+    if (status?.tier === planParam) return; // already subscribed to this tier
+    autoLaunched.current = true;
+    handleCheckout(`guardian_${planParam}_${annual ? "annual" : "monthly"}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, planParam, status, successParam, canceledParam]);
 
   const handleManage = async () => {
     try {

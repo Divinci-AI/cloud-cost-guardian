@@ -28,6 +28,8 @@ export interface GuardianAccountProps {
   tier: GuardianTier;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
+  subscriptionStatus?: string;
+  currentPeriodEnd?: number;
   alertChannels: AlertChannel[];
   onboardingCompleted: boolean;
   settings: {
@@ -56,6 +58,8 @@ const guardianAccountSchema = new Schema<GuardianAccountDocument>({
   tier: { type: String, required: true, enum: ["free", "pro", "team", "enterprise"], default: "free" },
   stripeCustomerId: { type: String },
   stripeSubscriptionId: { type: String },
+  subscriptionStatus: { type: String },
+  currentPeriodEnd: { type: Number },
   alertChannels: { type: [alertChannelSchema], default: [] },
   onboardingCompleted: { type: Boolean, default: false },
   settings: {
