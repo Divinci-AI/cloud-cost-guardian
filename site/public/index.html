@@ -3,13 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="/favicon.ico" sizes="32x32">
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <title>Kill Switch | Stop Runaway Cloud Bills</title>
-    <meta name="description" content="Auto-kill runaway cloud services before they generate surprise bills. Cloudflare, GCP, AWS. Born from a $91K bill. Open source.">
-    <meta property="og:title" content="Kill Switch — Cloud Billing Protection">
-    <meta property="og:description" content="Auto-kill runaway cloud services before they generate surprise bills. Born from a $91K bill.">
+    <meta name="description" content="Auto-kill runaway cloud services before they generate surprise bills. Monitor Cloudflare, GCP, and AWS spending. Plans from $29/mo. Born from a $91K bill.">
+    <meta property="og:title" content="Kill Switch — Stop Runaway Cloud Bills">
+    <meta property="og:description" content="Cloud cost monitoring with automatic kill switches. Protect Cloudflare, GCP, and AWS from runaway bills. Plans from $29/mo.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://kill-switch.net">
     <meta name="twitter:card" content="summary_large_image">
@@ -83,6 +80,20 @@
             background: linear-gradient(to bottom, transparent 0%, #0c1229 100%);
             pointer-events: none;
             z-index: 1;
+        }
+        .beta-banner {
+            width: 100%; background: linear-gradient(135deg, #c25800, #e06800);
+            color: #fff; text-align: center; padding: 8px 16px;
+            font-size: 13px; font-weight: 600; font-family: 'Outfit', sans-serif;
+            letter-spacing: 0.3px; z-index: 1001;
+        }
+        .beta-banner a { color: #fff; text-decoration: underline; }
+        .beta-badge {
+            display: inline-block; background: rgba(194, 88, 0, 0.25);
+            border: 1px solid rgba(224, 104, 0, 0.5); border-radius: 6px;
+            padding: 2px 8px; font-size: 11px; font-weight: 700;
+            color: #ff9d42; text-transform: uppercase; letter-spacing: 0.5px;
+            margin-left: 8px; vertical-align: middle;
         }
         .hero-badge {
             display: inline-flex; align-items: center; gap: 8px;
@@ -199,7 +210,7 @@
 
         /* ── Cost Banner ─────────────────────────────── */
         .cost-banner {
-            position: relative; z-index: 2;
+            position: relative; z-index: 1;
             margin-top: 60px;
             display: flex; gap: 40px;
             justify-content: center; flex-wrap: wrap;
@@ -527,6 +538,143 @@
         .story-card .source {
             font-size: 12px; color: #6b7280;
         }
+        .story-card .source a {
+            color: #8b8d96; text-decoration: none;
+            border-bottom: 1px dotted rgba(255,255,255,0.25);
+        }
+        .story-card .source a:hover { color: #5ce2e7; border-bottom-color: #5ce2e7; }
+        /* ── Bill Shock Wall (live social embeds) ─────── */
+        .embed-wall {
+            display: flex;
+            gap: 20px;
+            align-items: start;
+            overflow-x: auto;
+            overflow-y: hidden;
+            margin: 28px -24px 0;          /* bleed to section edges for the scroll */
+            padding: 4px 24px 16px;
+            scroll-snap-type: x proximity;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(92,226,231,0.4) transparent;
+        }
+        .embed-wall::-webkit-scrollbar { height: 8px; }
+        .embed-wall::-webkit-scrollbar-thumb { background: rgba(92,226,231,0.35); border-radius: 999px; }
+        .embed-wall::-webkit-scrollbar-track { background: transparent; }
+        .embed-cell {
+            position: relative;
+            flex: 0 0 340px;               /* one tweet per slide in the row */
+            max-height: 560px;
+            overflow: hidden;
+            border-radius: 14px;
+            scroll-snap-align: start;
+        }
+        .embed-cell::after {
+            content: "";
+            position: absolute; left: 0; right: 0; bottom: 0; height: 96px;
+            background: linear-gradient(to bottom, rgba(12,18,41,0) 0%, rgba(12,18,41,0.96) 78%);
+            pointer-events: none; z-index: 1;
+        }
+        .embed-cell .embed-more {
+            position: absolute; bottom: 14px; left: 0; right: 0;
+            text-align: center; z-index: 2;
+        }
+        .embed-cell .embed-more a {
+            font-size: 13px; font-weight: 600; color: #5ce2e7;
+            text-decoration: none;
+            background: rgba(12,18,41,0.85);
+            border: 1px solid rgba(92,226,231,0.35);
+            border-radius: 999px; padding: 7px 16px;
+            backdrop-filter: blur(4px);
+        }
+        .embed-cell .embed-more a:hover { background: rgba(92,226,231,0.15); }
+        /* overflow story-cards in a single-row horizontal scroll */
+        .stories-scroll {
+            display: flex; gap: 20px;
+            overflow-x: auto; overflow-y: hidden;
+            margin: 20px -24px 0; padding: 4px 24px 14px;
+            scroll-snap-type: x proximity;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,107,107,0.4) transparent;
+        }
+        .stories-scroll .story-card { flex: 0 0 320px; scroll-snap-align: start; }
+        .stories-scroll::-webkit-scrollbar { height: 8px; }
+        .stories-scroll::-webkit-scrollbar-thumb { background: rgba(255,107,107,0.35); border-radius: 999px; }
+        .stories-scroll::-webkit-scrollbar-track { background: transparent; }
+        .scroll-hint {
+            font-size: 12px; color: #6b7280; margin: 22px 0 0;
+            text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;
+        }
+        /* let the header sit over the visible video (shorter top fade) */
+        .video-bg-section.show-video-top::before { height: 72px; }
+        .embed-wall .twitter-tweet,
+        .embed-wall .reddit-embed-bq {
+            margin: 0 auto !important;
+            width: 100% !important;
+        }
+        .embed-note {
+            text-align: center; font-size: 12px; color: #6b7280;
+            margin: 20px auto 0; max-width: 640px;
+        }
+
+        /* ── Pricing ─────────────────────────────────── */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+        .pricing-card {
+            padding: 32px 28px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            transition: border-color 0.2s, transform 0.2s;
+            display: flex; flex-direction: column;
+        }
+        .pricing-card:hover { border-color: rgba(92, 226, 231, 0.2); transform: translateY(-2px); }
+        .pricing-card.featured {
+            border-color: rgba(194, 88, 0, 0.4);
+            background: rgba(194, 88, 0, 0.06);
+        }
+        .pricing-card .plan-name {
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px; font-weight: 600; color: #fff;
+            margin-bottom: 4px;
+        }
+        .pricing-card .plan-desc {
+            font-size: 13px; color: #6b7280; margin-bottom: 20px;
+        }
+        .pricing-card .plan-price {
+            font-family: 'Outfit', sans-serif;
+            font-size: 40px; font-weight: 800; color: #fff;
+            margin-bottom: 4px;
+        }
+        .pricing-card .plan-price .per { font-size: 16px; font-weight: 400; color: #6b7280; }
+        .pricing-card .plan-features {
+            list-style: none; padding: 0; margin: 20px 0 28px; flex: 1;
+        }
+        .pricing-card .plan-features li {
+            font-size: 13px; color: #c4c5ca; padding: 5px 0;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .pricing-card .plan-features li::before {
+            content: '\2713'; color: #5ce2e7; font-weight: 700; font-size: 12px;
+        }
+        .pricing-card .btn-plan {
+            display: block; text-align: center;
+            padding: 12px; border-radius: 8px;
+            font-weight: 600; font-size: 14px;
+            text-decoration: none; transition: background 0.2s, transform 0.2s;
+        }
+        .pricing-card .btn-plan.primary {
+            background: linear-gradient(135deg, #c25800, #e06800);
+            color: #fff;
+        }
+        .pricing-card .btn-plan.primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(194, 88, 0, 0.3); }
+        .pricing-card .btn-plan.secondary {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff; border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .pricing-card .btn-plan.secondary:hover { background: rgba(255, 255, 255, 0.15); }
 
         /* ── CTA ─────────────────────────────────────── */
         .cta {
@@ -547,24 +695,44 @@
 
         @media (max-width: 768px) {
             .navbar { padding: 0 16px; }
-            .nav-links { gap: 12px; }
+            .nav-links { gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+            .nav-links a { font-size: 12px !important; }
+            .btn-github { display: none !important; }
             .flow { grid-template-columns: 1fr; }
             .cost-banner { gap: 24px; }
             .hero { padding: 100px 20px 60px; }
+            .pricing-grid { grid-template-columns: 1fr; }
+            .pricing-card .plan-price { font-size: 32px; }
+            .provider-cards { grid-template-columns: 1fr; }
+            .features-grid { grid-template-columns: 1fr; }
+            .stories { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 480px) {
+            .navbar { height: auto; padding: 12px 16px; flex-direction: column; gap: 8px; }
+            .nav-links { gap: 8px; justify-content: center; }
+            .hero h1 { font-size: 28px; }
+            .hero-sub { font-size: 15px; }
+            .hero-actions { flex-direction: column; align-items: center; }
         }
     </style>
 </head>
 <body>
+    <div class="beta-banner">&#128679; Beta Preview &mdash; We're onboarding early users. <a href="https://app.kill-switch.net?screen_hint=signup">Sign up</a> to lock in founding member pricing.</div>
     <nav class="navbar">
         <div class="nav-brand">
             <span class="icon">&#9889;</span>
             <span>Kill Switch</span>
+            <span class="beta-badge">Beta</span>
         </div>
         <div class="nav-links">
             <a href="#how-it-works">How It Works</a>
             <a href="#features">Features</a>
+            <a href="#pricing">Pricing</a>
             <a href="/docs">API Docs</a>
-            <a href="https://guardian-api-150038457816.us-central1.run.app/billing/plans" target="_blank" style="color: #5ce2e7;">Pricing</a>
+            <a href="https://github.com/Divinci-AI/kill-switch" class="btn-github">
+                <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub
+            </a>
             <a href="https://app.kill-switch.net" style="background: linear-gradient(135deg, #c25800, #e06800); color: #fff !important; padding: 7px 18px; border-radius: 6px; font-weight: 600; font-size: 13px;">Sign In</a>
         </div>
     </nav>
@@ -589,12 +757,13 @@
             <span class="gradient-text-warn">Cloud Bills</span>
         </h1>
         <p class="hero-sub">
-            Cloud providers have no spending caps. A single feedback loop can drain your account
-            overnight. Kill Switch monitors usage and auto-kills runaway services before
-            the bill arrives. Cloudflare, GCP, and AWS.
+            Cloud providers have no spending caps &#8212; and neither do coding agents. One runaway
+            loop can drain your account or burn thousands in tokens overnight. Kill Switch
+            auto-kills runaway cloud services <em>and</em> caps runaway coding agents before
+            the bill arrives. Cloudflare, GCP, AWS &#8212; and Claude Code, Cursor, or any agent.
         </p>
         <div class="hero-actions">
-            <a href="https://github.com/Divinci-AI/kill-switch" class="btn-primary">Get Started</a>
+            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started</a>
             <a href="#how-it-works" class="btn-secondary">See How It Works</a>
         </div>
         <div class="cost-banner">
@@ -710,6 +879,8 @@
         <div class="section-label">Supported Providers</div>
         <div class="section-title">Kill switches for 14 cloud services</div>
         <div class="section-desc">Monitor spending and auto-kill runaway services across cloud infrastructure, AI APIs, databases, and SaaS platforms.</div>
+
+        <!-- Big 3 Provider Cards -->
         <div class="provider-cards">
             <div class="provider-card">
                 <div class="provider-header">
@@ -720,7 +891,7 @@
                 <ul>
                     <li>Worker request volume spikes</li>
                     <li>Durable Object wall-time hours</li>
-                    <li>DO subrequest loops</li>
+                    <li>R2, D1, Queues, Stream costs</li>
                     <li>Route removal &amp; domain disconnect</li>
                 </ul>
             </div>
@@ -752,21 +923,21 @@
             </div>
         </div>
 
-        <!-- Additional providers text list -->
+        <!-- Additional Providers Text List -->
         <div style="text-align: center; max-width: 800px; margin: 32px auto 0;">
             <p style="color: #6b7280; font-size: 15px; line-height: 2;">
-                Plus financial kill switches for<br>
-                <span style="color: #9ca3af; font-weight: 600;">RunPod</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">Redis</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">MongoDB</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">OpenAI</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">Anthropic</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">xAI</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">Replicate</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">Snowflake</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">Vercel</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">Datadog</span> &middot;
-                <span style="color: #9ca3af; font-weight: 600;">Neon</span>
+                Plus financial kill switches for
+                <span style="color: #673ab7; font-weight: 600;">RunPod</span> &middot;
+                <span style="color: #dc382d; font-weight: 600;">Redis</span> &middot;
+                <span style="color: #00684a; font-weight: 600;">MongoDB</span> &middot;
+                <span style="color: #10a37f; font-weight: 600;">OpenAI</span> &middot;
+                <span style="color: #d4a574; font-weight: 600;">Anthropic</span> &middot;
+                <span style="color: #1d9bf0; font-weight: 600;">xAI</span> &middot;
+                <span style="color: #0081fb; font-weight: 600;">Replicate</span> &middot;
+                <span style="color: #29b5e8; font-weight: 600;">Snowflake</span> &middot;
+                <span style="color: #fff; font-weight: 600;">Vercel</span> &middot;
+                <span style="color: #632ca6; font-weight: 600;">Datadog</span> &middot;
+                <span style="color: #00e599; font-weight: 600;">Neon</span>
             </p>
         </div>
     </section>
@@ -811,27 +982,74 @@
     </section>
     </div>
 
-    <section>
-        <div class="section-label">Quick Start</div>
-        <div class="section-title">Deploy in 60 seconds</div>
-        <div class="section-desc">Three commands and you're protected.</div>
-        <div class="code-block">
-            <span class="comment"># Clone and deploy</span><br>
-            <span class="cmd">git clone</span> https://github.com/Divinci-AI/kill-switch<br>
-            <span class="cmd">cd</span> cloudflare-billing-kill-switch<br>
-            <span class="cmd">npm install</span> <span class="flag">&&</span> <span class="cmd">wrangler deploy</span><br>
-            <br>
-            <span class="comment"># Set your secrets</span><br>
-            <span class="cmd">wrangler secret put</span> <span class="flag">CLOUDFLARE_ACCOUNT_ID</span><br>
-            <span class="cmd">wrangler secret put</span> <span class="flag">CLOUDFLARE_API_TOKEN</span><br>
-            <span class="cmd">wrangler secret put</span> <span class="flag">PAGERDUTY_ROUTING_KEY</span><br>
-            <br>
-            <span class="comment"># Test it</span><br>
-            <span class="cmd">curl</span> https://your-worker.workers.dev/<span class="flag">test-alert</span>
+    <section id="agent-guard">
+        <div class="section-label">New</div>
+        <div class="section-title">Spend caps your coding agent <span class="gradient-text-warn">can't override</span></div>
+        <div class="section-desc">
+            A coding agent re-sends its entire context on every tool call, so token spend compounds
+            silently &#8212; the loop behind the $4,200 weekend, the $87K month, and the reported
+            $500M month after a team &#8220;failed to put usage limits on Claude licenses.&#8221;
+            Kill Switch caps that loop with <strong>per-session and daily-rolling limits</strong> &#8212;
+            a soft warning, then a hard stop. It protects <strong>any</strong> coding agent, by design:
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">&#129693;</div>
+                <h3>Native hook for Claude Code</h3>
+                <p>Reads the live session, prices real token usage, warns at your soft cap and <strong>blocks the next tool call</strong> at the hard cap. Fails open on any error &#8212; a guard bug never bricks your session.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#128721;</div>
+                <h3>Hard proxy wall for everything else</h3>
+                <p>Point Cursor, Aider, or any script at the local metering proxy. At the cap it returns <strong>HTTP 402</strong> &#8212; the API simply stops answering. A wall the agent can&#8217;t argue past.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#9208;&#65039;</div>
+                <h3>The human holds the key</h3>
+                <p>The escape hatch lives outside the agent loop: <code>ks guard pause</code>, or a single file the agent can&#8217;t reach. The agent can hit the wall &#8212; it can&#8217;t move it.</p>
+            </div>
+        </div>
+        <div class="code-block" style="max-width: 640px; margin: 28px auto 0;">
+            <pre><code>npm i -g @kill-switch/cli
+ks guard install                       # protect Claude Code
+ks guard config --session-hard 30 --daily-hard 150</code></pre>
         </div>
     </section>
 
-    <div class="video-bg-section">
+    <section>
+        <div class="section-label">Quick Start</div>
+        <div class="section-title">Two ways to get started</div>
+        <div class="section-desc">Use our managed platform or self-host the open-source version.</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+            <div style="background: rgba(194, 88, 0, 0.06); border: 1px solid rgba(194, 88, 0, 0.2); border-radius: 12px; padding: 28px;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 8px;">Managed Platform</h3>
+                <p style="font-size: 14px; color: #8b8fa3; margin-bottom: 16px;">Sign up, connect your cloud credentials, set your thresholds. Done.</p>
+                <ol style="list-style: none; padding: 0; margin: 0 0 20px;">
+                    <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">1.</span> Create an account</li>
+                    <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">2.</span> Connect Cloudflare, GCP, or AWS</li>
+                    <li style="font-size: 14px; color: #c4c5ca; padding: 6px 0; display: flex; gap: 10px;"><span style="color: #c25800; font-weight: 700;">3.</span> Set cost thresholds and alert channels</li>
+                </ol>
+                <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary" style="display: inline-block; font-size: 14px; padding: 10px 24px;">Get Started</a>
+            </div>
+            <div class="code-block" style="margin: 0;">
+                <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 12px;">Self-Hosted (Open Source)</div>
+                <span class="comment"># Clone and deploy</span><br>
+                <span class="cmd">git clone</span> https://github.com/Divinci-AI/kill-switch<br>
+                <span class="cmd">cd</span> kill-switch<br>
+                <span class="cmd">npm install</span> <span class="flag">&&</span> <span class="cmd">wrangler deploy</span><br>
+                <br>
+                <span class="comment"># Set your secrets</span><br>
+                <span class="cmd">wrangler secret put</span> <span class="flag">CLOUDFLARE_ACCOUNT_ID</span><br>
+                <span class="cmd">wrangler secret put</span> <span class="flag">CLOUDFLARE_API_TOKEN</span><br>
+                <span class="cmd">wrangler secret put</span> <span class="flag">PAGERDUTY_ROUTING_KEY</span><br>
+                <br>
+                <span class="comment"># Test it</span><br>
+                <span class="cmd">curl</span> https://your-worker.workers.dev/<span class="flag">test-alert</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="video-bg-section show-video-top">
         <video autoplay muted loop playsinline>
             <source src="assets/money-video.webm" type="video/webm">
             <source src="assets/money-video.mp4" type="video/mp4">
@@ -859,41 +1077,183 @@
                     <div class="cause">Uncontrolled writes from a retry loop bug. No native circuit breaker to stop it.</div>
                     <div class="source">Hacker News</div>
                 </div>
+                <div class="story-card">
+                    <div class="amount">$104,500</div>
+                    <div class="cause">Free-tier static site hit 60.7 TB of bandwidth in four days. One MP3 downloaded millions of times.</div>
+                    <div class="source"><a href="https://www.reddit.com/r/webdev/comments/1b14bty/netlify_just_sent_me_a_104k_bill_for_a_simple/" target="_blank" rel="noopener">r/webdev — Netlify bill →</a></div>
+                </div>
+                <div class="story-card">
+                    <div class="amount">$96,280</div>
+                    <div class="cause">Artist app Cara went viral; Vercel functions spiked to 56M invocations/day. Bootstrapped, no spending cap.</div>
+                    <div class="source"><a href="https://news.ycombinator.com/item?id=40618220" target="_blank" rel="noopener">Hacker News — Cara / Vercel →</a></div>
+                </div>
+                <div class="story-card">
+                    <div class="amount">$47,000</div>
+                    <div class="cause">Two AI agents locked in a recursive loop, exchanging clarification requests thousands of times around the clock.</div>
+                    <div class="source"><a href="https://dev.to/utibe_okodi_339fb47a13ef5/the-ai-agent-that-cost-47000-while-everyone-thought-it-was-working-1lg6" target="_blank" rel="noopener">DEV Community →</a></div>
+                </div>
             </div>
+            <p class="scroll-hint">More incidents — scroll →</p>
+            <div class="stories-scroll">
+                <div class="story-card">
+                    <div class="amount">$30,000</div>
+                    <div class="cause">AWS Bedrock + Claude Opus billed $30K despite a cost-cap setting the customer believed was enabled.</div>
+                    <div class="source"><a href="https://www.theregister.com/ai-ml/2026/05/18/surprise-ai-bills-leave-aws-and-google-cloud-users-aghast/" target="_blank" rel="noopener">The Register →</a></div>
+                </div>
+                <div class="story-card">
+                    <div class="amount">$6,000</div>
+                    <div class="cause">Someone left Claude Code running overnight. Token-based billing plus an agentic loop did the rest.</div>
+                    <div class="source"><a href="https://www.makeuseof.com/someone-left-claude-code-running-overnight-and-it-cost-6000/" target="_blank" rel="noopener">MakeUseOf →</a></div>
+                </div>
+            </div>
+
+            <!-- ── Bill Shock Wall: live posts from the community ── -->
+            <div class="section-label" style="margin-top: 72px;">Straight From the Source</div>
+            <div class="section-title" style="font-size: clamp(22px, 3vw, 30px);">People are posting these in real time</div>
+            <div class="section-desc">From founders, indie devs, and us — the bill-shock conversation in real time. Scroll →</div>
+            <div class="embed-wall">
+                <!-- Kill Switch — pinned -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/KillSwitchCloud/status/2060243063768068188"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/KillSwitchCloud/status/2060243063768068188" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- @mikeumus -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/mikeumus/status/2054083570189341095"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/mikeumus/status/2054083570189341095" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- Cara / Vercel — Jingna Zhang -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/zemotion/status/1798558292681343039"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/zemotion/status/1798558292681343039" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- Replit deleted prod DB — Jason Lemkin -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/jasonlk/status/1946069562723897802"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/jasonlk/status/1946069562723897802" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- Firebase ~$70k overnight — @tamarajtran -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/tamarajtran/status/1880036092906467841"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/tamarajtran/status/1880036092906467841" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+                <!-- AWS billing horror / needs hard caps — @GergelyOrosz -->
+                <div class="embed-cell">
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/GergelyOrosz/status/1542449611440328704"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/GergelyOrosz/status/1542449611440328704" target="_blank" rel="noopener">View on X →</a></div>
+                </div>
+            </div>
+            <p class="embed-note">Embedded directly from the original posts — nothing here is altered or out of context. Got a bill-shock story? <a href="https://x.com/intent/post?text=Hey%20%40KillSwitchCloud%2C%20here%27s%20my%20runaway%20cloud%2FAI%20bill%20story%3A%20" target="_blank" rel="noopener" style="color:#5ce2e7;">Tell @KillSwitchCloud</a>.</p>
+            <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+            <script>
+            /* Clip every embed to the first tweet's rendered height so the row is uniform.
+               Embed iframes load + resize async, so we re-measure on a short interval. */
+            (function () {
+                function equalize() {
+                    var cells = document.querySelectorAll('.embed-wall .embed-cell');
+                    if (!cells.length) return;
+                    var ref = cells[0];
+                    ref.style.height = 'auto';
+                    var h = ref.offsetHeight;
+                    if (h < 120) return; /* first embed not rendered yet */
+                    for (var i = 0; i < cells.length; i++) cells[i].style.height = h + 'px';
+                }
+                var ticks = 0;
+                var iv = setInterval(function () {
+                    equalize();
+                    if (++ticks > 24) clearInterval(iv); /* settle within ~12s */
+                }, 500);
+                window.addEventListener('resize', equalize);
+            }());
+            </script>
         </section>
     </div>
 
+    <section id="pricing">
+        <div class="section-label">Pricing</div>
+        <div class="section-title">Simple, transparent pricing</div>
+        <div class="section-desc">Start free and self-host the open source version, or go hands-off with a paid plan from $29/mo.</div>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <div class="plan-name">Free</div>
+                <div class="plan-desc">Open source &amp; self-host</div>
+                <div class="plan-price">$0<span class="per">/mo</span></div>
+                <ul class="plan-features">
+                    <li>1 cloud account</li>
+                    <li>6-hour check interval</li>
+                    <li>1 alert channel</li>
+                    <li>Self-host the open-source version</li>
+                    <li>Community support</li>
+                </ul>
+                <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-plan secondary">Start free</a>
+            </div>
+            <div class="pricing-card featured">
+                <div class="plan-name">Pro</div>
+                <div class="plan-desc">For teams shipping fast</div>
+                <div class="plan-price">$29<span class="per">/mo</span></div>
+                <ul class="plan-features">
+                    <li>3 cloud accounts</li>
+                    <li>5-minute check interval</li>
+                    <li>All alert channels</li>
+                    <li>Anomaly detection</li>
+                    <li>FinOps cost analytics</li>
+                    <li>Rule presets &amp; custom rules</li>
+                </ul>
+                <a href="https://app.kill-switch.net/billing?plan=pro" class="btn-plan primary">Upgrade to Pro</a>
+            </div>
+            <div class="pricing-card">
+                <div class="plan-name">Team</div>
+                <div class="plan-desc">For growing organizations</div>
+                <div class="plan-price">$99<span class="per">/mo</span></div>
+                <ul class="plan-features">
+                    <li>10 cloud accounts</li>
+                    <li>5-minute check interval</li>
+                    <li>Team roles &amp; audit log</li>
+                    <li>API access</li>
+                    <li>Priority support</li>
+                    <li>Everything in Pro</li>
+                </ul>
+                <a href="https://app.kill-switch.net/billing?plan=team" class="btn-plan secondary">Upgrade to Team</a>
+            </div>
+            <div class="pricing-card">
+                <div class="plan-name">Enterprise</div>
+                <div class="plan-desc">For large-scale operations</div>
+                <div class="plan-price" style="font-size: 28px; padding-top: 8px;">Custom</div>
+                <ul class="plan-features">
+                    <li>100+ cloud accounts</li>
+                    <li>1-minute check interval</li>
+                    <li>SSO &amp; SAML</li>
+                    <li>Dedicated support &amp; SLA</li>
+                    <li>Custom integrations</li>
+                    <li>Everything in Team</li>
+                </ul>
+                <a href="mailto:admin@kill-switch.net" class="btn-plan secondary">Contact Sales</a>
+            </div>
+        </div>
+    </section>
+
     <div class="cta">
-        <div class="section-label">Open Source</div>
+        <div class="section-label">Open Source &amp; SaaS</div>
         <div class="section-title">Stop your next surprise bill</div>
         <p class="section-desc" style="margin: 0 auto 32px; text-align: center;">
-            MIT licensed. Single file. Zero dependencies.<br>
-            Deploys in 60 seconds. Plans start at $29/mo.
+            Self-host the open source core or use our managed platform.<br>
+            Either way, you're protected in under 5 minutes.
         </p>
         <div class="hero-actions">
-            <a href="/docs" class="btn-primary">Get Started</a>
+            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started</a>
             <a href="https://github.com/Divinci-AI/kill-switch" class="btn-secondary">View on GitHub</a>
         </div>
     </div>
 
     <footer>
-        <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 16px;">
-            <a href="https://github.com/divinci-ai/kill-switch" title="GitHub" style="color: #6b7280; transition: color 0.2s;">
-                <svg height="22" width="22" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            </a>
-            <a href="https://www.npmjs.com/package/@kill-switch/cli" title="npm" style="color: #6b7280; transition: color 0.2s;">
-                <svg height="22" width="22" viewBox="0 0 24 24" fill="currentColor"><path d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0v1.336H8.001V8.667h5.334v5.332h-2.669v-.001zm12.001 0h-1.33v-4h-1.336v4h-1.335v-4h-1.33v4h-2.671V8.667h8.002v5.331zM10.665 10H12v2.667h-1.335V10z"/></svg>
-            </a>
-            <a href="/docs" title="API Docs" style="color: #6b7280; transition: color 0.2s;">
-                <svg height="22" width="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-            </a>
-        </div>
         <p>
             Built by <a href="https://divinci.ai">Divinci AI</a>
             <span class="divider">|</span>
-            <a href="https://github.com/divinci-ai/kill-switch/blob/main/LICENSE">MIT License</a>
+            <a href="https://app.kill-switch.net">Dashboard</a>
             <span class="divider">|</span>
-            &copy; 2026 Kill Switch
+            <a href="https://github.com/Divinci-AI/kill-switch">GitHub</a>
+            <span class="divider">|</span>
+            <a href="https://github.com/Divinci-AI/kill-switch/blob/main/LICENSE">MIT License</a>
         </p>
     </footer>
     <script>
