@@ -680,9 +680,10 @@
             <span class="gradient-text-warn">Cloud Bills</span>
         </h1>
         <p class="hero-sub">
-            Cloud providers have no spending caps. A single feedback loop can drain your account
-            overnight. Kill Switch monitors usage and auto-kills runaway services before
-            the bill arrives. Cloudflare, GCP, and AWS.
+            Cloud providers have no spending caps &#8212; and neither do coding agents. One runaway
+            loop can drain your account or burn thousands in tokens overnight. Kill Switch
+            auto-kills runaway cloud services <em>and</em> caps runaway coding agents before
+            the bill arrives. Cloudflare, GCP, AWS &#8212; and Claude Code, Cursor, or any agent.
         </p>
         <div class="hero-actions">
             <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started</a>
@@ -903,6 +904,40 @@
         </div>
     </section>
     </div>
+
+    <section id="agent-guard">
+        <div class="section-label">New</div>
+        <div class="section-title">Spend caps your coding agent <span class="gradient-text-warn">can't override</span></div>
+        <div class="section-desc">
+            A coding agent re-sends its entire context on every tool call, so token spend compounds
+            silently &#8212; the loop behind the $4,200 weekend, the $87K month, and the reported
+            $500M month after a team &#8220;failed to put usage limits on Claude licenses.&#8221;
+            Kill Switch caps that loop with <strong>per-session and daily-rolling limits</strong> &#8212;
+            a soft warning, then a hard stop. It protects <strong>any</strong> coding agent, by design:
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">&#129693;</div>
+                <h3>Native hook for Claude Code</h3>
+                <p>Reads the live session, prices real token usage, warns at your soft cap and <strong>blocks the next tool call</strong> at the hard cap. Fails open on any error &#8212; a guard bug never bricks your session.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#128721;</div>
+                <h3>Hard proxy wall for everything else</h3>
+                <p>Point Cursor, Aider, or any script at the local metering proxy. At the cap it returns <strong>HTTP 402</strong> &#8212; the API simply stops answering. A wall the agent can&#8217;t argue past.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#9208;&#65039;</div>
+                <h3>The human holds the key</h3>
+                <p>The escape hatch lives outside the agent loop: <code>ks guard pause</code>, or a single file the agent can&#8217;t reach. The agent can hit the wall &#8212; it can&#8217;t move it.</p>
+            </div>
+        </div>
+        <div class="code-block" style="max-width: 640px; margin: 28px auto 0;">
+            <pre><code>npm i -g @kill-switch/cli
+ks guard install                       # protect Claude Code
+ks guard config --session-hard 30 --daily-hard 150</code></pre>
+        </div>
+    </section>
 
     <section>
         <div class="section-label">Quick Start</div>
