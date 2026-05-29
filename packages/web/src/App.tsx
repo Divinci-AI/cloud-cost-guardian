@@ -28,6 +28,7 @@ import { OnboardingPage } from "./pages/Onboarding/OnboardingPage";
 import { SettingsPage } from "./pages/Settings/SettingsPage";
 import { AcceptInvitePage } from "./pages/Team/AcceptInvitePage";
 import { ActivityPage } from "./pages/Activity/ActivityPage";
+import { AgentGuardPage } from "./pages/AgentGuard/AgentGuardPage";
 import { CliAuthPage } from "./pages/CliAuth/CliAuthPage";
 
 function AuthenticatedApp() {
@@ -97,6 +98,7 @@ function AuthenticatedApp() {
           <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
             <Link to="/" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Dashboard</Link>
             <Link to="/accounts" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Accounts</Link>
+            <Link to="/agent-guard" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Agent Guard</Link>
             <Link to="/alerts" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Alerts</Link>
             <Link to="/activity" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Activity</Link>
             <Link to="/billing" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Billing</Link>
@@ -129,6 +131,7 @@ function AuthenticatedApp() {
             <Route path="/accounts/connect/neo4j" element={<ConnectNeo4j />} />
             <Route path="/alerts" element={<AlertsHistory />} />
             <Route path="/activity" element={<ActivityPage />} />
+            <Route path="/agent-guard" element={<AgentGuardPage />} />
             <Route path="/billing" element={<BillingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/invite" element={<AcceptInvitePage />} />

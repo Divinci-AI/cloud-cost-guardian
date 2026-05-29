@@ -83,7 +83,7 @@ export async function dispatchAlert(cfg: GuardConfig, evt: AlertEvent): Promise<
   if (cfg.apiKey && cfg.apiUrl) {
     tasks.push(
       postJson(
-        `${cfg.apiUrl.replace(/\/$/, "")}/v1/agent-guard/events`,
+        `${cfg.apiUrl.replace(/\/$/, "")}/agent-guard/events`,
         evt,
         { authorization: `Bearer ${cfg.apiKey}` },
       ),

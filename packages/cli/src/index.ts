@@ -29,6 +29,7 @@ import { registerActivityCommands } from "./commands/activity.js";
 import { registerStatusCommand } from "./commands/status.js";
 import { registerWatchCommand } from "./commands/watch.js";
 import { registerProviderCommands } from "./commands/providers.js";
+import { registerAgentGuardCommands } from "./commands/agent-guard.js";
 
 import type { ClientFactory } from "./types.js";
 import { CLI_VERSION } from "./version.js";
@@ -71,5 +72,6 @@ registerActivityCommands(program, createClient);
 registerStatusCommand(program, createClient);
 registerWatchCommand(program, createClient);
 registerProviderCommands(program, createClient);
+registerAgentGuardCommands(program);
 
 program.parse();

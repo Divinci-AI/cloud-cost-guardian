@@ -23,7 +23,28 @@ export {
   type SessionRecord,
 } from "./ledger.js";
 export { parseTranscript, type TranscriptTotals } from "./transcript.js";
-export { loadConfig, DEFAULT_BUDGET, type GuardConfig } from "./config.js";
+export {
+  loadConfig,
+  DEFAULT_BUDGET,
+  guardDir,
+  ensureGuardDir,
+  configPath,
+  pausePath,
+  isPaused,
+  pauseExpiry,
+  writePause,
+  clearPause,
+  type GuardConfig,
+} from "./config.js";
 export { dispatchAlert, type AlertEvent } from "./alert.js";
 export { startProxy, resolveUpstream, type ProxyOptions } from "./proxy.js";
 export { runHook } from "./hook.js";
+export { buildStatusReport, type StatusReport } from "./report.js";
+export {
+  installHook,
+  setBudget,
+  resetLedger,
+  type InstallOptions,
+  type InstallResult,
+  type BudgetPatch,
+} from "./ops.js";

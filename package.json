@@ -17,6 +17,8 @@
     "dev:web": "cd packages/web && npm run dev",
     "build:api": "cd packages/api && npm run build",
     "build:web": "cd packages/web && npm run build",
+    "build:agent-guard": "cd packages/agent-guard && npm run build",
+    "test:agent-guard": "cd packages/agent-guard && npm test",
     "deploy:api": "cd packages/api && npm run deploy",
     "deploy:kill-switch": "cd packages/kill-switch-cf && env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID npm run deploy",
     "deploy:kill-switch-aws": "cd packages/kill-switch-aws && npm run deploy",

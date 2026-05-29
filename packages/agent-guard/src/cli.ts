@@ -11,27 +11,22 @@
  */
 
 import { Command } from "commander";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { runHook } from "./hook.js";
 import { startProxy, resolveUpstream } from "./proxy.js";
 import {
   loadConfig,
   configPath,
-  ensureGuardDir,
-  DEFAULT_BUDGET,
   isPaused,
   pauseExpiry,
   writePause,
   clearPause,
   pausePath,
-  type GuardConfig,
 } from "./config.js";
-import { loadLedger, saveLedger, rollingDailyCost, emptyLedger } from "./ledger.js";
+import { loadLedger, rollingDailyCost } from "./ledger.js";
 import { evaluate } from "./budget.js";
 import { fmtUSD } from "./cost.js";
+import { installHook, setBudget, resetLedger } from "./ops.js";
 
 const program = new Command();
 program
@@ -54,40 +49,11 @@ program
   .option("--global", "Install into ~/.claude/settings.json (default: project ./.claude/settings.json)")
   .option("--command <cmd>", "Override the hook command (default: absolute path to this binary)")
   .action((opts) => {
-    const settingsPath = opts.global
-      ? join(homedir(), ".claude", "settings.json")
-      : join(process.cwd(), ".claude", "settings.json");
-
     const cliPath = fileURLToPath(import.meta.url);
-    const command: string = opts.command || `"${process.execPath}" "${cliPath}" hook`;
-
-    let settings: any = {};
-    try {
-      settings = JSON.parse(readFileSync(settingsPath, "utf8"));
-    } catch {
-      /* new file */
-    }
-    settings.hooks ??= {};
-
-    const ensureHook = (event: string, withMatcher: boolean) => {
-      settings.hooks[event] ??= [];
-      const already = JSON.stringify(settings.hooks[event]).includes('"agent-guard"') ||
-        JSON.stringify(settings.hooks[event]).includes("cli.js") ||
-        JSON.stringify(settings.hooks[event]).includes(command);
-      if (already) return false;
-      const entry: any = { hooks: [{ type: "command", command }] };
-      if (withMatcher) entry.matcher = "*";
-      settings.hooks[event].push(entry);
-      return true;
-    };
-
-    const added: string[] = [];
-    if (ensureHook("PreToolUse", true)) added.push("PreToolUse");
-    if (ensureHook("UserPromptSubmit", false)) added.push("UserPromptSubmit");
-    if (ensureHook("Stop", false)) added.push("Stop");
-
-    mkdirSync(dirname(settingsPath), { recursive: true });
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+    const { settingsPath, command, added } = installHook(cliPath, process.execPath, {
+      global: opts.global,
+      command: opts.command,
+    });
 
     const cfg = loadConfig();
     console.log(`✅ Hook installed → ${settingsPath}`);
@@ -216,11 +182,6 @@ program
     const anySet = ["sessionSoft", "sessionHard", "dailySoft", "dailyHard", "slackWebhook"]
       .some((k) => opts[k] !== undefined);
 
-    let file: Partial<GuardConfig> = {};
-    try {
-      file = JSON.parse(readFileSync(configPath(), "utf8"));
-    } catch { /* new */ }
-
     if (!anySet) {
       const cfg = loadConfig();
       console.log(JSON.stringify({ budget: cfg.budget, slackWebhook: cfg.slackWebhook ? "(set)" : undefined }, null, 2));
@@ -228,20 +189,16 @@ program
       return;
     }
 
-    file.budget = { ...DEFAULT_BUDGET, ...(file.budget ?? {}) };
-    const set = (k: keyof typeof DEFAULT_BUDGET, v: string | undefined) => {
-      if (v !== undefined && Number.isFinite(Number(v))) file.budget![k] = Number(v);
-    };
-    set("sessionSoftUSD", opts.sessionSoft);
-    set("sessionHardUSD", opts.sessionHard);
-    set("dailySoftUSD", opts.dailySoft);
-    set("dailyHardUSD", opts.dailyHard);
-    if (opts.slackWebhook) file.slackWebhook = opts.slackWebhook;
-
-    ensureGuardDir();
-    writeFileSync(configPath(), JSON.stringify(file, null, 2) + "\n");
+    const num = (v: string | undefined) => (v !== undefined ? Number(v) : undefined);
+    const budget = setBudget({
+      sessionSoftUSD: num(opts.sessionSoft),
+      sessionHardUSD: num(opts.sessionHard),
+      dailySoftUSD: num(opts.dailySoft),
+      dailyHardUSD: num(opts.dailyHard),
+      slackWebhook: opts.slackWebhook,
+    });
     console.log(`✅ Saved → ${configPath()}`);
-    console.log(JSON.stringify(file.budget, null, 2));
+    console.log(JSON.stringify(budget, null, 2));
   });
 
 // ── reset ────────────────────────────────────────────────────────────────────
@@ -252,28 +209,7 @@ program
   .option("--session <id>", "Clear a single session")
   .option("--today", "Clear sessions active today")
   .action((opts) => {
-    if (opts.all) {
-      saveLedger(emptyLedger());
-      console.log("✅ Ledger wiped.");
-      return;
-    }
-    const ledger = loadLedger();
-    if (opts.session) {
-      delete ledger.sessions[opts.session];
-      saveLedger(ledger);
-      console.log(`✅ Cleared session ${opts.session}.`);
-      return;
-    }
-    if (opts.today) {
-      const today = new Date().toISOString().slice(0, 10);
-      for (const [id, s] of Object.entries(ledger.sessions)) {
-        if (new Date(s.lastAt).toISOString().slice(0, 10) === today) delete ledger.sessions[id];
-      }
-      saveLedger(ledger);
-      console.log("✅ Cleared today's sessions.");
-      return;
-    }
-    console.log("Specify --all, --session <id>, or --today.");
+    console.log(`✅ ${resetLedger({ all: opts.all, session: opts.session, today: opts.today })}`);
   });
 
 program.parseAsync();
