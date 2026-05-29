@@ -26,11 +26,17 @@ const agentGuardEventSchema = new mongoose.Schema({
   action: { type: String, default: "" },
   cwd: { type: String },
 
-  createdAt: { type: Date, default: Date.now, index: true },
+  createdAt: { type: Date, default: Date.now },
 });
 
 // Common query: an account's recent events, newest first.
 agentGuardEventSchema.index({ guardianAccountId: 1, createdAt: -1 });
+
+// Retention: agent-guard events are high-volume telemetry (every warn/block,
+// every session). Auto-expire after 90 days via a TTL index so the collection
+// can't grow unbounded. Mongo's background TTL monitor deletes expired docs.
+const RETENTION_DAYS = 90;
+agentGuardEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: RETENTION_DAYS * 24 * 60 * 60 });
 
 export const AgentGuardEventModel =
   (mongoose.models?.["AgentGuardEvent"] as mongoose.Model<any>) ||
