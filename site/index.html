@@ -587,25 +587,28 @@
             backdrop-filter: blur(4px);
         }
         .embed-cell .embed-more a:hover { background: rgba(92,226,231,0.15); }
-        /* overflow story-cards in a single-row horizontal scroll */
-        .stories-scroll {
+        /* two horizontal-scroll rows: 3 cards visible per row, the 4th scrolls in */
+        .stories-row {
             display: flex; gap: 20px;
             overflow-x: auto; overflow-y: hidden;
-            margin: 20px -24px 0; padding: 4px 24px 14px;
+            margin: 0 0 20px; padding: 4px 0 14px;
             scroll-snap-type: x proximity;
             scrollbar-width: thin;
             scrollbar-color: rgba(255,107,107,0.4) transparent;
         }
-        .stories-scroll .story-card { flex: 0 0 320px; scroll-snap-align: start; }
-        .stories-scroll::-webkit-scrollbar { height: 8px; }
-        .stories-scroll::-webkit-scrollbar-thumb { background: rgba(255,107,107,0.35); border-radius: 999px; }
-        .stories-scroll::-webkit-scrollbar-track { background: transparent; }
-        .scroll-hint {
-            font-size: 12px; color: #6b7280; margin: 22px 0 0;
-            text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;
+        .stories-row:last-of-type { margin-bottom: 0; }
+        .stories-row .story-card {
+            flex: 0 0 calc((100% - 40px) / 3);  /* 3 visible; two 20px gaps */
+            min-width: 260px;                    /* stay readable on narrow screens */
+            scroll-snap-align: start;
         }
-        /* let the header sit over the visible video (shorter top fade) */
-        .video-bg-section.show-video-top::before { height: 72px; }
+        .stories-row::-webkit-scrollbar { height: 8px; }
+        .stories-row::-webkit-scrollbar-thumb { background: rgba(255,107,107,0.35); border-radius: 999px; }
+        .stories-row::-webkit-scrollbar-track { background: transparent; }
+        /* header overlaps the video: minimal top fade + push the heading down into it */
+        .video-bg-section.show-video-top::before { height: 36px; }
+        .video-bg-section.show-video-top > section { padding-top: 170px; }
+        .video-bg-section.show-video-top > video { opacity: 0.22; }  /* a touch more so the texture reads behind the heading */
         .embed-wall .twitter-tweet,
         .embed-wall .reddit-embed-bq {
             margin: 0 auto !important;
@@ -1061,7 +1064,8 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
             <div style="text-align: center; margin-bottom: 40px;">
                 <img src="assets/bill-counter.svg" alt="$91K Cloud Bill" style="width: 100%; max-width: 520px; border-radius: 12px; border: 1px solid rgba(255,107,107,0.2);">
             </div>
-            <div class="stories">
+            <!-- Two horizontal-scroll rows: 3 incidents visible, a 4th scrolls in -->
+            <div class="stories-row">
                 <div class="story-card">
                     <div class="amount">$91,316</div>
                     <div class="cause">Cloud compute bill from runaway containers generating 1.38 billion requests in one month. $88K in compute duration alone.</div>
@@ -1078,6 +1082,13 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
                     <div class="source">Hacker News</div>
                 </div>
                 <div class="story-card">
+                    <div class="amount">$30,000</div>
+                    <div class="cause">AWS Bedrock + Claude Opus billed $30K despite a cost-cap setting the customer believed was enabled.</div>
+                    <div class="source"><a href="https://www.theregister.com/ai-ml/2026/05/18/surprise-ai-bills-leave-aws-and-google-cloud-users-aghast/" target="_blank" rel="noopener">The Register →</a></div>
+                </div>
+            </div>
+            <div class="stories-row">
+                <div class="story-card">
                     <div class="amount">$104,500</div>
                     <div class="cause">Free-tier static site hit 60.7 TB of bandwidth in four days. One MP3 downloaded millions of times.</div>
                     <div class="source"><a href="https://www.reddit.com/r/webdev/comments/1b14bty/netlify_just_sent_me_a_104k_bill_for_a_simple/" target="_blank" rel="noopener">r/webdev — Netlify bill →</a></div>
@@ -1092,14 +1103,6 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
                     <div class="cause">Two AI agents locked in a recursive loop, exchanging clarification requests thousands of times around the clock.</div>
                     <div class="source"><a href="https://dev.to/utibe_okodi_339fb47a13ef5/the-ai-agent-that-cost-47000-while-everyone-thought-it-was-working-1lg6" target="_blank" rel="noopener">DEV Community →</a></div>
                 </div>
-            </div>
-            <p class="scroll-hint">More incidents — scroll →</p>
-            <div class="stories-scroll">
-                <div class="story-card">
-                    <div class="amount">$30,000</div>
-                    <div class="cause">AWS Bedrock + Claude Opus billed $30K despite a cost-cap setting the customer believed was enabled.</div>
-                    <div class="source"><a href="https://www.theregister.com/ai-ml/2026/05/18/surprise-ai-bills-leave-aws-and-google-cloud-users-aghast/" target="_blank" rel="noopener">The Register →</a></div>
-                </div>
                 <div class="story-card">
                     <div class="amount">$6,000</div>
                     <div class="cause">Someone left Claude Code running overnight. Token-based billing plus an agentic loop did the rest.</div>
@@ -1110,12 +1113,12 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
             <!-- ── Bill Shock Wall: live posts from the community ── -->
             <div class="section-label" style="margin-top: 72px;">Straight From the Source</div>
             <div class="section-title" style="font-size: clamp(22px, 3vw, 30px);">People are posting these in real time</div>
-            <div class="section-desc">From founders, indie devs, and us — the bill-shock conversation in real time. Scroll →</div>
+            <div class="section-desc">From founders and indie devs who got the surprise bill — the conversation, in real time. Scroll →</div>
             <div class="embed-wall">
-                <!-- Kill Switch — pinned -->
+                <!-- Firebase ~$70k overnight — @tamarajtran -->
                 <div class="embed-cell">
-                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/KillSwitchCloud/status/2060243063768068188"></a></blockquote>
-                    <div class="embed-more"><a href="https://x.com/KillSwitchCloud/status/2060243063768068188" target="_blank" rel="noopener">View on X →</a></div>
+                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/tamarajtran/status/1880036092906467841"></a></blockquote>
+                    <div class="embed-more"><a href="https://x.com/tamarajtran/status/1880036092906467841" target="_blank" rel="noopener">View on X →</a></div>
                 </div>
                 <!-- @mikeumus -->
                 <div class="embed-cell">
@@ -1131,11 +1134,6 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
                 <div class="embed-cell">
                     <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/jasonlk/status/1946069562723897802"></a></blockquote>
                     <div class="embed-more"><a href="https://x.com/jasonlk/status/1946069562723897802" target="_blank" rel="noopener">View on X →</a></div>
-                </div>
-                <!-- Firebase ~$70k overnight — @tamarajtran -->
-                <div class="embed-cell">
-                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/tamarajtran/status/1880036092906467841"></a></blockquote>
-                    <div class="embed-more"><a href="https://x.com/tamarajtran/status/1880036092906467841" target="_blank" rel="noopener">View on X →</a></div>
                 </div>
                 <!-- AWS billing horror / needs hard caps — @GergelyOrosz -->
                 <div class="embed-cell">
