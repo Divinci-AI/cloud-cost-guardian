@@ -28,6 +28,35 @@ past. Both feed one ledger with **two budget scopes**:
 npm i -g @kill-switch/agent-guard   # provides `agent-guard` and `ksg`
 ```
 
+Or use it through the main Kill Switch CLI as `ks guard …` (same engine, one
+shared ledger/budget) — see [`packages/cli`](../cli).
+
+### Developing from this monorepo
+
+The hook is wired into Claude Code by **absolute path to `dist/cli.js`**, so it
+must be built before `install`, and the bare `agent-guard` / `ksg` commands only
+land on your `PATH` after a link or publish:
+
+```sh
+# from the repo root
+npm run build:agent-guard          # compile src → dist (required before install/link)
+npm run test:agent-guard           # 21 unit tests
+
+# put `agent-guard` / `ksg` on PATH for local dev
+cd packages/agent-guard && npm link
+agent-guard --help                 # now resolves
+
+# unlink when done
+npm rm -g @kill-switch/agent-guard
+```
+
+> ⚠️ If `agent-guard` reports `command not found` (e.g. when a runaway session
+> hits the cap and the recovery command won't run), it just means the package
+> isn't linked/published yet. The block message always prints an **absolute-path**
+> fallback so recovery works regardless, and `ks guard …` works whenever the
+> `ks` CLI is installed. You can also always pause with zero tooling:
+> `touch ~/.kill-switch/agent-guard/PAUSED`.
+
 ## Quick start — Claude Code (hook)
 
 ```sh
