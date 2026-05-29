@@ -31,6 +31,7 @@ import {
 } from "./ledger.js";
 import { evaluate } from "./budget.js";
 import { dispatchAlert } from "./alert.js";
+import { assertSafeEndpoint, warnIfUnexpectedHost } from "./net.js";
 
 export interface ProxyOptions {
   port: number;
@@ -161,7 +162,7 @@ function meter(
 
 export function startProxy(opts: ProxyOptions): Server {
   const cfg = loadConfig();
-  const upstreamOrigin = opts.upstream.replace(/\/$/, "");
+  const upstreamOrigin = assertSafeEndpoint(opts.upstream, "upstream").replace(/\/$/, "");
   const blockedNotified: Record<string, boolean> = {};
 
   const server = createServer(async (req, res) => {
@@ -294,5 +295,11 @@ export function startProxy(opts: ProxyOptions): Server {
 }
 
 export function resolveUpstream(flavor: string, explicit?: string): string {
-  return explicit || UPSTREAMS[flavor] || UPSTREAMS.anthropic;
+  const upstream = explicit || UPSTREAMS[flavor] || UPSTREAMS.anthropic;
+  assertSafeEndpoint(upstream, "upstream");
+  if (explicit) {
+    const expected = new URL(UPSTREAMS[flavor] || UPSTREAMS.anthropic).hostname;
+    warnIfUnexpectedHost(upstream, expected, "--upstream");
+  }
+  return upstream;
 }

@@ -50,11 +50,30 @@ export function resolveApiKey(flagKey?: string): string | undefined {
   return process.env.KILL_SWITCH_API_KEY || flagKey || loadConfig().apiKey;
 }
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
 /**
- * Resolve the API URL.
+ * Resolve the API URL. The resolved endpoint receives the user's API key, so we
+ * refuse anything that isn't https:// (http:// allowed only for localhost) —
+ * this prevents a poisoned env var / config from redirecting the key over an
+ * insecure or unexpected channel (security: M-1).
  */
 export function resolveApiUrl(flagUrl?: string): string {
-  return process.env.KILL_SWITCH_API_URL || flagUrl || loadConfig().apiUrl || DEFAULT_API_URL;
+  const url = process.env.KILL_SWITCH_API_URL || flagUrl || loadConfig().apiUrl || DEFAULT_API_URL;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid API URL: "${url}". Set a valid https:// URL.`);
+  }
+  const localhost = LOCAL_HOSTS.has(parsed.hostname);
+  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && localhost)) {
+    throw new Error(
+      `Refusing to use API URL "${url}": it must be https:// (http:// allowed only for localhost). ` +
+        `This protects your API key from being sent over an insecure channel.`,
+    );
+  }
+  return url;
 }
 
 export { CONFIG_DIR, CONFIG_FILE, DEFAULT_API_URL };
