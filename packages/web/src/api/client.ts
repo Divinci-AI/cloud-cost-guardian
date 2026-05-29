@@ -254,6 +254,15 @@ export const api = {
     }
   },
 
+  // Agent Guard — coding-agent budget-trip events
+  getAgentGuardEvents: (params?: { limit?: number; skip?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.skip) qs.set("skip", String(params.skip));
+    const queryStr = qs.toString();
+    return guardianFetch<any>(`/agent-guard/events${queryStr ? `?${queryStr}` : ""}`);
+  },
+
   // Activity Log
   getActivity: (params?: {
     page?: number; limit?: number; action?: string;
