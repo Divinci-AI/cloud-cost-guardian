@@ -22,6 +22,7 @@ Symptoms: `failed to fetch secrets store binding [code: 10021]` or any wrangler 
 - `packages/web` — React SPA dashboard (CF Worker: `kill-switch-app`)
 - `packages/api` — Express.js API (GCP Cloud Run)
 - `packages/cli` — Kill Switch CLI (`ks` / `kill-switch`)
+- `packages/agent-guard` — Kill Switch for coding agents (`agent-guard` / `ksg`): Claude Code hook + token-metering proxy that cap per-session & daily-rolling LLM spend
 - `packages/kill-switch-cf` — Cloudflare kill-switch worker (cron)
 - `packages/kill-switch-gcp` — GCP kill-switch
 - `packages/kill-switch-aws` — AWS kill-switch
