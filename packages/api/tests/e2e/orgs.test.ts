@@ -40,7 +40,7 @@ vi.mock("mongoose", () => {
   const createMockModel = (name: string) => {
     const store = mockGetStore(name);
     return {
-      create: vi.fn(async (data: any) => { const doc = { _id: `${name}-${mockIdCounter.v++}`, ...data, save: vi.fn() }; store.set(doc._id, doc); return doc; }),
+      create: vi.fn(async (data: any) => { const doc = { _id: (mockIdCounter.v++).toString(16).padStart(24, "0"), ...data, save: vi.fn() }; store.set(doc._id, doc); return doc; }),
       find: vi.fn((query: any) => chainable(async () => Array.from(store.values()).filter(d => mockMatchesQuery(d, query)))),
       findById: vi.fn((id: string) => chainable(async () => store.get(id) || null)),
       findOne: vi.fn((query: any) => chainable(async () => Array.from(store.values()).find(d => mockMatchesQuery(d, query)) || null)),
@@ -51,7 +51,7 @@ vi.mock("mongoose", () => {
       findByIdAndDelete: vi.fn(async (id: string) => { const doc = store.get(id); store.delete(id); return doc; }),
       findOneAndUpdate: vi.fn(async (query: any, update: any, opts?: any) => {
         let doc = Array.from(store.values()).find(d => mockMatchesQuery(d, query));
-        if (!doc && opts?.upsert) { doc = { _id: `${name}-${mockIdCounter.v++}`, ...(update.$setOnInsert || update.$set || {}) }; store.set(doc._id, doc); }
+        if (!doc && opts?.upsert) { doc = { _id: (mockIdCounter.v++).toString(16).padStart(24, "0"), ...(update.$setOnInsert || update.$set || {}) }; store.set(doc._id, doc); }
         if (doc && update.$set) Object.assign(doc, update.$set);
         return doc;
       }),
@@ -91,7 +91,7 @@ let app: Express;
 beforeAll(() => { process.env.NODE_ENV = "test"; process.env.ENVIRONMENT = "local"; process.env.GUARDIAN_DEV_AUTH_BYPASS = "true"; app = createApp(); });
 
 function seedAccount(opts: { owner?: string; tier?: string; type?: string; slug?: string } = {}) {
-  const id = `GuardianAccount-${mockIdCounter.v++}`;
+  const id = (mockIdCounter.v++).toString(16).padStart(24, "0");
   mockGetStore("GuardianAccount").set(id, {
     _id: id, ownerUserId: opts.owner || "owner-user", name: "Test Account",
     tier: opts.tier || "team", type: opts.type || "personal", slug: opts.slug || `slug-${id}`,
@@ -187,6 +187,20 @@ describe("Organizations API", () => {
       const res = await request(app).post(`/orgs/${id}/switch`).set(auth(id));
       expect(res.status).toBe(200);
       expect(res.body.switched).toBe(true);
+    });
+
+    it("returns 404 (not 500) for a malformed orgId", async () => {
+      const id = seedAccount();
+      const res = await request(app).post(`/orgs/not-an-objectid/switch`).set(auth(id));
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("GET /orgs/:orgId", () => {
+    it("returns 404 (not 500) for a malformed orgId", async () => {
+      const id = seedAccount();
+      const res = await request(app).get(`/orgs/not-an-objectid`).set(auth(id));
+      expect(res.status).toBe(404);
     });
   });
 

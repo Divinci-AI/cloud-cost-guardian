@@ -113,6 +113,38 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 }
 
 /**
+ * Best-effort lookup of a user's email + display name from Clerk's Backend API.
+ *
+ * Clerk session JWTs don't carry an `email` claim by default, so `req.auth.email`
+ * is usually undefined — which is why freshly auto-created accounts ended up with
+ * an empty profile email and a generic "User <id>" org name. We only call this when
+ * provisioning a workspace for the first time (not per-request), and it fails soft:
+ * any error returns {} and we fall back to the generic name, exactly as before.
+ */
+async function fetchClerkIdentity(userId: string): Promise<{ email?: string; name?: string }> {
+  const secret = process.env.CLERK_SECRET_KEY;
+  if (!secret || !userId) return {};
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    const r = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(userId)}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return {};
+    const u: any = await r.json();
+    const emails: any[] = Array.isArray(u.email_addresses) ? u.email_addresses : [];
+    const primary = emails.find((e) => e.id === u.primary_email_address_id) || emails[0];
+    const email = primary?.email_address as string | undefined;
+    const name = [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || undefined;
+    return { email, name };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Resolve the organization (GuardianAccount) for the authenticated user.
  *
  * Resolution order:
@@ -213,7 +245,18 @@ export async function resolveOrg(req: AuthenticatedRequest, res: Response, next:
 
     // 5. Auto-create personal workspace (use findOneAndUpdate+upsert to avoid race duplicates)
     const { generateSlug } = await import("../models/guardian-account/schema.js");
-    const autoName = req.auth?.email || `User ${req.userId.substring(0, 8)}`;
+
+    // The session JWT usually lacks an email claim; pull the real email + name from
+    // Clerk so the new workspace and profile aren't stuck with "User <id>" / empty email.
+    let email = req.auth?.email;
+    let fullName: string | undefined;
+    if (!email) {
+      const identity = await fetchClerkIdentity(req.userId);
+      email = identity.email;
+      fullName = identity.name;
+    }
+    const autoName = fullName || email || `User ${req.userId.substring(0, 8)}`;
+
     account = await GuardianAccountModel.findOneAndUpdate(
       { ownerUserId: req.userId, type: "personal" },
       {
@@ -238,8 +281,8 @@ export async function resolveOrg(req: AuthenticatedRequest, res: Response, next:
       { userId: req.userId },
       {
         userId: req.userId,
-        email: req.auth?.email || "",
-        name: req.auth?.email || "",
+        email: email || "",
+        name: fullName || email || "",
         activeOrgId: account!._id.toString(),
       },
       { upsert: true }

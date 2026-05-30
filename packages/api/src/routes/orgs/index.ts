@@ -16,6 +16,12 @@ import { logActivity } from "../../services/activity-logger.js";
 export const orgsRouter = Router();
 
 /**
+ * A Mongo ObjectId is 24 hex chars. Validate `:orgId` route params before any
+ * findById so a malformed id resolves to a clean 404 instead of a 500 CastError.
+ */
+const isValidObjectId = (id: string): boolean => /^[0-9a-fA-F]{24}$/.test(id);
+
+/**
  * GET /orgs — List all orgs the user belongs to (owned + member of)
  */
 orgsRouter.get("/", async (req: any, res, next) => {
@@ -134,6 +140,7 @@ orgsRouter.post("/", async (req: any, res, next) => {
  */
 orgsRouter.get("/:orgId", async (req: any, res, next) => {
   try {
+    if (!isValidObjectId(req.params.orgId)) return res.status(404).json({ error: "Organization not found" });
     const account = await GuardianAccountModel.findById(req.params.orgId).lean();
     if (!account) return res.status(404).json({ error: "Organization not found" });
 
@@ -266,6 +273,8 @@ orgsRouter.post("/:orgId/switch", async (req: any, res, next) => {
   try {
     const userId = req.userId;
     const orgId = req.params.orgId;
+
+    if (!isValidObjectId(orgId)) return res.status(404).json({ error: "Organization not found" });
 
     // Verify access
     const account = await GuardianAccountModel.findById(orgId);
