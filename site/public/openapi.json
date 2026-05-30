@@ -45,7 +45,7 @@
         "summary": "Validate cloud credentials",
         "operationId": "validateCredential",
         "tags": ["Providers"],
-        "parameters": [{ "name": "providerId", "in": "path", "required": true, "schema": { "type": "string", "enum": ["cloudflare", "gcp", "aws"] } }],
+        "parameters": [{ "name": "providerId", "in": "path", "required": true, "schema": { "type": "string", "enum": ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog", "neon", "neo4j"] } }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Credential" } } } },
         "responses": { "200": { "description": "Validation result" } }
       }
@@ -71,7 +71,7 @@
                 "type": "object",
                 "required": ["provider", "name", "credential"],
                 "properties": {
-                  "provider": { "type": "string", "enum": ["cloudflare", "gcp", "aws"] },
+                  "provider": { "type": "string", "enum": ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog", "neon", "neo4j"] },
                   "name": { "type": "string", "example": "Production Cloudflare" },
                   "credential": { "$ref": "#/components/schemas/Credential" }
                 }
@@ -410,7 +410,7 @@
       "Credential": {
         "type": "object",
         "properties": {
-          "provider": { "type": "string", "enum": ["cloudflare", "gcp", "aws"] },
+          "provider": { "type": "string", "enum": ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog", "neon", "neo4j"] },
           "apiToken": { "type": "string", "description": "Cloudflare API token" },
           "accountId": { "type": "string", "description": "Cloudflare Account ID" },
           "serviceAccountJson": { "type": "string", "description": "GCP Service Account JSON" },
@@ -437,7 +437,7 @@
         "type": "object",
         "required": ["type", "name", "config", "enabled"],
         "properties": {
-          "type": { "type": "string", "enum": ["pagerduty", "discord", "slack", "email", "webhook"] },
+          "type": { "type": "string", "enum": ["pagerduty", "discord", "slack", "email", "webhook", "github"] },
           "name": { "type": "string" },
           "config": { "type": "object" },
           "enabled": { "type": "boolean" }
