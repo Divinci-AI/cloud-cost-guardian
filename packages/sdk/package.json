@@ -1,6 +1,6 @@
 {
   "name": "@kill-switch/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Kill Switch SDK — programmatic access to the Kill Switch API",
   "type": "module",
   "main": "./dist/index.js",
