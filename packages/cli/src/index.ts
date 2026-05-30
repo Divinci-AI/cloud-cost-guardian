@@ -14,6 +14,7 @@
 import { Command } from "commander";
 import { KillSwitchClient } from "@kill-switch/sdk";
 import { resolveApiKey, resolveApiUrl } from "./config.js";
+import { outputError } from "./output.js";
 import { registerAuthCommands } from "./commands/auth.js";
 import { registerAccountCommands } from "./commands/accounts.js";
 import { registerRuleCommands } from "./commands/rules.js";
@@ -51,10 +52,18 @@ program
  */
 const createClient: ClientFactory = () => {
   const opts = program.opts();
-  return new KillSwitchClient({
-    apiKey: resolveApiKey(opts.apiKey),
-    baseUrl: resolveApiUrl(opts.apiUrl),
-  });
+  try {
+    return new KillSwitchClient({
+      apiKey: resolveApiKey(opts.apiKey),
+      baseUrl: resolveApiUrl(opts.apiUrl),
+    });
+  } catch (err) {
+    // e.g. a malformed / non-https apiUrl from config/env (resolveApiUrl throws).
+    // Some commands build the client outside their try/catch, so handle it here
+    // to emit a clean error instead of a raw stack trace.
+    outputError(err instanceof Error ? err.message : String(err), opts.json);
+    process.exit(1);
+  }
 };
 
 registerAuthCommands(program, createClient);

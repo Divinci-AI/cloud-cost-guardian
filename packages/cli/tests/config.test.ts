@@ -57,4 +57,27 @@ describe("resolveApiUrl", () => {
     const result = resolveApiUrl(undefined);
     expect(result).toContain("kill-switch.net");
   });
+
+  // Security (M-1): the resolved URL receives the API key, so reject anything
+  // that isn't https:// — http:// allowed only for localhost.
+  it("allows http only for localhost", () => {
+    delete process.env.KILL_SWITCH_API_URL;
+    expect(resolveApiUrl("http://localhost:8787")).toBe("http://localhost:8787");
+    expect(resolveApiUrl("http://127.0.0.1:3000")).toBe("http://127.0.0.1:3000");
+  });
+
+  it("rejects plaintext http to a non-localhost host", () => {
+    delete process.env.KILL_SWITCH_API_URL;
+    expect(() => resolveApiUrl("http://evil.example.com")).toThrow(/https/i);
+  });
+
+  it("rejects a malformed URL", () => {
+    delete process.env.KILL_SWITCH_API_URL;
+    expect(() => resolveApiUrl("not a url")).toThrow(/Invalid API URL/i);
+  });
+
+  it("rejects a non-http(s) scheme", () => {
+    delete process.env.KILL_SWITCH_API_URL;
+    expect(() => resolveApiUrl("file:///etc/passwd")).toThrow();
+  });
 });

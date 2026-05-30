@@ -24,7 +24,7 @@ vi.mock("../src/config.js", () => ({
   CONFIG_DIR: "/tmp",
   DEFAULT_API_URL: "https://api.kill-switch.net",
 }));
-import { resolveApiKey, deleteConfig } from "../src/config.js";
+import { resolveApiKey, deleteConfig, loadConfig } from "../src/config.js";
 
 import { registerAccountCommands } from "../src/commands/accounts.js";
 import { registerAlertCommands } from "../src/commands/alerts.js";
@@ -36,6 +36,7 @@ import { registerKillCommands } from "../src/commands/kill.js";
 import { registerAuthCommands } from "../src/commands/auth.js";
 import { registerShieldCommands } from "../src/commands/shield.js";
 import { registerOnboardCommands } from "../src/commands/onboard.js";
+import { registerConfigCommands } from "../src/commands/config-cmd.js";
 
 function makeProgram() {
   return new Command()
@@ -612,5 +613,49 @@ describe("ks onboard", () => {
     ).rejects.toThrow("exit:1");
     expect(create).not.toHaveBeenCalled();
     exit.mockRestore();
+  });
+});
+
+// ── config (key masking, H-2) ────────────────────────────────────────────────
+describe("ks config (apiKey masking)", () => {
+  const FULL = "ks_live_secret1234567890";
+  beforeEach(() => {
+    vi.mocked(loadConfig).mockReturnValue({ apiKey: FULL, apiUrl: "https://api.kill-switch.net" } as never);
+  });
+
+  it("list --json masks the apiKey by default", async () => {
+    const p = makeProgram(); registerConfigCommands(p);
+    const out = captureConsole();
+    await p.parseAsync(["node", "ks", "--json", "config", "list"]);
+    const parsed = parseJson(out);
+    expect(parsed.apiKey).not.toBe(FULL);
+    expect(parsed.apiKey).toContain("…");
+    expect(parsed.apiUrl).toBe("https://api.kill-switch.net"); // non-secret untouched
+  });
+
+  it("list --json --reveal shows the full apiKey", async () => {
+    const p = makeProgram(); registerConfigCommands(p);
+    const out = captureConsole();
+    await p.parseAsync(["node", "ks", "--json", "config", "list", "--reveal"]);
+    expect(parseJson(out).apiKey).toBe(FULL);
+  });
+
+  it("get apiKey masks by default and reveals with --reveal", async () => {
+    let p = makeProgram(); registerConfigCommands(p);
+    let out = captureConsole();
+    await p.parseAsync(["node", "ks", "--json", "config", "get", "apiKey"]);
+    expect(parseJson(out).apiKey).toContain("…");
+
+    p = makeProgram(); registerConfigCommands(p);
+    out = captureConsole();
+    await p.parseAsync(["node", "ks", "--json", "config", "get", "apiKey", "--reveal"]);
+    expect(parseJson(out).apiKey).toBe(FULL);
+  });
+
+  it("get on a non-secret key is never masked", async () => {
+    const p = makeProgram(); registerConfigCommands(p);
+    const out = captureConsole();
+    await p.parseAsync(["node", "ks", "--json", "config", "get", "apiUrl"]);
+    expect(parseJson(out).apiUrl).toBe("https://api.kill-switch.net");
   });
 });

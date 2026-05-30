@@ -113,4 +113,17 @@ describe("CLI e2e (built binary vs mock API)", () => {
     expect(parsed.authenticated).toBe(true);
     expect(parsed.tier).toBe("pro");
   });
+
+  it("a misconfigured (non-https) API URL fails cleanly, not with a raw stack", async () => {
+    // `shield` builds the client outside its try/catch — this is the path the
+    // createClient() hardening covers. Empty HOME so the bad URL comes from env.
+    const { stdout, stderr, code } = await runCli(
+      ["--json", "shield", "cost-runaway"],
+      { KILL_SWITCH_API_URL: "http://evil.example.com", HOME: mkdtempSync(join(tmpdir(), "ks-e2e-bad-")) },
+    );
+    const all = stdout + stderr;
+    expect(code).toBe(1);
+    expect(all).toMatch(/Refusing to use API URL|https/i);
+    expect(all).not.toMatch(/^\s+at\s/m); // no stack-trace frames
+  });
 });
