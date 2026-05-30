@@ -262,6 +262,10 @@ async function resolveOrgById(
   GuardianAccountModel: any,
   TeamMemberModel: any
 ): Promise<{ accountId: string; role: "owner" | "admin" | "member" | "viewer"; orgType: "personal" | "organization" } | null> {
+  // Reject malformed ids up front: a bad X-Org-Id (or stale activeOrgId) must resolve to a
+  // clean 403, not a 500 from a Mongoose CastError on an invalid ObjectId.
+  if (!/^[0-9a-fA-F]{24}$/.test(orgId)) return null;
+
   const account = await GuardianAccountModel.findById(orgId);
   if (!account) return null;
 
