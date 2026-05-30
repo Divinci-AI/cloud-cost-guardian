@@ -153,6 +153,8 @@
                         <li><a href="#provider-snowflake">Snowflake</a></li>
                         <li><a href="#provider-vercel">Vercel</a></li>
                         <li><a href="#provider-datadog">Datadog</a></li>
+                        <li><a href="#provider-neon">Neon</a></li>
+                        <li><a href="#provider-neo4j">Neo4j</a></li>
                     </ul>
                 </li>
                 <li><a href="#runpod-guide">RunPod Setup Guide</a>
@@ -352,6 +354,8 @@ secret_name = "PAGERDUTY_ROUTING_KEY"</code></pre>
             <tr id="provider-snowflake"><td><strong>Snowflake</strong></td><td>Warehouse credits, query costs, data scanning</td><td>Scale down warehouse, suspend warehouse</td></tr>
             <tr id="provider-vercel"><td><strong>Vercel</strong></td><td>Function invocations, bandwidth, build minutes</td><td>Scale down, disable service</td></tr>
             <tr id="provider-datadog"><td><strong>Datadog</strong></td><td>Host count, log ingestion, custom metrics</td><td>Rotate credentials, mute monitors</td></tr>
+            <tr id="provider-neon"><td><strong>Neon</strong></td><td>Serverless Postgres compute hours, storage, data transfer</td><td>Scale down, delete project</td></tr>
+            <tr id="provider-neo4j"><td><strong>Neo4j Aura</strong></td><td>Graph DB instances, memory, storage, instance count</td><td>Pause instance, scale down, delete</td></tr>
         </table>
 
         <h2 id="runpod-guide">6. RunPod Setup Guide<a href="#runpod-guide" class="anchor"></a></h2>
@@ -581,6 +585,65 @@ ks onboard --provider runpod \
             <tr><td>Host Count</td><td>50</td></tr>
             <tr><td>Log Ingestion/day</td><td>10 GB</td></tr>
             <tr><td>Daily Cost</td><td>$100/day</td></tr>
+        </table>
+
+        <!-- ─── Neon ─────────────────────────────────────────────── -->
+        <h2 id="neon-guide">16. Neon Setup Guide<a href="#neon-guide" class="anchor"></a></h2>
+        <p>Monitor Neon serverless Postgres compute hours, storage, and data transfer. Scale down or pause a runaway project before the bill spikes.</p>
+        <h3>Credentials</h3>
+        <ol>
+            <li>Go to <a href="https://console.neon.tech/app/settings/api-keys" target="_blank" rel="noopener">console.neon.tech &gt; Account Settings &gt; API Keys</a></li>
+            <li>Create an API key and copy it (shown once)</li>
+            <li>Find your Project ID under Project Settings</li>
+        </ol>
+<pre><code># Connect at the dashboard (Neon onboarding is dashboard-driven):
+# https://app.kill-switch.net/accounts/connect/neon
+#   API key:    neon_api_key_...
+#   Project ID: your-project-id</code></pre>
+        <h3>Kill Actions</h3>
+        <table>
+            <tr><th>Action</th><th>What Happens</th><th>Reversible</th></tr>
+            <tr><td><code>scale-down</code></td><td>Suspend all compute endpoints (autosuspend)</td><td>Yes</td></tr>
+            <tr><td><code>delete</code></td><td>Delete the project (last resort)</td><td>No</td></tr>
+        </table>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Compute</td><td>80 CU-hrs/month</td></tr>
+            <tr><td>Storage</td><td>400 MB</td></tr>
+            <tr><td>Data Transfer</td><td>4 GB</td></tr>
+            <tr><td>Daily Cost</td><td>$1/day (monthly limit $30)</td></tr>
+        </table>
+
+        <!-- ─── Neo4j Aura ───────────────────────────────────────── -->
+        <h2 id="neo4j-guide">17. Neo4j Aura Setup Guide<a href="#neo4j-guide" class="anchor"></a></h2>
+        <p>Monitor Neo4j Aura graph database instances — memory, storage, and instance count. Pause or scale down before idle instances rack up cost.</p>
+        <h3>Credentials</h3>
+        <ol>
+            <li>Go to <a href="https://console.neo4j.io/" target="_blank" rel="noopener">console.neo4j.io &gt; Account &gt; API Credentials</a></li>
+            <li>Create credentials — you get a <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+            <li>Optionally note a specific Instance ID (otherwise all instances are monitored)</li>
+        </ol>
+<pre><code># CLI (one command):
+ks onboard --provider neo4j \
+  --neo4j-client-id "CLIENT_ID" \
+  --neo4j-client-secret "CLIENT_SECRET" \
+  --name "Production Neo4j" --shields cost-runaway
+# Or connect at https://app.kill-switch.net/accounts/connect/neo4j</code></pre>
+        <h3>Kill Actions</h3>
+        <table>
+            <tr><th>Action</th><th>What Happens</th><th>Reversible</th></tr>
+            <tr><td><code>pause-cluster</code></td><td>Pause the Aura instance</td><td>Yes</td></tr>
+            <tr><td><code>scale-down</code></td><td>Resize to a smaller tier</td><td>Yes</td></tr>
+            <tr><td><code>delete</code></td><td>Delete the instance (last resort)</td><td>No</td></tr>
+        </table>
+        <h3>Default Thresholds</h3>
+        <table>
+            <tr><th>Threshold</th><th>Default</th></tr>
+            <tr><td>Running Instances</td><td>3</td></tr>
+            <tr><td>Memory</td><td>8 GB</td></tr>
+            <tr><td>Storage</td><td>16 GB</td></tr>
+            <tr><td>Daily Cost</td><td>$20/day (monthly limit $600)</td></tr>
         </table>
 
         <h2 id="help">Need Help?<a href="#help" class="anchor"></a></h2>

@@ -7,18 +7,20 @@
     <link rel="icon" href="/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <title>CLI Reference | Kill Switch</title>
-    <meta name="description" content="Kill Switch CLI — monitor cloud spending, kill runaway services from the terminal.">
+    <meta name="description" content="Kill Switch CLI — monitor cloud spending, kill runaway services, and cap coding-agent spend from the terminal.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --nav-h: 58px; --sidebar-w: 264px; }
+        html { scroll-behavior: smooth; }
         body { font-family: 'Inter', sans-serif; background: rgb(12, 18, 41); color: #c4c5ca; }
         a { color: #5ce2e7; text-decoration: none; }
         a:hover { color: #fff; }
         .navbar {
             position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
             display: flex; justify-content: space-between; align-items: center;
-            padding: 0 2em; height: 58px;
+            padding: 0 2em; height: var(--nav-h);
             background: rgba(51, 51, 51, 0.55); backdrop-filter: blur(12px);
             border-top: 4px solid #0e102dab;
         }
@@ -29,9 +31,44 @@
         .nav-links a.active { color: #5ce2e7; }
         .btn-github { background: #24292e; color: #fff !important; padding: 7px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; border: 1px solid #444; }
         .btn-github:hover { background: #444; }
-        .content { max-width: 860px; margin: 0 auto; padding: 90px 2em 4em; }
+
+        /* Layout: sticky sidebar + main */
+        .layout { display: flex; max-width: 1240px; margin: 0 auto; }
+        .sidebar {
+            position: sticky; top: var(--nav-h); align-self: flex-start;
+            width: var(--sidebar-w); flex-shrink: 0;
+            height: calc(100vh - var(--nav-h));
+            overflow-y: auto; padding: 1.4em 0.8em 2em 1.4em;
+            border-right: 1px solid rgba(255,255,255,0.07);
+        }
+        .sidebar::-webkit-scrollbar { width: 8px; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+        .search-wrap { position: relative; margin-bottom: 1em; }
+        #docSearch {
+            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 7px; padding: 9px 12px 9px 32px; color: #fff; font-size: 13px;
+            font-family: 'Inter', sans-serif; outline: none;
+        }
+        #docSearch:focus { border-color: #5ce2e7; background: rgba(92,226,231,0.06); }
+        #docSearch::placeholder { color: #6b6e7e; }
+        .search-wrap .s-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #6b6e7e; font-size: 14px; pointer-events: none; }
+        .search-wrap .s-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: #6b6e7e; cursor: pointer; font-size: 16px; display: none; background: none; border: none; padding: 2px 6px; }
+        .search-wrap .s-clear:hover { color: #fff; }
+        .sidebar nav { font-size: 13px; }
+        .sidebar nav a {
+            display: block; padding: 5px 10px; margin: 1px 0; border-radius: 5px;
+            color: #9498a8; font-weight: 500; border-left: 2px solid transparent;
+        }
+        .sidebar nav a:hover { color: #fff; background: rgba(255,255,255,0.04); }
+        .sidebar nav a.active { color: #5ce2e7; background: rgba(92,226,231,0.08); border-left-color: #5ce2e7; }
+        .sidebar nav .nav-group { margin: 1.1em 0 0.3em; padding: 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: #5b5e6e; }
+        .no-results { padding: 10px; color: #8a8d9b; font-size: 13px; font-style: italic; display: none; }
+
+        .main { flex: 1; min-width: 0; max-width: 880px; padding: 90px 2.4em 5em; }
         h1 { font-family: 'Outfit', sans-serif; font-size: 2.2em; font-weight: 800; color: #fff; margin: 0 0 0.3em; }
-        h2 { font-family: 'Outfit', sans-serif; font-size: 1.5em; font-weight: 700; color: #fff; margin: 2em 0 0.6em; padding-top: 1em; border-top: 1px solid rgba(255,255,255,0.06); }
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.5em; font-weight: 700; color: #fff; margin: 0 0 0.6em; padding-top: 1em; }
+        .doc-section { border-top: 1px solid rgba(255,255,255,0.06); margin-top: 2em; padding-top: 0.5em; scroll-margin-top: calc(var(--nav-h) + 16px); }
+        .doc-section:first-of-type { border-top: none; margin-top: 1em; }
         h3 { font-family: 'Outfit', sans-serif; font-size: 1.15em; font-weight: 600; color: #ddd; margin: 1.5em 0 0.4em; }
         p { line-height: 1.7; margin: 0 0 1em; }
         ul, ol { margin: 0 0 1.2em 1.5em; line-height: 1.8; }
@@ -41,13 +78,33 @@
         pre code { background: none; padding: 0; color: inherit; }
         table { width: 100%; border-collapse: collapse; margin: 0 0 1.5em; font-size: 14px; }
         th { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.04); color: #fff; font-weight: 600; }
-        td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: top; }
         td code { font-size: 12px; }
         .callout { background: rgba(92,226,231,0.06); border-left: 3px solid #5ce2e7; padding: 1em 1.2em; border-radius: 0 6px 6px 0; margin: 0 0 1.5em; }
         .callout-warn { background: rgba(255,152,0,0.06); border-left-color: #ff9800; }
         .cmd-group { margin: 1.5em 0; }
         .cmd-group h4 { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #5ce2e7; margin: 0 0 0.3em; }
         .cmd-group p { font-size: 14px; margin: 0 0 0.8em; color: #8a8d9b; }
+        .menu-toggle { display: none; }
+
+        @media (max-width: 900px) {
+            .nav-links a:not(.btn-github):not(.active) { display: none; }
+            .layout { display: block; }
+            .sidebar {
+                position: fixed; top: var(--nav-h); left: 0; z-index: 900;
+                width: 280px; height: calc(100vh - var(--nav-h));
+                background: rgb(12, 18, 41); transform: translateX(-100%);
+                transition: transform 0.2s ease; border-right: 1px solid rgba(255,255,255,0.1);
+            }
+            body.menu-open .sidebar { transform: translateX(0); }
+            .main { max-width: 100%; padding: 80px 1.3em 4em; }
+            .menu-toggle {
+                display: inline-flex; align-items: center; gap: 6px; position: fixed;
+                bottom: 18px; right: 18px; z-index: 950; background: #5ce2e7; color: #0c1229;
+                border: none; border-radius: 30px; padding: 12px 18px; font-weight: 700;
+                font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.4); cursor: pointer;
+            }
+        }
     </style>
 </head>
 <body>
@@ -69,12 +126,52 @@
         </div>
     </nav>
 
-    <div class="content">
-        <h1>CLI Reference</h1>
-        <p><code>@kill-switch/cli</code> &mdash; monitor cloud spending, kill runaway services from the terminal. Designed for both developers and AI agents.</p>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="search-wrap">
+                <span class="s-icon">&#128269;</span>
+                <input type="search" id="docSearch" placeholder="Search the CLI docs…" autocomplete="off" spellcheck="false">
+                <button class="s-clear" id="searchClear" aria-label="Clear search">&times;</button>
+            </div>
+            <nav id="sidebarNav">
+                <div class="nav-group">Getting Started</div>
+                <a href="#install">Install</a>
+                <a href="#quick-start">Quick Start</a>
+                <a href="#authentication">Authentication</a>
+                <a href="#onboard">Onboard</a>
+                <div class="nav-group">Protect &amp; Monitor</div>
+                <a href="#shield">Shield</a>
+                <a href="#accounts">Cloud Accounts</a>
+                <a href="#monitoring">Monitoring</a>
+                <a href="#rules">Rules</a>
+                <a href="#kill">Database Kill Switch</a>
+                <a href="#alerts">Alerts</a>
+                <div class="nav-group">Agent Guard</div>
+                <a href="#guard">Agent Guard (ks guard)</a>
+                <div class="nav-group">Team &amp; Insights</div>
+                <a href="#orgs">Organizations</a>
+                <a href="#activity">Activity Log</a>
+                <a href="#providers">Providers</a>
+                <a href="#status">Status Dashboard</a>
+                <a href="#analytics">Analytics</a>
+                <div class="nav-group">Reference</div>
+                <a href="#config">Configuration</a>
+                <a href="#global-options">Global Options</a>
+                <a href="#agent-usage">AI Agent Usage</a>
+                <a href="#env-vars">Environment Variables</a>
+                <a href="#exit-codes">Exit Codes</a>
+                <a href="#see-also">See Also</a>
+                <div class="no-results" id="noResults">No matches found.</div>
+            </nav>
+        </aside>
 
+        <main class="main">
+        <h1>CLI Reference</h1>
+        <p><code>@kill-switch/cli</code> &mdash; monitor cloud spending, kill runaway services, and cap coding-agent spend from the terminal. Designed for both developers and AI agents.</p>
+
+        <section class="doc-section" id="install">
         <h2>Install</h2>
-<pre><code># From npm (coming soon)
+<pre><code># From npm
 npm install -g @kill-switch/cli
 
 # From source
@@ -86,10 +183,12 @@ npm link  # makes `kill-switch` and `ks` available globally</code></pre>
         <div class="callout">
             <strong>Short alias:</strong> Every <code>kill-switch</code> command can also be run as <code>ks</code>. For example: <code>ks onboard</code>, <code>ks check</code>, <code>ks accounts list</code>.
         </div>
+        </section>
 
+        <section class="doc-section" id="quick-start">
         <h2>Quick Start</h2>
-<pre><code># 1. Authenticate
-ks auth login --api-key ks_live_your_key_here
+<pre><code># 1. Authenticate (browser device flow — or pass --api-key)
+ks auth setup
 
 # 2. One-command setup (connects provider + applies shields + sets up alerts)
 ks onboard --provider cloudflare \
@@ -104,9 +203,40 @@ ks check
 
 # 4. View results
 ks accounts list</code></pre>
+        </section>
 
+        <section class="doc-section" id="authentication">
+        <h2>Authentication</h2>
+        <p>The CLI authenticates with personal API keys (prefixed with <code>ks_</code>) or a browser device flow. Create a key from the web dashboard at <a href="https://app.kill-switch.net">app.kill-switch.net</a> (Settings &rarr; API Keys), or via the API.</p>
+
+        <div class="cmd-group">
+            <h4>ks auth setup</h4>
+            <p>Authenticate via your browser (opens a one-time approval page). Add <code>--manual</code> to open the Settings page and paste a key yourself instead.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks auth login [--api-key KEY]</h4>
+            <p>Authenticate. Uses the browser device flow by default; pass <code>--api-key ks_…</code> for a direct, non-interactive login. Saves to <code>~/.kill-switch/config.json</code> (0600 permissions).</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks auth status</h4>
+            <p>Show current auth status, account name, and tier.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks auth logout</h4>
+            <p>Clear stored credentials.</p>
+        </div>
+
+        <h3>Auth Resolution Order</h3>
+        <ol>
+            <li><code>KILL_SWITCH_API_KEY</code> environment variable (best for CI/CD and AI agents)</li>
+            <li><code>--api-key</code> flag on any command</li>
+            <li><code>~/.kill-switch/config.json</code> file (set by <code>ks auth login</code> / <code>ks auth setup</code>)</li>
+        </ol>
+        </section>
+
+        <section class="doc-section" id="onboard">
         <h2>Onboard (One-Command Setup)</h2>
-        <p>The fastest way to get protected. Connects a cloud provider, applies shield presets, and configures alerts &mdash; all in a single command. Designed for both humans and AI agents.</p>
+        <p>The fastest way to get protected. Connects a cloud provider, applies shield presets, and configures alerts &mdash; all in a single command. Designed for both humans and AI agents. (<code>ks setup</code> is an alias for <code>ks onboard</code>.)</p>
 
         <div class="callout">
             <strong>AI agent friendly:</strong> Every parameter is passable as a flag. Run <code>ks onboard --help-provider cloudflare</code> to get exact instructions for obtaining credentials.
@@ -145,69 +275,86 @@ ks onboard \
   --runpod-api-key "YOUR_RUNPOD_API_KEY" \
   --shields cost-runaway,gpu-runaway
 
+# Connect Neo4j Aura
+ks onboard \
+  --provider neo4j \
+  --neo4j-client-id "YOUR_CLIENT_ID" \
+  --neo4j-client-secret "YOUR_CLIENT_SECRET" \
+  --shields cost-runaway
+
+# Connect MongoDB Atlas
+ks onboard \
+  --provider mongodb \
+  --mongodb-subtype atlas \
+  --atlas-public-key "YOUR_PUBLIC_KEY" \
+  --atlas-private-key "YOUR_PRIVATE_KEY" \
+  --atlas-project-id "YOUR_PROJECT_ID" \
+  --shields cost-runaway
+
 # Show how to get credentials for a provider
 ks onboard --help-provider cloudflare
 ks onboard --help-provider aws
 ks onboard --help-provider gcp
-ks onboard --help-provider runpod</code></pre>
+ks onboard --help-provider runpod
+ks onboard --help-provider neo4j
+ks onboard --help-provider mongodb</code></pre>
 
         <h3>Onboard Options</h3>
         <table>
             <tr><th>Flag</th><th>Description</th></tr>
-            <tr><td><code>--provider</code></td><td>Cloud provider: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, <code>runpod</code></td></tr>
+            <tr><td><code>--provider</code></td><td>Cloud provider: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, <code>runpod</code>, <code>neo4j</code>, <code>mongodb</code></td></tr>
             <tr><td><code>--name</code></td><td>Account name (e.g., "Production")</td></tr>
-            <tr><td><code>--token</code></td><td>API token (Cloudflare &mdash; must be an API Token, not Global Key)</td></tr>
-            <tr><td><code>--account-id</code></td><td>Account ID (Cloudflare &mdash; from URL bar)</td></tr>
-            <tr><td><code>--project-id</code></td><td>Project ID (GCP)</td></tr>
-            <tr><td><code>--service-account</code></td><td>Service Account JSON (GCP)</td></tr>
-            <tr><td><code>--access-key</code></td><td>Access Key ID (AWS)</td></tr>
-            <tr><td><code>--secret-key</code></td><td>Secret Access Key (AWS)</td></tr>
-            <tr><td><code>--region</code></td><td>Region (AWS, default: us-east-1)</td></tr>
-            <tr><td><code>--runpod-api-key</code></td><td>API Key (RunPod)</td></tr>
+            <tr><td><code>--help-provider</code></td><td>Show how to get credentials for a provider</td></tr>
+            <tr><td colspan="2" style="color:#5b5e6e;font-size:12px;padding-top:14px;">Cloudflare</td></tr>
+            <tr><td><code>--token</code></td><td>API token (must be an API Token, not Global Key)</td></tr>
+            <tr><td><code>--account-id</code></td><td>Account ID (from the dashboard URL bar)</td></tr>
+            <tr><td colspan="2" style="color:#5b5e6e;font-size:12px;padding-top:14px;">GCP</td></tr>
+            <tr><td><code>--project-id</code></td><td>Project ID</td></tr>
+            <tr><td><code>--service-account</code></td><td>Service Account JSON</td></tr>
+            <tr><td colspan="2" style="color:#5b5e6e;font-size:12px;padding-top:14px;">AWS</td></tr>
+            <tr><td><code>--access-key</code></td><td>Access Key ID</td></tr>
+            <tr><td><code>--secret-key</code></td><td>Secret Access Key</td></tr>
+            <tr><td><code>--region</code></td><td>Region (default: us-east-1)</td></tr>
+            <tr><td colspan="2" style="color:#5b5e6e;font-size:12px;padding-top:14px;">RunPod</td></tr>
+            <tr><td><code>--runpod-api-key</code></td><td>API Key</td></tr>
+            <tr><td colspan="2" style="color:#5b5e6e;font-size:12px;padding-top:14px;">Neo4j Aura</td></tr>
+            <tr><td><code>--neo4j-client-id</code></td><td>Client ID</td></tr>
+            <tr><td><code>--neo4j-client-secret</code></td><td>Client Secret</td></tr>
+            <tr><td><code>--neo4j-instance-id</code></td><td>Instance ID (optional)</td></tr>
+            <tr><td colspan="2" style="color:#5b5e6e;font-size:12px;padding-top:14px;">MongoDB</td></tr>
+            <tr><td><code>--mongodb-subtype</code></td><td><code>atlas</code> or <code>self-hosted</code></td></tr>
+            <tr><td><code>--atlas-public-key</code></td><td>Atlas API public key</td></tr>
+            <tr><td><code>--atlas-private-key</code></td><td>Atlas API private key</td></tr>
+            <tr><td><code>--atlas-project-id</code></td><td>Atlas project ID</td></tr>
+            <tr><td><code>--atlas-cluster-name</code></td><td>Atlas cluster name (optional)</td></tr>
+            <tr><td><code>--mongodb-uri</code></td><td>Connection URI (self-hosted)</td></tr>
+            <tr><td><code>--mongodb-database</code></td><td>Database name (self-hosted, optional)</td></tr>
+            <tr><td colspan="2" style="color:#5b5e6e;font-size:12px;padding-top:14px;">Protection &amp; alerts</td></tr>
             <tr><td><code>--shields</code></td><td>Comma-separated presets (default: cost-runaway)</td></tr>
+            <tr><td><code>--alert-pagerduty</code></td><td>PagerDuty routing key (recommended)</td></tr>
             <tr><td><code>--alert-email</code></td><td>Email for alerts</td></tr>
             <tr><td><code>--alert-discord</code></td><td>Discord webhook URL</td></tr>
             <tr><td><code>--alert-slack</code></td><td>Slack webhook URL</td></tr>
-            <tr><td><code>--alert-pagerduty</code></td><td>PagerDuty routing key (recommended)</td></tr>
             <tr><td><code>--skip-shields</code></td><td>Skip applying protection rules</td></tr>
             <tr><td><code>--skip-alerts</code></td><td>Skip alert setup</td></tr>
-            <tr><td><code>--help-provider</code></td><td>Show how to get credentials for a provider</td></tr>
         </table>
+        </section>
 
-        <h2>Authentication</h2>
-        <p>The CLI uses personal API keys (prefixed with <code>ks_</code>). Create one from the web dashboard at <a href="https://app.kill-switch.net">app.kill-switch.net</a>, or via the API.</p>
-
-        <h3>Auth Resolution Order</h3>
-        <ol>
-            <li><code>KILL_SWITCH_API_KEY</code> environment variable (best for CI/CD and AI agents)</li>
-            <li><code>--api-key</code> flag on any command</li>
-            <li><code>~/.kill-switch/config.json</code> file (set by <code>kill-switch auth login</code>)</li>
-        </ol>
-
-        <div class="cmd-group">
-            <h4>kill-switch auth login --api-key KEY</h4>
-            <p>Authenticate and save the key to ~/.kill-switch/config.json (0600 permissions).</p>
-        </div>
-        <div class="cmd-group">
-            <h4>kill-switch auth status</h4>
-            <p>Show current auth status, account name, and tier.</p>
-        </div>
-        <div class="cmd-group">
-            <h4>kill-switch auth logout</h4>
-            <p>Clear stored credentials.</p>
-        </div>
-
+        <section class="doc-section" id="shield">
         <h2>Shield (Quick Protect)</h2>
         <p>The fastest way to add protection. One command applies a preset rule.</p>
 
 <pre><code># Apply cost runaway protection
-kill-switch shield cost-runaway
+ks shield cost-runaway
 
 # List all available shields
-kill-switch shield --list
+ks shield --list
+
+# Preview without applying
+ks shield gpu-runaway --dry-run
 
 # Apply with JSON output (for automation)
-kill-switch shield gpu-runaway --json</code></pre>
+ks shield gpu-runaway --json</code></pre>
 
         <h3>Available Shields</h3>
         <table>
@@ -221,47 +368,51 @@ kill-switch shield gpu-runaway --json</code></pre>
             <tr><td><code>exfiltration</code></td><td>Data Exfiltration Detection</td><td>Security</td></tr>
             <tr><td><code>error-storm</code></td><td>Error Storm Protection</td><td>Reliability</td></tr>
         </table>
+        </section>
 
+        <section class="doc-section" id="accounts">
         <h2>Cloud Accounts</h2>
 
         <div class="cmd-group">
-            <h4>kill-switch accounts list</h4>
-            <p>List all connected cloud accounts with provider, name, and status.</p>
+            <h4>ks accounts list</h4>
+            <p>List all connected cloud accounts with provider, name, and status. Filter with <code>--provider</code> or <code>--status</code>.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch accounts get &lt;id&gt;</h4>
+            <h4>ks accounts get &lt;id&gt;</h4>
             <p>Show detailed account info including thresholds and last check results.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch accounts add &lt;provider&gt; --name "My Account"</h4>
-            <p>Connect a cloud provider. Supported: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, <code>runpod</code>.</p>
+            <h4>ks accounts add &lt;provider&gt; --name "My Account"</h4>
+            <p>Connect a cloud provider. Supported: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, and more.</p>
         </div>
 
 <pre><code># Connect Cloudflare
-kill-switch accounts add cloudflare \
+ks accounts add cloudflare \
   --name "Production" \
   --token "your-cf-api-token" \
   --account-id "your-account-id"
 
 # Connect GCP
-kill-switch accounts add gcp \
+ks accounts add gcp \
   --name "GCP Production" \
   --project-id "my-project" \
   --service-account '{"type":"service_account",...}'</code></pre>
 
         <div class="cmd-group">
-            <h4>kill-switch accounts delete &lt;id&gt;</h4>
-            <p>Disconnect and delete a cloud account and its stored credentials.</p>
-        </div>
-        <div class="cmd-group">
-            <h4>kill-switch accounts check &lt;id&gt;</h4>
+            <h4>ks accounts check &lt;id&gt;</h4>
             <p>Run a manual monitoring check on a specific account.</p>
         </div>
+        <div class="cmd-group">
+            <h4>ks accounts delete &lt;id&gt;</h4>
+            <p>Disconnect and delete a cloud account and its stored credentials.</p>
+        </div>
+        </section>
 
+        <section class="doc-section" id="monitoring">
         <h2>Monitoring</h2>
 
         <div class="cmd-group">
-            <h4>kill-switch check</h4>
+            <h4>ks check</h4>
             <p>Run monitoring checks on all connected accounts. Shows violations and actions taken.</p>
         </div>
 
@@ -276,67 +427,78 @@ Service               Metric          Current   Threshold   Over    Severity
 BigQuery              monthlySpend    $523      $500        1x      warning
   Actions: scale-down</code></pre>
 
+        <div class="cmd-group">
+            <h4>ks watch [--interval 60]</h4>
+            <p>Continuously monitor all accounts, polling on an interval (default: 60 seconds). Ctrl-C to stop.</p>
+        </div>
+        </section>
+
+        <section class="doc-section" id="rules">
         <h2>Rules</h2>
 
         <div class="cmd-group">
-            <h4>kill-switch rules list</h4>
-            <p>List all active kill switch rules.</p>
+            <h4>ks rules list</h4>
+            <p>List kill switch rules. Filter with <code>--trigger</code> (<code>cost</code>, <code>security</code>, <code>custom</code>, <code>api</code>, <code>agent</code>), <code>--enabled</code>, or <code>--disabled</code>.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch rules presets</h4>
+            <h4>ks rules presets</h4>
             <p>List available preset rule templates.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch rules create &lt;name&gt; --trigger &lt;type&gt;</h4>
-            <p>Create a custom rule. Trigger types: <code>cost</code>, <code>security</code>, <code>api</code>.</p>
+            <h4>ks rules create &lt;name&gt; --trigger &lt;type&gt;</h4>
+            <p>Create a custom rule. Trigger types: <code>cost</code>, <code>security</code>, <code>api</code>. Pass <code>--condition</code> / <code>--action</code> JSON, or <code>--dry-run</code> to preview.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch rules toggle &lt;id&gt;</h4>
+            <h4>ks rules toggle &lt;id&gt;</h4>
             <p>Enable or disable a rule.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch rules delete &lt;id&gt;</h4>
+            <h4>ks rules delete &lt;id&gt;</h4>
             <p>Delete a rule permanently.</p>
         </div>
+        </section>
 
+        <section class="doc-section" id="kill">
         <h2>Database Kill Switch</h2>
         <p>Multi-step database kill sequences: snapshot &rarr; verify &rarr; isolate &rarr; nuke. Each step is an explicit command &mdash; no interactive prompts.</p>
 
 <pre><code># Initiate a kill sequence
-kill-switch kill init \
+ks kill init \
   --credential-id "cred_abc123" \
   --trigger "credential compromise detected"
 
-# Check status
-kill-switch kill status dbkill-xyz789
+# Check status (omit id to list all active)
+ks kill status dbkill-xyz789
 
 # Advance to next step
-kill-switch kill advance dbkill-xyz789 --credential-id "cred_abc123"
+ks kill advance dbkill-xyz789 --credential-id "cred_abc123"
 
 # Final step (nuke) requires human approval
-kill-switch kill advance dbkill-xyz789 \
+ks kill advance dbkill-xyz789 \
   --credential-id "cred_abc123" \
   --human-approval
 
 # Abort if needed
-kill-switch kill abort dbkill-xyz789</code></pre>
+ks kill abort dbkill-xyz789</code></pre>
+        </section>
 
+        <section class="doc-section" id="alerts">
         <h2>Alerts</h2>
 
         <div class="cmd-group">
-            <h4>kill-switch alerts list</h4>
+            <h4>ks alerts list</h4>
             <p>List configured alert channels with type, name, enabled status, and masked config preview.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch alerts add --type TYPE [options]</h4>
+            <h4>ks alerts add --type TYPE [options]</h4>
             <p>Add an alert channel. Supported types: <code>pagerduty</code>, <code>slack</code>, <code>discord</code>, <code>email</code>, <code>webhook</code>, <code>github</code>.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch alerts remove &lt;name&gt;</h4>
+            <h4>ks alerts remove &lt;name&gt;</h4>
             <p>Remove an alert channel by name.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch alerts test</h4>
+            <h4>ks alerts test</h4>
             <p>Send a test alert to all configured and enabled channels.</p>
         </div>
 
@@ -362,11 +524,156 @@ ks alerts add --type webhook --webhook-url https://your-service.example.com/webh
 # Remove and test
 ks alerts remove "PagerDuty"
 ks alerts test</code></pre>
+        </section>
 
+        <section class="doc-section" id="guard">
+        <h2>Agent Guard (<code>ks guard</code>)</h2>
+        <p>Kill Switch for <strong>coding agents</strong> &mdash; stop a runaway Claude Code / Cursor / Aider session from racking up an LLM bill. <code>ks guard</code> is the same engine as the standalone <a href="https://www.npmjs.com/package/@kill-switch/agent-guard"><code>@kill-switch/agent-guard</code></a> binary (<code>agent-guard</code> / <code>ksg</code>) &mdash; they share one ledger, budget, and escape hatch.</p>
+
+        <div class="callout">
+            <strong>Two enforcement modes.</strong> The <strong>hook</strong> (Claude Code) reads the live transcript, prices real token usage, warns at the soft cap, and <em>denies the next tool call</em> at the hard cap &mdash; failing <em>open</em> on any error so a buggy guard never bricks your session. The <strong>proxy</strong> (any agent) is a local metering reverse-proxy that returns <strong>HTTP 402</strong> at the cap — a wall the agent can't argue past.
+        </div>
+
+        <div class="cmd-group">
+            <h4>ks guard install [--global]</h4>
+            <p>Wire the agent-guard hook into Claude Code settings. Defaults to <code>./.claude/settings.json</code>; pass <code>--global</code> to install into <code>~/.claude/settings.json</code>.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks guard status [--json]</h4>
+            <p>Show current session + daily agent spend against the budget.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks guard config [options]</h4>
+            <p>View or set budget caps.</p>
+            <table>
+                <tr><th>Flag</th><th>Description</th></tr>
+                <tr><td><code>--session-soft &lt;usd&gt;</code></td><td>Per-session soft cap (warn)</td></tr>
+                <tr><td><code>--session-hard &lt;usd&gt;</code></td><td>Per-session hard cap (block)</td></tr>
+                <tr><td><code>--daily-soft &lt;usd&gt;</code></td><td>Daily rolling soft cap (warn)</td></tr>
+                <tr><td><code>--daily-hard &lt;usd&gt;</code></td><td>Daily rolling hard cap (block)</td></tr>
+                <tr><td><code>--slack-webhook &lt;url&gt;</code></td><td>Slack incoming-webhook for breach alerts</td></tr>
+            </table>
+        </div>
+        <div class="cmd-group">
+            <h4>ks guard pause [--minutes N]</h4>
+            <p>Temporarily disable enforcement (escape hatch). Auto-resumes after N minutes, or stays paused indefinitely. The escape hatch always belongs to the human, never the agent.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks guard resume</h4>
+            <p>Re-arm enforcement after a pause.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks guard reset [--all | --session ID | --today]</h4>
+            <p>Clear the agent spend ledger — all sessions, a single session, or just today's.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks guard proxy [options]</h4>
+            <p>Start the token-metering proxy (HTTP 402 at the hard cap) for non-Claude-Code agents.</p>
+            <table>
+                <tr><th>Flag</th><th>Description</th></tr>
+                <tr><td><code>--port &lt;n&gt;</code></td><td>Port to listen on (default: 8787)</td></tr>
+                <tr><td><code>--flavor &lt;name&gt;</code></td><td>API flavor: <code>anthropic</code> | <code>openai</code> (default: anthropic)</td></tr>
+                <tr><td><code>--upstream &lt;url&gt;</code></td><td>Upstream origin (default: api.anthropic.com / api.openai.com)</td></tr>
+            </table>
+        </div>
+
+<pre><code># Cap a Claude Code session
+ks guard install
+ks guard config --session-hard 30 --daily-hard 150
+ks guard status
+
+# Hard 402 wall for any other agent (Cursor, Aider, raw scripts)
+ks guard proxy --flavor openai --port 8787
+# then point the agent at it:
+export OPENAI_BASE_URL=http://localhost:8787
+
+# Escape hatch (human only)
+ks guard pause --minutes 30
+ks guard resume</code></pre>
+        </section>
+
+        <section class="doc-section" id="orgs">
+        <h2>Organizations</h2>
+        <p>Multi-org support for team and enterprise tiers. Scope any command to an org with the active selection (<code>ks orgs switch</code>) or the <code>X-Org-Id</code> header via the API.</p>
+
+        <div class="cmd-group">
+            <h4>ks orgs list</h4>
+            <p>List organizations you belong to.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks orgs create &lt;name&gt;</h4>
+            <p>Create a new organization (requires team/enterprise tier).</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks orgs switch &lt;orgId&gt;</h4>
+            <p>Switch the active organization for subsequent commands.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks orgs info [orgId]</h4>
+            <p>Get organization details.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks orgs members</h4>
+            <p>List team members in the current organization.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks orgs invite &lt;email&gt; [--role admin|member|viewer]</h4>
+            <p>Invite a member to the current organization (default role: member).</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks orgs delete &lt;orgId&gt;</h4>
+            <p>Delete an organization (owner only; cannot delete your personal workspace).</p>
+        </div>
+        </section>
+
+        <section class="doc-section" id="activity">
+        <h2>Activity Log</h2>
+        <p>Audit trail of every mutation — account connects, rule changes, kill sequences, team changes. Available on team/enterprise tiers.</p>
+
+        <div class="cmd-group">
+            <h4>ks activity</h4>
+            <p>Show recent activity (last 10 entries).</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks activity list [filters]</h4>
+            <p>Query the activity log (owner/admin only).</p>
+            <table>
+                <tr><th>Flag</th><th>Description</th></tr>
+                <tr><td><code>--page &lt;n&gt;</code></td><td>Page number (default: 1)</td></tr>
+                <tr><td><code>--limit &lt;n&gt;</code></td><td>Results per page, max 100 (default: 25)</td></tr>
+                <tr><td><code>--action &lt;prefix&gt;</code></td><td>Filter by action prefix (e.g., cloud_account, rule, team, kill_switch)</td></tr>
+                <tr><td><code>--resource-type &lt;type&gt;</code></td><td>Filter by resource type</td></tr>
+                <tr><td><code>--actor &lt;userId&gt;</code></td><td>Filter by actor user ID</td></tr>
+                <tr><td><code>--from &lt;date&gt;</code></td><td>Start date (ISO format)</td></tr>
+                <tr><td><code>--to &lt;date&gt;</code></td><td>End date (ISO format)</td></tr>
+            </table>
+        </div>
+        </section>
+
+        <section class="doc-section" id="providers">
+        <h2>Providers</h2>
+        <p>Inspect supported cloud providers and validate credentials before connecting.</p>
+
+        <div class="cmd-group">
+            <h4>ks providers list</h4>
+            <p>List supported cloud providers.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks providers validate &lt;provider&gt; [creds]</h4>
+            <p>Validate cloud provider credentials without connecting an account. Accepts the same credential flags as <code>ks onboard</code> (<code>--token</code>, <code>--account-id</code>, <code>--project-id</code>, <code>--service-account</code>, <code>--access-key</code>, <code>--secret-key</code>, <code>--region</code>, <code>--runpod-api-key</code>).</p>
+        </div>
+
+<pre><code># Validate a Cloudflare token before connecting
+ks providers validate cloudflare \
+  --token your-cf-api-token \
+  --account-id your-account-id</code></pre>
+        </section>
+
+        <section class="doc-section" id="status">
         <h2>Status Dashboard</h2>
 
         <div class="cmd-group">
-            <h4>kill-switch status</h4>
+            <h4>ks status</h4>
             <p>Mini-dashboard: plan tier, connected accounts, enabled rules, alert channels, and 30-day spend summary &mdash; all in one command.</p>
         </div>
 
@@ -393,11 +700,13 @@ Alert Channels:
 Type          Name                 Enabled   Config
 ──────────────────────────────────────────────────────────────────
 pagerduty     On-Call              true      ****abcd</code></pre>
+        </section>
 
+        <section class="doc-section" id="analytics">
         <h2>Analytics</h2>
 
         <div class="cmd-group">
-            <h4>kill-switch analytics [--days 30]</h4>
+            <h4>ks analytics [--days 30]</h4>
             <p>FinOps overview: total spend, daily average, projected monthly cost, savings from kill-switch actions, and per-account cost breakdown.</p>
         </div>
 
@@ -424,41 +733,52 @@ Provider        Total Cost   Avg Daily
 ──────────────────────────────────────
 cloudflare      80           2.67
 aws             43.45        1.44</code></pre>
+        </section>
 
+        <section class="doc-section" id="config">
         <h2>Configuration</h2>
 
         <div class="cmd-group">
-            <h4>kill-switch config init</h4>
+            <h4>ks config init</h4>
             <p>Create <code>~/.kill-switch/config.json</code> with defaults.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch config list</h4>
-            <p>Show all config values (API key is masked).</p>
+            <h4>ks config list</h4>
+            <p>Show all config values. The API key is masked (in both table and <code>--json</code> output); pass <code>--reveal</code> to print it in full.</p>
         </div>
         <div class="cmd-group">
-            <h4>kill-switch config set &lt;key&gt; &lt;value&gt;</h4>
+            <h4>ks config get &lt;key&gt;</h4>
+            <p>Get a single config value. Secret values (e.g. <code>apiKey</code>) are masked unless you pass <code>--reveal</code>.</p>
+        </div>
+        <div class="cmd-group">
+            <h4>ks config set &lt;key&gt; &lt;value&gt;</h4>
             <p>Set a config value. Keys: <code>apiKey</code>, <code>apiUrl</code>.</p>
         </div>
+        </section>
 
+        <section class="doc-section" id="global-options">
         <h2>Global Options</h2>
         <table>
             <tr><th>Flag</th><th>Description</th></tr>
             <tr><td><code>--json</code></td><td>Output raw JSON to stdout (for automation, piping, AI agents)</td></tr>
             <tr><td><code>--api-key &lt;key&gt;</code></td><td>Override API key for this command</td></tr>
             <tr><td><code>--api-url &lt;url&gt;</code></td><td>Override API URL (default: https://api.kill-switch.net)</td></tr>
+            <tr><td><code>-y, --yes</code></td><td>Skip confirmation prompts (for non-interactive / agent use)</td></tr>
             <tr><td><code>-V, --version</code></td><td>Show version number</td></tr>
             <tr><td><code>-h, --help</code></td><td>Show help</td></tr>
         </table>
+        </section>
 
+        <section class="doc-section" id="agent-usage">
         <h2>AI Agent Usage</h2>
         <p>The CLI is designed to be used by AI coding agents (Claude Code, Cursor, Windsurf, etc.) to set up cloud cost protection on behalf of users &mdash; no manual steps required.</p>
 
         <div class="callout">
-            <strong>Agent-safe by design:</strong> Every parameter is passable as a flag. No interactive prompts when flags are provided. All output is parseable with <code>--json</code>. Exit codes are deterministic (0=success, 1=error, 2=auth error). Use <code>--help-provider</code> to discover how to obtain credentials.
+            <strong>Agent-safe by design:</strong> Every parameter is passable as a flag. No interactive prompts when flags are provided (or with <code>-y</code>). All output is parseable with <code>--json</code>. Exit codes are deterministic (0=success, 1=error, 2=auth error). Use <code>--help-provider</code> to discover how to obtain credentials.
         </div>
 
         <h3>Full Agent Workflow</h3>
-        <p>An AI agent can set up Kill Switch monitoring in 3 steps:</p>
+        <p>An AI agent can set up Kill Switch monitoring in a few steps:</p>
 
 <pre><code># Step 1: Authenticate (user provides their API key, or set env var)
 export KILL_SWITCH_API_KEY=ks_live_your_key
@@ -493,7 +813,8 @@ ks status --json</code></pre>
 - Auth: KILL_SWITCH_API_KEY env var or `ks auth login --api-key KEY`
 - Setup: `ks onboard --provider cloudflare --account-id ID --token TOKEN`
 - Check: `ks check --json`
-- Credential help: `ks onboard --help-provider cloudflare`</code></pre>
+- Credential help: `ks onboard --help-provider cloudflare`
+- Cap my own agent spend: `ks guard install && ks guard config --daily-hard 150`</code></pre>
 
         <h3>Non-Interactive Commands for Agents</h3>
 <pre><code># All commands work with --json for machine-readable output
@@ -502,17 +823,22 @@ ks shield cost-runaway --json
 ks check --json
 ks rules list --json
 ks analytics --json
+ks guard status --json
 
 # Parse JSON output
 ks check --json | jq '.results[].violations | length'</code></pre>
+        </section>
 
+        <section class="doc-section" id="env-vars">
         <h2>Environment Variables</h2>
         <table>
             <tr><th>Variable</th><th>Description</th></tr>
-            <tr><td><code>KILL_SWITCH_API_KEY</code></td><td>API key (highest priority, overrides config file)</td></tr>
+            <tr><td><code>KILL_SWITCH_API_KEY</code></td><td>API key (overrides the config file)</td></tr>
             <tr><td><code>KILL_SWITCH_API_URL</code></td><td>API URL override (default: https://api.kill-switch.net)</td></tr>
         </table>
+        </section>
 
+        <section class="doc-section" id="exit-codes">
         <h2>Exit Codes</h2>
         <table>
             <tr><th>Code</th><th>Meaning</th></tr>
@@ -520,13 +846,112 @@ ks check --json | jq '.results[].violations | length'</code></pre>
             <tr><td><code>1</code></td><td>Client error (bad arguments, API error)</td></tr>
             <tr><td><code>2</code></td><td>Authentication error (invalid/missing API key)</td></tr>
         </table>
+        </section>
 
+        <section class="doc-section" id="see-also">
         <h2>See Also</h2>
         <ul>
             <li><a href="/docs">API Reference</a> (OpenAPI 3.1)</li>
             <li><a href="/docs/integration.html">Integration Guide</a> (Edge Agent, Spend Guard, Alerting)</li>
+            <li><a href="https://www.npmjs.com/package/@kill-switch/cli"><code>@kill-switch/cli</code></a> &amp; <a href="https://www.npmjs.com/package/@kill-switch/agent-guard"><code>@kill-switch/agent-guard</code></a> on npm</li>
             <li><a href="https://github.com/divinci-ai/kill-switch">GitHub Repository</a></li>
         </ul>
+        </section>
+        </main>
     </div>
+
+    <button class="menu-toggle" id="menuToggle">&#9776; Menu</button>
+
+    <script>
+    (function () {
+        var search = document.getElementById('docSearch');
+        var clearBtn = document.getElementById('searchClear');
+        var nav = document.getElementById('sidebarNav');
+        var noResults = document.getElementById('noResults');
+        var navLinks = Array.prototype.slice.call(nav.querySelectorAll('a'));
+        var groups = Array.prototype.slice.call(nav.querySelectorAll('.nav-group'));
+        var sections = Array.prototype.slice.call(document.querySelectorAll('.doc-section'));
+
+        // Build a search index: section id -> lowercased text
+        var index = sections.map(function (sec) {
+            return { id: sec.id, el: sec, text: (sec.textContent || '').toLowerCase() };
+        });
+
+        function runSearch(q) {
+            q = q.trim().toLowerCase();
+            clearBtn.style.display = q ? 'block' : 'none';
+            if (!q) {
+                sections.forEach(function (s) { s.style.display = ''; });
+                navLinks.forEach(function (a) { a.style.display = ''; });
+                groups.forEach(function (g) { g.style.display = ''; });
+                noResults.style.display = 'none';
+                return;
+            }
+            var matchIds = {};
+            index.forEach(function (entry) {
+                var hit = entry.text.indexOf(q) !== -1;
+                entry.el.style.display = hit ? '' : 'none';
+                if (hit) matchIds[entry.id] = true;
+            });
+            var anyLink = false;
+            navLinks.forEach(function (a) {
+                var id = a.getAttribute('href').slice(1);
+                var hit = !!matchIds[id];
+                a.style.display = hit ? '' : 'none';
+                if (hit) anyLink = true;
+            });
+            // Hide group labels with no visible links after them
+            groups.forEach(function (g) {
+                var sib = g.nextElementSibling, visible = false;
+                while (sib && !sib.classList.contains('nav-group')) {
+                    if (sib.tagName === 'A' && sib.style.display !== 'none') { visible = true; break; }
+                    sib = sib.nextElementSibling;
+                }
+                g.style.display = visible ? '' : 'none';
+            });
+            noResults.style.display = anyLink ? 'none' : 'block';
+        }
+
+        search.addEventListener('input', function () { runSearch(search.value); });
+        clearBtn.addEventListener('click', function () { search.value = ''; runSearch(''); search.focus(); });
+        // "/" focuses search
+        document.addEventListener('keydown', function (e) {
+            if (e.key === '/' && document.activeElement !== search) { e.preventDefault(); search.focus(); }
+            if (e.key === 'Escape' && document.activeElement === search) { search.value = ''; runSearch(''); search.blur(); }
+        });
+
+        // Scrollspy — highlight the sidebar link for the section in view
+        var byId = {};
+        navLinks.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+        function setActive(id) {
+            navLinks.forEach(function (a) { a.classList.remove('active'); });
+            if (byId[id]) byId[id].classList.add('active');
+        }
+        if ('IntersectionObserver' in window) {
+            var visible = {};
+            var obs = new IntersectionObserver(function (entries) {
+                entries.forEach(function (en) {
+                    if (en.isIntersecting) visible[en.target.id] = en.intersectionRatio;
+                    else delete visible[en.target.id];
+                });
+                // pick the topmost visible section
+                var best = null, bestTop = Infinity;
+                Object.keys(visible).forEach(function (id) {
+                    var top = document.getElementById(id).getBoundingClientRect().top;
+                    if (top < bestTop) { bestTop = top; best = id; }
+                });
+                if (best) setActive(best);
+            }, { rootMargin: '-70px 0px -70% 0px', threshold: [0, 0.25, 1] });
+            sections.forEach(function (s) { obs.observe(s); });
+        }
+
+        // Mobile menu toggle
+        var menuToggle = document.getElementById('menuToggle');
+        menuToggle.addEventListener('click', function () { document.body.classList.toggle('menu-open'); });
+        nav.addEventListener('click', function (e) {
+            if (e.target.tagName === 'A') document.body.classList.remove('menu-open');
+        });
+    })();
+    </script>
 </body>
 </html>

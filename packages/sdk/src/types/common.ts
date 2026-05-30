@@ -4,7 +4,23 @@
 
 import type { EventHooks } from "../hooks.js";
 
-export type ProviderId = "cloudflare" | "gcp" | "aws" | "runpod" | "redis" | "mongodb";
+// Mirrors the API provider registry (packages/api/src/providers/index.ts) — 15 providers.
+export type ProviderId =
+  | "cloudflare"
+  | "gcp"
+  | "aws"
+  | "runpod"
+  | "redis"
+  | "mongodb"
+  | "openai"
+  | "anthropic"
+  | "xai"
+  | "replicate"
+  | "snowflake"
+  | "vercel"
+  | "datadog"
+  | "neon"
+  | "neo4j";
 export type GuardianTier = "free" | "pro" | "team" | "enterprise";
 export type TeamRole = "owner" | "admin" | "member" | "viewer";
 

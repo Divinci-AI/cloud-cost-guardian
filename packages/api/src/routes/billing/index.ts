@@ -27,6 +27,11 @@ const PRICES: Record<string, { tier: GuardianTier; interval: string; priceId: st
   guardian_team_annual: { tier: "team", interval: "year", priceId: process.env.STRIPE_PRICE_TEAM_ANNUAL || "price_1TE2hOIzNdoxvIKm9pprqge0" },
 };
 
+// Tiers reachable via self-serve Stripe checkout. These MUST be backed by a live
+// subscription; if they aren't, billing/status self-heals them to free. Enterprise is
+// sales-led (set manually, no self-serve sub) and is intentionally excluded.
+const SELF_SERVE_PAID_TIERS = new Set<GuardianTier>(Object.values(PRICES).map((p) => p.tier));
+
 // Fail fast: in production with Stripe enabled, never silently fall back to the
 // baked-in test-mode price IDs. A misconfigured deploy must crash, not charge wrong prices.
 if (process.env.NODE_ENV === "production" && STRIPE_SECRET_KEY) {
@@ -67,6 +72,11 @@ billingRouter.get("/plans", (_req, res) => {
   res.json({
     plans: [
       {
+        tier: "free", name: "Free", monthlyPrice: 0, annualPrice: 0,
+        features: ["1 cloud account", "6-hour check interval", "1 alert channel", "Self-host the open-source version", "Community support"],
+        limits: TIER_LIMITS.free,
+      },
+      {
         tier: "pro", name: "Pro", monthlyPrice: 29, annualPrice: 290,
         priceIds: { monthly: PRICES.guardian_pro_monthly.priceId, annual: PRICES.guardian_pro_annual.priceId },
         features: ["3 cloud accounts", "5-minute checks", "All alert channels", "Dashboard", "Anomaly detection", "Cost forecasting"],
@@ -97,13 +107,37 @@ billingRouter.get("/status", requirePermission("billing:read"), async (req, res,
     const account = await GuardianAccountModel.findById(accountId);
     if (!account) return res.status(404).json({ error: "Account not found" });
 
-    let subscription = null;
+    let subscription: Stripe.Subscription | null = null;
+    let retrieveFailed = false;
     if (stripe && account.stripeSubscriptionId) {
       try {
         subscription = await stripe.subscriptions.retrieve(account.stripeSubscriptionId);
       } catch {
-        // Subscription may have been deleted
+        // Subscription may have been deleted out-of-band — or this could be a transient
+        // Stripe error. We can't tell the two apart, so flag it and do NOT self-heal below
+        // (a transient blip must never wrongly strip someone's paid tier).
+        retrieveFailed = true;
       }
+    }
+
+    // Self-heal stale paid tiers. A self-serve paid tier (pro/team) is only legitimate
+    // when a live Stripe subscription backs it. If Stripe is configured and there is no
+    // active/grace subscription (sub ID missing, or the sub is canceled/unpaid/expired),
+    // the tier got stuck elevated — e.g. a subscription deleted in the Stripe dashboard
+    // whose webhook never reached us. Reconcile to free so we never grant paid features
+    // (or under-bill) on stale state. Skipped on a transient retrieve error and for
+    // enterprise (sales-led, no self-serve sub).
+    const hasLiveSub = !!(subscription && classifySubscriptionStatus(subscription.status) !== "downgrade");
+    if (stripe && SELF_SERVE_PAID_TIERS.has(account.tier) && !hasLiveSub && !retrieveFailed) {
+      const staleTier = account.tier;
+      account.tier = "free";
+      account.subscriptionStatus = subscription ? subscription.status : "canceled";
+      if (!subscription) account.stripeSubscriptionId = undefined;
+      account.settings.checkIntervalMinutes = TIER_LIMITS.free.checkIntervalMinutes;
+      await account.save();
+      await reconcileTierDowngrade(String(account._id), "free");
+      console.log(`[guardian] Self-heal: account ${account._id} had stale paid tier "${staleTier}" with no live subscription -> free`);
+      subscription = null;
     }
 
     res.json({

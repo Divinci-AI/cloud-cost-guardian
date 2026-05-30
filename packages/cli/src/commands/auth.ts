@@ -103,8 +103,12 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
     .option("--api-key <key>", "Personal API key (starts with ks_) — skips browser flow")
     .action(async (opts) => {
       const json = program.opts().json;
-      const apiUrl = resolveApiUrl();
-      let key = opts.apiKey;
+      const apiUrl = resolveApiUrl(program.opts().apiUrl);
+      // The program also declares a global --api-key/--api-url; by commander's
+      // parent/child precedence the value lands on the PARENT even when passed
+      // after `login`, leaving opts.apiKey undefined. Read from either place so
+      // `ks auth login --api-key KEY` actually works.
+      let key = opts.apiKey ?? program.opts().apiKey;
 
       // Device flow when no --api-key. JSON mode requires --api-key (no browser).
       if (!key) {

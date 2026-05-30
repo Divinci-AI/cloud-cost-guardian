@@ -15,6 +15,7 @@ import { appendFileSync } from "node:fs";
 import { eventsPath, ensureGuardDir, type GuardConfig } from "./config.js";
 import type { Verdict } from "./budget.js";
 import { fmtUSD } from "./cost.js";
+import { isSafeEndpoint, warnIfUnexpectedHost } from "./net.js";
 
 export interface AlertEvent {
   ts: number;
@@ -80,7 +81,9 @@ export async function dispatchAlert(cfg: GuardConfig, evt: AlertEvent): Promise<
     tasks.push(postJson(cfg.slackWebhook, { text: slackText(evt) }));
   }
 
-  if (cfg.apiKey && cfg.apiUrl) {
+  // Only POST the ks_live key to a safe endpoint; warn on an unexpected host.
+  if (cfg.apiKey && cfg.apiUrl && isSafeEndpoint(cfg.apiUrl)) {
+    warnIfUnexpectedHost(cfg.apiUrl, "api.kill-switch.net", "apiUrl");
     tasks.push(
       postJson(
         `${cfg.apiUrl.replace(/\/$/, "")}/agent-guard/events`,

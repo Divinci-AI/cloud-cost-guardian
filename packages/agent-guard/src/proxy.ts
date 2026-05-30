@@ -16,7 +16,7 @@
  * else (Cursor, Aider, raw scripts). See README.
  */
 
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import { Readable } from "node:stream";
 import { loadConfig, mergedPricing, isPaused, type GuardConfig } from "./config.js";
 import { MODEL_PRICING } from "./pricing.js";
@@ -31,6 +31,7 @@ import {
 } from "./ledger.js";
 import { evaluate } from "./budget.js";
 import { dispatchAlert } from "./alert.js";
+import { assertSafeEndpoint, warnIfUnexpectedHost } from "./net.js";
 
 export interface ProxyOptions {
   port: number;
@@ -159,9 +160,9 @@ function meter(
   saveLedger(ledger);
 }
 
-export function startProxy(opts: ProxyOptions): void {
+export function startProxy(opts: ProxyOptions): Server {
   const cfg = loadConfig();
-  const upstreamOrigin = opts.upstream.replace(/\/$/, "");
+  const upstreamOrigin = assertSafeEndpoint(opts.upstream, "upstream").replace(/\/$/, "");
   const blockedNotified: Record<string, boolean> = {};
 
   const server = createServer(async (req, res) => {
@@ -277,7 +278,9 @@ export function startProxy(opts: ProxyOptions): void {
     })();
   });
 
-  server.listen(opts.port, () => {
+  // Bind to loopback only — this proxy forwards the caller's LLM API key
+  // upstream, so it must never be reachable from the local network.
+  server.listen(opts.port, "127.0.0.1", () => {
     process.stdout.write(
       `🛡  agent-guard proxy on http://localhost:${opts.port} → ${upstreamOrigin} (${opts.flavor})\n` +
         `   Caps: session hard ${fmtUSD(cfg.budget.sessionHardUSD)}, daily hard ${fmtUSD(cfg.budget.dailyHardUSD)}\n` +
@@ -287,8 +290,16 @@ export function startProxy(opts: ProxyOptions): void {
           : `     OPENAI_BASE_URL=http://localhost:${opts.port}/v1 aider\n`),
     );
   });
+
+  return server;
 }
 
 export function resolveUpstream(flavor: string, explicit?: string): string {
-  return explicit || UPSTREAMS[flavor] || UPSTREAMS.anthropic;
+  const upstream = explicit || UPSTREAMS[flavor] || UPSTREAMS.anthropic;
+  assertSafeEndpoint(upstream, "upstream");
+  if (explicit) {
+    const expected = new URL(UPSTREAMS[flavor] || UPSTREAMS.anthropic).hostname;
+    warnIfUnexpectedHost(upstream, expected, "--upstream");
+  }
+  return upstream;
 }

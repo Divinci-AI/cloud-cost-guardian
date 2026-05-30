@@ -145,7 +145,7 @@ export function BillingPage() {
         <div>
           <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "28px", fontWeight: "700", color: "#fff", margin: 0 }}>Billing</h1>
           <p style={{ color: "#9ca3af", marginTop: "4px" }}>
-            Current plan: <span style={{ color: status?.tier === "free" ? "#9ca3af" : "#5ce2e7", fontWeight: "600" }}>{status?.tier === "free" ? "No active plan" : status?.tier?.toUpperCase()}</span>
+            Current plan: <span style={{ color: status?.tier === "free" ? "#9ca3af" : "#5ce2e7", fontWeight: "600" }}>{status?.tier?.toUpperCase() ?? "FREE"}</span>
           </p>
         </div>
         {status?.subscription && (
@@ -213,7 +213,7 @@ export function BillingPage() {
                   </li>
                 ))}
               </ul>
-              {isCurrent && plan.tier !== "free" ? (
+              {isCurrent ? (
                 <div style={{ textAlign: "center", padding: "10px", color: "#5ce2e7", fontWeight: "600", fontSize: "14px" }}>Current Plan</div>
               ) : planKey ? (
                 <button onClick={() => handleCheckout(planKey)} style={{

@@ -789,7 +789,8 @@ describe("E2E: Billing", () => {
     expect(res.body.plans.length).toBeGreaterThanOrEqual(3);
 
     const free = res.body.plans.find((p: any) => p.tier === "free");
-    expect(free).toBeUndefined();
+    expect(free).toBeDefined();
+    expect(free.monthlyPrice).toBe(0);
 
     const pro = res.body.plans.find((p: any) => p.tier === "pro");
     expect(pro).toBeDefined();
@@ -828,8 +829,10 @@ describe("E2E: Billing", () => {
     expect(team.priceIds.monthly).toBeTruthy();
     expect(team.priceIds.annual).toBeTruthy();
 
+    // Free tier is listed for visibility but has no Stripe price IDs (no self-serve checkout).
     const free = res.body.plans.find((p: any) => p.tier === "free");
-    expect(free).toBeUndefined();
+    expect(free).toBeDefined();
+    expect(free.priceIds).toBeUndefined();
   });
 
   it("POST /billing/checkout returns 503 when Stripe not configured", async () => {
