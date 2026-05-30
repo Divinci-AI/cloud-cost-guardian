@@ -297,19 +297,21 @@ beforeEach(() => {
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
 describe("Billing: Plans", () => {
-  it("GET /billing/plans returns 3 paid tiers (no free tier)", async () => {
+  it("GET /billing/plans returns Free + 3 paid tiers (Free first)", async () => {
     const res = await request(app).get("/billing/plans");
     expect(res.status).toBe(200);
-    expect(res.body.plans).toHaveLength(3);
+    expect(res.body.plans).toHaveLength(4);
 
     const tiers = res.body.plans.map((p: any) => p.tier);
-    expect(tiers).toEqual(["pro", "team", "enterprise"]);
+    expect(tiers).toEqual(["free", "pro", "team", "enterprise"]);
 
-    expect(res.body.plans[0].monthlyPrice).toBe(29);
-    expect(res.body.plans[0].annualPrice).toBe(290);
-    expect(res.body.plans[1].monthlyPrice).toBe(99);
-    expect(res.body.plans[1].annualPrice).toBe(990);
-    expect(res.body.plans[2].contactUs).toBe(true);
+    const byTier = Object.fromEntries(res.body.plans.map((p: any) => [p.tier, p]));
+    expect(byTier.free.monthlyPrice).toBe(0);
+    expect(byTier.pro.monthlyPrice).toBe(29);
+    expect(byTier.pro.annualPrice).toBe(290);
+    expect(byTier.team.monthlyPrice).toBe(99);
+    expect(byTier.team.annualPrice).toBe(990);
+    expect(byTier.enterprise.contactUs).toBe(true);
   });
 
   it("GET /billing/plans is public (no auth required)", async () => {
@@ -327,8 +329,10 @@ describe("Billing: Plans", () => {
     const team = res.body.plans.find((p: any) => p.tier === "team");
     expect(team.priceIds).toBeDefined();
 
+    // Free tier is listed for visibility, but has no Stripe price IDs (no self-serve checkout).
     const free = res.body.plans.find((p: any) => p.tier === "free");
-    expect(free).toBeUndefined();
+    expect(free).toBeDefined();
+    expect(free.priceIds).toBeUndefined();
   });
 
   it("pro tier has correct limits", async () => {
@@ -382,6 +386,65 @@ describe("Billing: Status", () => {
   it("GET /billing/status requires authentication", async () => {
     const res = await request(app).get("/billing/status");
     expect(res.status).toBe(401);
+  });
+});
+
+describe("Billing: Status self-heal (stale paid tier w/o live subscription)", () => {
+  it("heals a paid tier with NO subscription id down to free", async () => {
+    const store = mockGetStore("GuardianAccount");
+    const account = store.get("billing-acct")!;
+    account.tier = "team";
+    account.stripeSubscriptionId = null; // tier set out-of-band; no Stripe sub backs it
+
+    const res = await request(app).get("/billing/status").set(AUTH_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe("free");
+    expect(res.body.limits.cloudAccounts).toBe(1);
+    expect(res.body.subscription).toBeNull();
+    // Persisted, not just masked in the response.
+    expect(store.get("billing-acct")!.tier).toBe("free");
+  });
+
+  it("heals a paid tier whose subscription is canceled down to free", async () => {
+    const store = mockGetStore("GuardianAccount");
+    const account = store.get("billing-acct")!;
+    account.tier = "pro";
+    account.stripeSubscriptionId = "sub_dead_123";
+    mockStripeInstance.subscriptions.retrieve.mockResolvedValueOnce({
+      id: "sub_dead_123",
+      status: "canceled",
+      cancel_at_period_end: false,
+    } as any);
+
+    const res = await request(app).get("/billing/status").set(AUTH_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe("free");
+    expect(store.get("billing-acct")!.tier).toBe("free");
+  });
+
+  it("does NOT downgrade on a transient Stripe error (keeps the paid tier)", async () => {
+    const store = mockGetStore("GuardianAccount");
+    const account = store.get("billing-acct")!;
+    account.tier = "pro";
+    account.stripeSubscriptionId = "sub_live_but_flaky";
+    mockStripeInstance.subscriptions.retrieve.mockRejectedValueOnce(new Error("ETIMEDOUT"));
+
+    const res = await request(app).get("/billing/status").set(AUTH_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe("pro"); // not stripped on a blip
+    expect(store.get("billing-acct")!.tier).toBe("pro");
+  });
+
+  it("does NOT touch a sales-led enterprise tier without a subscription", async () => {
+    const store = mockGetStore("GuardianAccount");
+    const account = store.get("billing-acct")!;
+    account.tier = "enterprise";
+    account.stripeSubscriptionId = null;
+
+    const res = await request(app).get("/billing/status").set(AUTH_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe("enterprise");
+    expect(store.get("billing-acct")!.tier).toBe("enterprise");
   });
 });
 
