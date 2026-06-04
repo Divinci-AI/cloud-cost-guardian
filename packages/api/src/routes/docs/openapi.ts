@@ -12,7 +12,8 @@ export const openApiSpec = {
     license: { name: "MIT", url: "https://opensource.org/licenses/MIT" },
   },
   servers: [
-    { url: "https://guardian-api-150038457816.us-central1.run.app", description: "Staging" },
+    { url: "https://api.kill-switch.net", description: "Production (api-proxy → Cloud Run)" },
+    { url: "https://guardian-api-150038457816.us-central1.run.app", description: "Staging (direct Cloud Run)" },
     { url: "http://localhost:8090", description: "Local Development" },
   ],
   tags: [
@@ -37,7 +38,7 @@ export const openApiSpec = {
     },
     "/providers/{providerId}/validate": {
       post: { summary: "Validate cloud credentials", operationId: "validateCredential", tags: ["Providers"],
-        parameters: [{ name: "providerId", in: "path", required: true, schema: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog"] } }],
+        parameters: [{ name: "providerId", in: "path", required: true, schema: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog", "neon", "neo4j"] } }],
         requestBody: { required: true, content: { "application/json": { schema: { "$ref": "#/components/schemas/Credential" } } } },
         responses: { "200": { description: "Validation result" } } },
     },
@@ -58,7 +59,7 @@ export const openApiSpec = {
         requestBody: { required: true, content: { "application/json": { schema: {
           type: "object", required: ["provider", "name", "credential"],
           properties: {
-            provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog"] },
+            provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog", "neon", "neo4j"] },
             name: { type: "string", example: "Production Cloudflare" },
             credential: { "$ref": "#/components/schemas/Credential" },
           },
@@ -136,8 +137,22 @@ export const openApiSpec = {
     },
     "/rules/presets/{presetId}": {
       post: { summary: "Apply a preset rule", operationId: "applyPreset", tags: ["Rules"], security: [{ bearerAuth: [] }],
-        parameters: [{ name: "presetId", in: "path", required: true, schema: { type: "string", enum: ["ddos", "brute-force", "cost-runaway", "error-storm", "exfiltration"] } }],
+        parameters: [{ name: "presetId", in: "path", required: true, schema: { type: "string", enum: ["ddos", "brute-force", "cost-runaway", "error-storm", "exfiltration", "gpu-runaway", "lambda-loop", "aws-cost-runaway"] } }],
         responses: { "201": { description: "Preset rule applied" } } },
+    },
+    "/rules/{ruleId}": {
+      put: { summary: "Update a rule", operationId: "updateRule", tags: ["Rules"], security: [{ bearerAuth: [] }],
+        parameters: [{ name: "ruleId", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { "$ref": "#/components/schemas/KillSwitchRule" } } } },
+        responses: { "200": { description: "Rule updated" }, "404": { description: "Rule not found" } } },
+      delete: { summary: "Delete a rule", operationId: "deleteRule", tags: ["Rules"], security: [{ bearerAuth: [] }],
+        parameters: [{ name: "ruleId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Rule deleted" }, "404": { description: "Rule not found" } } },
+    },
+    "/rules/{ruleId}/toggle": {
+      post: { summary: "Enable or disable a rule", operationId: "toggleRule", tags: ["Rules"], security: [{ bearerAuth: [] }],
+        parameters: [{ name: "ruleId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Rule toggled" }, "404": { description: "Rule not found" } } },
     },
     "/rules/agent/trigger": {
       post: { summary: "Agent-triggered kill switch", operationId: "agentTrigger", tags: ["Rules"], security: [{ bearerAuth: [] }],
@@ -228,7 +243,7 @@ export const openApiSpec = {
       Credential: {
         type: "object",
         properties: {
-          provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog"] },
+          provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod", "redis", "mongodb", "openai", "anthropic", "xai", "replicate", "snowflake", "vercel", "datadog", "neon", "neo4j"] },
           apiToken: { type: "string", description: "Cloudflare API token" },
           accountId: { type: "string", description: "Cloudflare Account ID" },
           serviceAccountJson: { type: "string", description: "GCP Service Account JSON" },

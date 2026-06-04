@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
-import { SignedIn, SignedOut, RedirectToSignIn, RedirectToSignUp, UserButton, useAuth, useUser } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, SignIn, SignUp, UserButton, useAuth, useUser } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { setTokenGetter, api } from "./api/client";
 import { OrgProvider } from "./context/OrgContext";
@@ -29,7 +29,9 @@ import { SettingsPage } from "./pages/Settings/SettingsPage";
 import { AcceptInvitePage } from "./pages/Team/AcceptInvitePage";
 import { ActivityPage } from "./pages/Activity/ActivityPage";
 import { AgentGuardPage } from "./pages/AgentGuard/AgentGuardPage";
+import { RulesPage } from "./pages/Rules/RulesPage";
 import { CliAuthPage } from "./pages/CliAuth/CliAuthPage";
+import { SiteFooter } from "./components/SiteFooter";
 
 function AuthenticatedApp() {
   const { getToken, isLoaded } = useAuth();
@@ -98,6 +100,7 @@ function AuthenticatedApp() {
           <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
             <Link to="/" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Dashboard</Link>
             <Link to="/accounts" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Accounts</Link>
+            <Link to="/rules" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Rules</Link>
             <Link to="/agent-guard" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Agent Guard</Link>
             <Link to="/alerts" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Alerts</Link>
             <Link to="/activity" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Activity</Link>
@@ -109,7 +112,7 @@ function AuthenticatedApp() {
         </nav>
 
         {/* Content */}
-        <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "32px 24px" }}>
+        <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "32px 24px", minHeight: "calc(100vh - 56px - 73px)" }}>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/accounts" element={<CloudAccountsList />} />
@@ -129,6 +132,7 @@ function AuthenticatedApp() {
             <Route path="/accounts/connect/datadog" element={<ConnectDatadog />} />
             <Route path="/accounts/connect/neon" element={<ConnectNeon />} />
             <Route path="/accounts/connect/neo4j" element={<ConnectNeo4j />} />
+            <Route path="/rules" element={<RulesPage />} />
             <Route path="/alerts" element={<AlertsHistory />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/agent-guard" element={<AgentGuardPage />} />
@@ -138,23 +142,61 @@ function AuthenticatedApp() {
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
+        <SiteFooter />
       </div>
     </OrgProvider>
   );
 }
 
 /**
- * Logged-out visitors land on sign-IN by default, but marketing CTAs link with
- * `?screen_hint=signup` (and /sign-up) to bring NEW users straight to the Clerk
- * sign-UP view. Without this, RedirectToSignIn always shows "Sign in" and the
- * hint is silently dropped — friction on the exact conversion step.
+ * Embedded Clerk auth on app.kill-switch.net (not Account Portal) so legal links
+ * from ClerkProvider layout + our SiteFooter are visible on sign-in/sign-up.
  */
-function SignedOutRedirect() {
-  const params = new URLSearchParams(window.location.search);
-  const wantsSignup =
-    params.get("screen_hint") === "signup" ||
-    window.location.pathname.startsWith("/sign-up");
-  return wantsSignup ? <RedirectToSignUp /> : <RedirectToSignIn />;
+function SignedOutAuth() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+
+  if (location.pathname === "/" && params.get("screen_hint") === "signup") {
+    return <Navigate to="/sign-up" replace />;
+  }
+  if (location.pathname === "/" || location.pathname === "/cli-auth") {
+    return <Navigate to="/sign-in" replace />;
+  }
+
+  const authShell = (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#0c1229" }}>
+      <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", padding: "24px" }}>
+        <Routes>
+          <Route
+            path="/sign-up/*"
+            element={
+              <SignUp
+                routing="path"
+                path="/sign-up"
+                signInUrl="/sign-in"
+                fallbackRedirectUrl="/"
+              />
+            }
+          />
+          <Route
+            path="/sign-in/*"
+            element={
+              <SignIn
+                routing="path"
+                path="/sign-in"
+                signUpUrl="/sign-up"
+                fallbackRedirectUrl="/"
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/sign-in" replace />} />
+        </Routes>
+      </div>
+      <SiteFooter />
+    </div>
+  );
+
+  return authShell;
 }
 
 export function App() {
@@ -164,7 +206,7 @@ export function App() {
         <AuthenticatedApp />
       </SignedIn>
       <SignedOut>
-        <SignedOutRedirect />
+        <SignedOutAuth />
       </SignedOut>
     </BrowserRouter>
   );

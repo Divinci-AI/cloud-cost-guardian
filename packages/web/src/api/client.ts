@@ -204,6 +204,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(customValues || {}),
     }),
+  updateRule: (ruleId: string, data: Record<string, unknown>) =>
+    guardianFetch<any>(`/rules/${ruleId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteRule: (ruleId: string) =>
+    guardianFetch<any>(`/rules/${ruleId}`, { method: "DELETE" }),
+  toggleRule: (ruleId: string) =>
+    guardianFetch<any>(`/rules/${ruleId}/toggle`, { method: "POST" }),
 
   // Organizations
   listOrgs: () => guardianFetch<any>("/orgs"),
