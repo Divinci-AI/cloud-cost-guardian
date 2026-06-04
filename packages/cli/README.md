@@ -119,11 +119,47 @@ ks alerts remove "PagerDuty"
 ks alerts test
 ```
 
+## Agent Guard (`ks guard`)
+
+Cap runaway **coding-agent** LLM spend (Claude Code, Cursor, Aider). Same engine as
+[`@kill-switch/agent-guard`](https://www.npmjs.com/package/@kill-switch/agent-guard) — one
+ledger, one budget.
+
+```sh
+# Wire the Claude Code hook (use --global for ~/.claude)
+ks guard install
+
+# Set caps (USD)
+ks guard config --session-soft 5 --session-hard 20 --daily-soft 25 --daily-hard 100
+
+# Check spend vs budget
+ks guard status
+
+# Hard 402 wall for non-Claude-Code agents (Cursor, Aider, scripts)
+ks guard proxy --flavor openai --port 8787
+
+# Escape hatch — enforcement off until resume
+ks guard pause --minutes 30
+ks guard resume
+```
+
+| Command | Description |
+|---------|-------------|
+| `ks guard install` | Wire agent-guard hook into Claude Code settings |
+| `ks guard status` | Session + daily spend vs budget |
+| `ks guard config` | View or set soft/hard caps |
+| `ks guard proxy` | Start token-metering proxy (HTTP 402 at hard cap) |
+| `ks guard pause` / `resume` | Temporarily disable / re-arm enforcement |
+| `ks guard reset` | Clear the spend ledger |
+
+Full docs: [kill-switch.net/docs/cli.html#guard](https://kill-switch.net/docs/cli.html#guard)
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `ks onboard` | One-command setup: connect + shields + alerts |
+| `ks auth setup` | Authenticate via browser (device flow) |
 | `ks auth login` | Authenticate with API key |
 | `ks auth status` | Show auth status |
 | `ks status` | Dashboard: accounts, alerts, 30-day spend summary |
@@ -138,6 +174,9 @@ ks alerts test
 | `ks alerts remove <name>` | Remove an alert channel by name |
 | `ks alerts test` | Send a test alert to all channels |
 | `ks analytics` | Cost analytics: spend summary, 7-day table, per-account breakdown |
+| `ks watch` | Continuously poll all accounts on an interval |
+| `ks providers` | Provider info and credential validation |
+| `ks guard` | Cap coding-agent LLM spend (hook + proxy) |
 | `ks config list` | Show configuration |
 
 ## AI Agent Usage
@@ -180,6 +219,7 @@ Add this to your project's `CLAUDE.md` so your AI agent knows how to manage Kill
 - Auth: KILL_SWITCH_API_KEY env var or `ks auth login --api-key KEY`
 - Setup: `ks onboard --provider cloudflare --account-id ID --token TOKEN`
 - Check: `ks check --json`
+- Agent spend: `ks guard install` then `ks guard config --daily-hard 150`
 - Docs: `ks onboard --help-provider cloudflare`
 ```
 
