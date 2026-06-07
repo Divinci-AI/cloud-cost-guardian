@@ -49,6 +49,9 @@ const TIER_LIMITS: Record<GuardianTier, { cloudAccounts: number; checkIntervalMi
   enterprise: { cloudAccounts: 100, checkIntervalMinutes: 1, alertChannels: 50, teamMembers: 100 },
 };
 
+// Ordinal ranking so we can ask "does the owner's tier cover the org's tier?".
+const TIER_RANK: Record<GuardianTier, number> = { free: 0, pro: 1, team: 2, enterprise: 3 };
+
 /**
  * Map a Stripe subscription status to the action we take on the account.
  * Pure + exported so the payment-lifecycle policy is unit-testable.
@@ -128,7 +131,48 @@ billingRouter.get("/status", requirePermission("billing:read"), async (req, res,
     // (or under-bill) on stale state. Skipped on a transient retrieve error and for
     // enterprise (sales-led, no self-serve sub).
     const hasLiveSub = !!(subscription && classifySubscriptionStatus(subscription.status) !== "downgrade");
-    if (stripe && SELF_SERVE_PAID_TIERS.has(account.tier) && !hasLiveSub && !retrieveFailed) {
+
+    // Decide whether this account's paid tier is still backed by a live subscription.
+    // Personal accounts are backed by their OWN sub. Organization accounts carry NO sub of
+    // their own — their tier is inherited from the owner's personal subscription at creation
+    // (see routes/orgs). So we must follow the OWNER's sub: if we naively used the org's own
+    // (always-absent) sub we'd wrongly strip a legitimately-paid org to free; if we simply
+    // skipped orgs we'd never downgrade an org after the owner cancels (fail-open: free
+    // paid-tier usage). Both are wrong — derive the org's backing from the owner.
+    let tierIsBacked: boolean;
+    let backingTransientError: boolean;
+    if (account.type === "personal") {
+      tierIsBacked = hasLiveSub;
+      backingTransientError = retrieveFailed;
+    } else {
+      backingTransientError = false;
+      const owner = await GuardianAccountModel.findOne({ ownerUserId: account.ownerUserId, type: "personal" });
+      if (!stripe || !owner?.stripeSubscriptionId) {
+        // No Stripe → can't validate, so don't strip (the self-heal's `stripe &&` guard also
+        // skips it). Owner has no subscription → the org's paid tier is stale.
+        tierIsBacked = !stripe;
+      } else {
+        try {
+          const ownerSub = await stripe.subscriptions.retrieve(owner.stripeSubscriptionId);
+          const ownerLive = classifySubscriptionStatus(ownerSub.status) !== "downgrade";
+          // Derive the owner's effective tier from the live sub's price (don't trust stored tier).
+          const ownerPriceId = ownerSub.items?.data?.[0]?.price?.id;
+          const ownerTier = Object.values(PRICES).find((p) => p.priceId === ownerPriceId)?.tier ?? owner.tier;
+          // The org stays provisioned only while the owner has a live sub whose tier covers it.
+          tierIsBacked = ownerLive && TIER_RANK[ownerTier] >= TIER_RANK[account.tier];
+        } catch {
+          // Transient Stripe error retrieving the owner's sub → never strip on uncertainty.
+          tierIsBacked = true;
+          backingTransientError = true;
+        }
+      }
+    }
+
+    // Self-heal a stale elevated tier: a self-serve paid tier (pro/team) is only legitimate
+    // while a live subscription backs it (the account's own, or the owner's for an org). When
+    // it doesn't, reconcile to free so we never grant paid features (or under-bill) on stale
+    // state. Skipped on a transient retrieve error and for enterprise (sales-led, no self-serve sub).
+    if (stripe && SELF_SERVE_PAID_TIERS.has(account.tier) && !tierIsBacked && !backingTransientError) {
       const staleTier = account.tier;
       account.tier = "free";
       account.subscriptionStatus = subscription ? subscription.status : "canceled";
@@ -136,7 +180,7 @@ billingRouter.get("/status", requirePermission("billing:read"), async (req, res,
       account.settings.checkIntervalMinutes = TIER_LIMITS.free.checkIntervalMinutes;
       await account.save();
       await reconcileTierDowngrade(String(account._id), "free");
-      console.log(`[guardian] Self-heal: account ${account._id} had stale paid tier "${staleTier}" with no live subscription -> free`);
+      console.log(`[guardian] Self-heal: ${account.type} account ${account._id} had stale paid tier "${staleTier}" with no live backing subscription -> free`);
       subscription = null;
     }
 
@@ -363,6 +407,8 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
           // "grace" (past_due / incomplete) → keep current tier; status is recorded above.
           await account.save();
           if (account.tier === "free") await reconcileTierDowngrade(String(account._id), "free");
+          // Propagate a real downgrade to the owner's organization accounts (grace keeps tier).
+          if (action === "downgrade") await downgradeOwnedOrganizations(account.ownerUserId);
           console.log(`[guardian] Subscription ${account._id} status=${status} tier=${account.tier}`);
         }
         break;
@@ -396,6 +442,8 @@ billingRouter.post("/webhook", raw({ type: "application/json" }), async (req, re
           account.settings.checkIntervalMinutes = TIER_LIMITS.free.checkIntervalMinutes;
           await account.save();
           await reconcileTierDowngrade(String(account._id), "free");
+          // The owner's organization accounts inherit from this (now-dead) sub — downgrade them too.
+          await downgradeOwnedOrganizations(account.ownerUserId);
           console.log(`[guardian] Subscription canceled: ${account._id} -> free`);
         }
         break;
@@ -433,6 +481,26 @@ async function reconcileTierDowngrade(accountId: string, tier: GuardianTier): Pr
     await (doc as any).save();
   }
   console.log(`[guardian] Downgrade reconcile: paused ${toPause.length} cloud account(s) for ${accountId} (limit ${limit})`);
+}
+
+/**
+ * When an owner's personal subscription dies, their organization accounts — whose tier is
+ * inherited from that sub and which carry no sub of their own — must downgrade too. Otherwise
+ * they retain paid features for free until someone opens their billing page. This is the
+ * event-driven counterpart to the owner-derived self-heal in GET /billing/status, and it
+ * updates the stored tier promptly so ALL tier-gated routes (not just billing/status) see it.
+ */
+async function downgradeOwnedOrganizations(ownerUserId: string): Promise<void> {
+  const orgs = await GuardianAccountModel.find({ ownerUserId, type: "organization" });
+  for (const org of orgs) {
+    if (!SELF_SERVE_PAID_TIERS.has(org.tier)) continue; // free/enterprise: nothing to self-heal
+    const staleTier = org.tier;
+    org.tier = "free";
+    org.settings.checkIntervalMinutes = TIER_LIMITS.free.checkIntervalMinutes;
+    await org.save();
+    await reconcileTierDowngrade(String(org._id), "free");
+    console.log(`[guardian] Propagated owner downgrade: org ${org._id} "${staleTier}" -> free`);
+  }
 }
 
 // Alert-channel limits are enforced directly in routes/alerts/index.ts via TIER_LIMITS.
