@@ -44,6 +44,7 @@ export { startProxy, resolveUpstream, type ProxyOptions } from "./proxy.js";
 export { runHook } from "./hook.js";
 export { buildStatusReport, buildLimitsReport, formatLimitsLines, type StatusReport, type LimitsReport } from "./report.js";
 export { detectPlanTier, mapRateLimitTier, tierLabel, type SubscriptionTier } from "./claude-code.js";
+export { readOAuthToken, fetchUsage, usageToSnapshot, refreshUsage, type UsageResponse } from "./claude-usage.js";
 export {
   parseUnifiedHeaders,
   parseUtilization,
@@ -58,6 +59,7 @@ export {
   WINDOW_MS,
   type LimitSnapshot,
   type WindowState,
+  type ExtraWindow,
   type LimitsState,
   type LimitWindow,
   type HeaderGetter,

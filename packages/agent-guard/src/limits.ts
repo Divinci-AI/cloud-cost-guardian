@@ -38,6 +38,13 @@ export interface WindowState {
   status?: string;
 }
 
+/** A labelled extra window (e.g. per-model weekly) — display-only, no pacing. */
+export interface ExtraWindow {
+  label: string;
+  utilization: number;
+  resetAt: number | null;
+}
+
 /** A point-in-time read of the account's subscription rate-limit standing. */
 export interface LimitSnapshot {
   fiveHour: WindowState | null;
@@ -46,6 +53,8 @@ export interface LimitSnapshot {
   status: string | null;
   /** Epoch ms when this snapshot was observed. */
   observedAt: number;
+  /** Extra windows from the OAuth usage endpoint (per-model weekly, etc.) — display only. */
+  extras?: ExtraWindow[];
 }
 
 /** Persisted global state (account-wide, not per-session). */
@@ -58,6 +67,8 @@ export interface LimitsState {
   notified: Record<string, boolean>;
   /** Epoch ms we first logged the raw unified-* headers (write-once diagnostic). */
   headersLoggedAt?: number;
+  /** Epoch ms of the last OAuth usage-endpoint fetch (for throttling). */
+  lastFetchAt?: number;
 }
 
 /** Nominal window durations, used for pacing math when a reset time is unknown. */
@@ -80,6 +91,7 @@ export function loadLimitsState(): LimitsState {
         snapshot: data.snapshot ?? null,
         notified: data.notified ?? {},
         headersLoggedAt: data.headersLoggedAt,
+        lastFetchAt: data.lastFetchAt,
       };
     }
   } catch {

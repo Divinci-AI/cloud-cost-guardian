@@ -24,6 +24,7 @@ import {
   resolveUpstream,
   fmtUSD,
   formatLimitsLines,
+  refreshUsage,
 } from "@kill-switch/agent-guard";
 import { outputJson, colors as c } from "../output.js";
 
@@ -49,9 +50,15 @@ export function registerAgentGuardCommands(program: Command) {
   // ks guard status
   guard
     .command("status")
-    .description("Show current session + daily agent spend against the budget")
-    .action(() => {
+    .description("Show current session + daily agent spend, and real Claude Code plan limits")
+    .action(async () => {
       const json = program.opts().json;
+      // Pull fresh real limits from Anthropic's usage endpoint (throttled; never fails status).
+      try {
+        await refreshUsage(Date.now());
+      } catch {
+        /* offline / no token → fall back to whatever's cached */
+      }
       const report = buildStatusReport();
 
       if (json) {
@@ -85,6 +92,31 @@ export function registerAgentGuardCommands(program: Command) {
         console.log("");
         for (const line of limitLines) console.log(`  ${line}`);
       }
+      console.log("");
+    });
+
+  // ks guard usage — force-fetch real plan limits from Anthropic's usage endpoint
+  guard
+    .command("usage")
+    .description("Fetch your REAL Claude Code plan limits (5h + weekly + per-model) from Anthropic")
+    .action(async () => {
+      const json = program.opts().json;
+      let snap;
+      try {
+        snap = await refreshUsage(Date.now(), { force: true });
+      } catch {
+        snap = null;
+      }
+      const report = buildStatusReport();
+      if (json) return outputJson({ fetched: !!snap, limits: report.limits });
+      if (!snap && report.limits.source !== "headers") {
+        console.log(c.yellow("Couldn't fetch usage."));
+        console.log(c.dim("  Need a logged-in Claude Code (token in the macOS Keychain or ~/.claude/.credentials.json)."));
+        console.log(c.dim("  The /api/oauth/usage endpoint is undocumented — it may be unavailable."));
+        return;
+      }
+      console.log("");
+      for (const line of formatLimitsLines(report.limits)) console.log(`  ${line}`);
       console.log("");
     });
 

@@ -146,6 +146,7 @@ ks guard resume
 | Command | Description |
 |---------|-------------|
 | `ks guard install` | Wire agent-guard hook into Claude Code settings |
+| `ks guard usage` | Fetch REAL Claude Code limits (5h + weekly + per-model) from Anthropic |
 | `ks guard status` | Session + daily spend vs budget, **and** Claude Code plan limits |
 | `ks guard config` | View or set soft/hard caps **and plan limits** (`--plan`, thresholds) |
 | `ks guard proxy` | Start token-metering proxy (HTTP 402 at hard cap; reads plan-limit headers) |
@@ -166,7 +167,8 @@ you've pinned a subscription `--plan` or seen fresh headers — a billed OpenAI/
 sharing the proxy keeps its hard wall.
 
 ```sh
-ks guard proxy                                  # then: ANTHROPIC_BASE_URL=http://localhost:8787 claude
+ks guard usage                                  # easiest: REAL 5h + weekly + per-model limits (from /api/oauth/usage)
+ks guard proxy                                  # alt: ANTHROPIC_BASE_URL=http://localhost:8787 claude (in-flight headers)
 ks guard config --plan max5                     # auto (detects tier from ~/.claude.json) | pro | max5 | max20
 ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
 ks guard reset --limits                         # clear detection latch + snapshot (re-arm the dollar wall)

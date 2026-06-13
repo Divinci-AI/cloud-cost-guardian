@@ -115,8 +115,33 @@ scarce resource isn't dollars — it's your plan's rate-limit quota, in two roll
 - a **5-hour** window (burst protection), and
 - a **weekly** (7-day) window — the real lockout risk, "resets a couple times a month".
 
-Anthropic reports exactly where you stand on every response via `anthropic-ratelimit-unified-*`
-headers. Run Claude Code **through the proxy** and agent-guard reads them — no estimation:
+### Easiest: `agent-guard usage`
+
+Pull your **real** limits straight from Anthropic — the same data `/usage` shows — no proxy, no
+workflow change:
+
+```sh
+agent-guard usage     # → 5-hour, weekly, and per-model (Sonnet/Opus) weekly utilization + resets
+```
+
+It reads your Claude Code OAuth token from the OS credential store (macOS Keychain
+`Claude Code-credentials`, or `~/.claude/.credentials.json` on Linux — used only as a Bearer
+header, **never logged or stored**) and GETs the `/api/oauth/usage` endpoint. `status`
+auto-refreshes this (throttled to 120s). The endpoint is **undocumented**, so every call fails
+soft — if it's unavailable, agent-guard falls back to the proxy or "unknown".
+
+```
+🟢 Claude Code plan limits  ·  observed just now
+  [██░░░░░░░░░░░░░░░░░░]  5-hour limit 12% used, resets 9:19 AM
+  [███░░░░░░░░░░░░░░░░░]  weekly limit 17% used, resets Tue 7:59 PM
+  [░░░░░░░░░░░░░░░░░░░░]  weekly · Sonnet   1%
+```
+
+### Alternative: the proxy
+
+Anthropic also reports your standing on every response via `anthropic-ratelimit-unified-*`
+headers (5h + weekly only — no per-model). Run Claude Code **through the proxy** and agent-guard
+reads them in-flight:
 
 ```sh
 agent-guard proxy                                    # meters Anthropic + reads limit headers

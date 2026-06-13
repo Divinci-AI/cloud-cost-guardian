@@ -28,6 +28,7 @@ import { evaluate } from "./budget.js";
 import { fmtUSD } from "./cost.js";
 import { installHook, setBudget, setLimits, resetLedger } from "./ops.js";
 import { buildStatusReport, formatLimitsLines } from "./report.js";
+import { refreshUsage } from "./claude-usage.js";
 
 const program = new Command();
 program
@@ -73,9 +74,14 @@ program
 // ── status ───────────────────────────────────────────────────────────────────
 program
   .command("status")
-  .description("Show current session + daily spend against the budget")
+  .description("Show current session + daily spend, and real Claude Code plan limits")
   .option("--json", "Output as JSON")
-  .action((opts) => {
+  .action(async (opts) => {
+    try {
+      await refreshUsage(Date.now()); // throttled real-limits pull; never fails status
+    } catch {
+      /* offline / no token */
+    }
     const cfg = loadConfig();
     const ledger = loadLedger();
     const now = Date.now();
@@ -134,6 +140,33 @@ program
       console.log("");
       for (const line of limitLines) console.log(line);
     }
+  });
+
+// ── usage (real Claude Code plan limits) ─────────────────────────────────────
+program
+  .command("usage")
+  .description("Fetch your REAL Claude Code plan limits (5h + weekly + per-model) from Anthropic")
+  .option("--json", "Output as JSON")
+  .action(async (opts) => {
+    let snap;
+    try {
+      snap = await refreshUsage(Date.now(), { force: true });
+    } catch {
+      snap = null;
+    }
+    const report = buildStatusReport();
+    if (opts.json) {
+      console.log(JSON.stringify({ fetched: !!snap, limits: report.limits }, null, 2));
+      return;
+    }
+    if (!snap && report.limits.source !== "headers") {
+      console.log("Couldn't fetch usage — need a logged-in Claude Code (token in the macOS Keychain or ~/.claude/.credentials.json).");
+      console.log("The /api/oauth/usage endpoint is undocumented and may be unavailable.");
+      return;
+    }
+    console.log("");
+    for (const line of formatLimitsLines(report.limits)) console.log(line);
+    console.log("");
   });
 
 // ── pause / resume (escape hatch) ────────────────────────────────────────────

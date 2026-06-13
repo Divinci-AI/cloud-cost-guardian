@@ -1,6 +1,6 @@
 {
   "name": "@kill-switch/cli",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "Kill Switch CLI — monitor cloud spending, kill runaway services from the terminal",
   "type": "module",
   "bin": {
@@ -13,7 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@kill-switch/agent-guard": "^0.1.4",
+    "@kill-switch/agent-guard": "^0.1.7",
     "@kill-switch/sdk": "^0.1.1",
     "chalk": "^5.6.2",
     "commander": "^12.1.0",

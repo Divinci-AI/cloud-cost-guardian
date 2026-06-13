@@ -16,7 +16,7 @@ import { loadConfig, isPaused, pauseExpiry, type GuardConfig } from "./config.js
 import { loadLedger, rollingDailyCost, type SessionRecord, type Ledger } from "./ledger.js";
 import { evaluate, type Budget, type VerdictLevel } from "./budget.js";
 import { fmtUSD } from "./cost.js";
-import { loadLimitsState, WINDOW_MS } from "./limits.js";
+import { loadLimitsState, WINDOW_MS, type ExtraWindow } from "./limits.js";
 import { assessSnapshot, worstLevel, type PacingAssessment, type PacingLevel } from "./pacing.js";
 import { detectPlanTier, tierLabel, type SubscriptionTier } from "./claude-code.js";
 
@@ -36,6 +36,8 @@ export interface LimitsReport {
   observedAt: number | null;
   /** Real per-window pacing (only when source === "headers"). */
   windows: PacingAssessment[];
+  /** Extra display-only windows (per-model weekly) from the OAuth usage endpoint. */
+  extras: ExtraWindow[];
   level: PacingLevel;
   /** Absolute rolling cost (API-equivalent USD) — honest local signal, not a limit %. */
   cost: { fiveHourUSD: number; dailyUSD: number; weeklyUSD: number };
@@ -104,6 +106,7 @@ export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number)
         subscriptionDetected: state.subscriptionDetected,
         observedAt: snap.observedAt,
         windows,
+        extras: snap.extras ?? [],
         level: worstLevel(windows),
         cost,
       };
@@ -119,6 +122,7 @@ export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number)
     subscriptionDetected: state.subscriptionDetected,
     observedAt: null,
     windows: [],
+    extras: [],
     level: "ok",
     cost,
   };
@@ -148,6 +152,10 @@ export function formatLimitsLines(limits: LimitsReport, now: number = Date.now()
     const icon = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
     const lines = [`${icon} Claude Code plan limits  ·  observed ${limits.observedAt ? ageString(limits.observedAt, now) : "—"}`];
     for (const w of limits.windows) lines.push(`  ${bar(w.utilization)}  ${w.message}`);
+    for (const e of limits.extras) {
+      const pct = `${Math.round(e.utilization * 100)}%`.padStart(4);
+      lines.push(`  ${bar(e.utilization)}  ${e.label} ${pct}`);
+    }
     return lines;
   }
 
