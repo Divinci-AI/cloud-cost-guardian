@@ -588,6 +588,41 @@
         @keyframes agfill { from { width:0; } }
         .ag-reset { font-size:11.5px; color:#6b73a0; margin-top:5px; }
 
+        /* ── Agent Guard: animated macOS terminal ──────── */
+        .ag-term { background:#0a0f1f; border:1px solid rgba(255,255,255,.1); border-radius:14px; overflow:hidden;
+                   box-shadow:0 32px 70px -22px rgba(0,0,0,.75), 0 0 0 1px rgba(92,226,231,.05); }
+        .ag-term-chrome { display:flex; align-items:center; gap:8px; padding:11px 14px;
+                          background:rgba(255,255,255,.04); border-bottom:1px solid rgba(255,255,255,.07); }
+        .ag-term-chrome .d { width:12px; height:12px; border-radius:50%; }
+        .ag-term-chrome .d.r{ background:#ff5f57; } .ag-term-chrome .d.y{ background:#febc2e; } .ag-term-chrome .d.g{ background:#28c840; }
+        .ag-term-title { margin-left:8px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#7c84a8; }
+        .ag-term-body { padding:18px 20px 10px; font-family:'JetBrains Mono',monospace; font-size:13px;
+                        line-height:1.85; color:#c4c5ca; }
+        .ag-term-body .cc { opacity:0; animation:ccfade .5s ease both; }
+        .ag-term-body .l1{ animation-delay:.2s } .ag-term-body .l2{ animation-delay:1.4s }
+        .ag-term-body .l3{ animation-delay:1.8s } .ag-term-body .l4{ animation-delay:2.2s }
+        .ag-term-body .l5{ animation-delay:2.7s } .ag-term-body .l6{ animation-delay:3.0s }
+        .ag-term-body .l7{ animation-delay:3.3s }
+        @keyframes ccfade { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+        .ag-term-body .dim{ color:#7c84a8; } .ag-term-body .grn{ color:#28c840; } .ag-term-body .red{ color:#ff6b6b; }
+        .ag-prompt { color:#5ce2e7; }
+        .ag-type { display:inline-block; white-space:nowrap; overflow:hidden; vertical-align:bottom;
+                   animation:agtyp 1.05s steps(28,end) .35s both; }
+        @keyframes agtyp { from { max-width:0; } to { max-width:30ch; } }
+        .ag-cur { display:inline-block; width:8px; height:15px; background:#5ce2e7; vertical-align:middle;
+                  margin-left:2px; animation:agblink 1.1s step-end infinite; }
+        @keyframes agblink { 50% { opacity:0; } }
+        .ag-term .ag-gauges { margin-top:10px; }
+        .ag-term .ag-fill { animation-delay:3.4s; }
+        .ag-statusline { display:flex; align-items:center; gap:13px; flex-wrap:wrap; padding:10px 16px;
+                         background:linear-gradient(90deg,#0e1733,#0b1124); border-top:1px solid rgba(255,255,255,.08);
+                         font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#aeb6da; }
+        .ag-statusline .sl-dim { color:#6b73a0; }
+        .ag-statusline .sl-shield { color:#e7eaff; display:inline-flex; align-items:center; gap:7px; }
+        .ag-statusline .sl-dot { width:8px; height:8px; border-radius:50%; background:#5ce2e7;
+                                 box-shadow:0 0 9px #5ce2e7; animation:slpulse 2.4s ease-in-out infinite; }
+        @keyframes slpulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+
         /* ── Horror Stories ───────────────────────────── */
         .stories {
             display: grid;
@@ -1287,47 +1322,47 @@
                 <div class="ag-cta"><code class="ag-cmd">npx @kill-switch/agent-guard usage</code></div>
             </div>
 
-            <div class="ag-panel" role="img" aria-label="Agent Guard showing real Claude Code plan limits: 5-hour 12%, weekly 17%, Sonnet 1%">
-                <div class="ag-chip"><span class="dot"></span> &#128737;&#65039; 5h 12% &middot; wk 17%</div>
-                <div class="ag-gauges">
-                    <div class="ag-gauge">
-                        <div class="ag-grow"><span>5-hour limit</span><b>12%</b></div>
-                        <div class="ag-track"><div class="ag-fill" style="width:12%"></div></div>
-                        <div class="ag-reset">resets 9:19&nbsp;AM</div>
-                    </div>
-                    <div class="ag-gauge">
-                        <div class="ag-grow"><span>weekly &middot; all models</span><b>17%</b></div>
-                        <div class="ag-track"><div class="ag-fill" style="width:17%"></div></div>
-                        <div class="ag-reset">resets Tue 7:59&nbsp;PM</div>
-                    </div>
-                    <div class="ag-gauge">
-                        <div class="ag-grow"><span>weekly &middot; Sonnet</span><b>1%</b></div>
-                        <div class="ag-track"><div class="ag-fill" style="width:3%"></div></div>
-                        <div class="ag-reset">resets Tue 7:59&nbsp;PM</div>
-                    </div>
-                    <div class="ag-gauge">
-                        <div class="ag-grow"><span>heavy week &middot; on pace to lock out</span><b>86%</b></div>
-                        <div class="ag-track"><div class="ag-fill warm" style="width:86%"></div></div>
-                        <div class="ag-reset">&#8594; lockout ~Thu &middot; resets Sat 6:00&nbsp;PM</div>
+            <div class="ag-term" role="img" aria-label="A macOS terminal running Claude Code; Agent Guard shows real plan limits — 5-hour 12%, weekly 17%, Sonnet 1% — in the status bar">
+                <div class="ag-term-chrome">
+                    <span class="d r"></span><span class="d y"></span><span class="d g"></span>
+                    <span class="ag-term-title">claude &mdash; ~/kill-switch</span>
+                </div>
+                <div class="ag-term-body">
+                    <div class="cc l1"><span class="ag-prompt">&#10095;</span> <span class="ag-type">add the usage-endpoint poller</span><span class="ag-cur"></span></div>
+                    <div class="cc l2">&#9210; <span class="dim">Read</span>&nbsp;&nbsp;src/claude-usage.ts</div>
+                    <div class="cc l3">&#9210; <span class="dim">Edit</span>&nbsp;&nbsp;src/claude-usage.ts&nbsp;&nbsp;<span class="grn">+34</span> <span class="red">-2</span></div>
+                    <div class="cc l4">&#9210; <span class="dim">Bash</span>&nbsp;&nbsp;npm&nbsp;test&nbsp;&nbsp;<span class="grn">&#10003; 119 passed</span></div>
+                    <div class="cc l5">&nbsp;</div>
+                    <div class="cc l6"><span class="ag-prompt">&#10095;</span> agent-guard usage</div>
+                    <div class="cc l7 ag-gauges">
+                        <div class="ag-gauge">
+                            <div class="ag-grow"><span>5-hour limit</span><b>12%</b></div>
+                            <div class="ag-track"><div class="ag-fill" style="width:12%"></div></div>
+                            <div class="ag-reset">resets 9:19&nbsp;AM</div>
+                        </div>
+                        <div class="ag-gauge">
+                            <div class="ag-grow"><span>weekly &middot; all models</span><b>17%</b></div>
+                            <div class="ag-track"><div class="ag-fill" style="width:17%"></div></div>
+                            <div class="ag-reset">resets Tue 7:59&nbsp;PM</div>
+                        </div>
+                        <div class="ag-gauge">
+                            <div class="ag-grow"><span>weekly &middot; Sonnet</span><b>1%</b></div>
+                            <div class="ag-track"><div class="ag-fill" style="width:3%"></div></div>
+                            <div class="ag-reset">resets Tue 7:59&nbsp;PM</div>
+                        </div>
+                        <div class="ag-gauge">
+                            <div class="ag-grow"><span>heavy week &middot; on pace to lock out</span><b>86%</b></div>
+                            <div class="ag-track"><div class="ag-fill warm" style="width:86%"></div></div>
+                            <div class="ag-reset">&#8594; lockout ~Thu &middot; resets Sat 6:00&nbsp;PM</div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="icon">&#128202;</div>
-                <h3>Your real limits, in your status bar</h3>
-                <p>5-hour, weekly, and per-model (Sonnet/Opus) &#8212; straight from Anthropic&#8217;s own usage endpoint. No proxy, no guessing from logs. It warns you <strong>before</strong> you lock out, not after.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon">&#129693;</div>
-                <h3>Hard caps on runaway spend</h3>
-                <p>Pay-as-you-go on an API key? Per-session and daily-rolling dollar caps &#8212; soft warning, then a hard stop. The $4,200-weekend loop, prevented. (Flat-fee plans get paced, never blocked.)</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon">&#9208;&#65039;</div>
-                <h3>The human holds the key</h3>
-                <p>Your OAuth token is read from your OS keychain and only ever sent to Anthropic &#8212; never logged, never stored. The escape hatch lives outside the agent loop: the agent can hit the wall, it can&#8217;t move it.</p>
+                <div class="ag-statusline">
+                    <span>&#10035; Opus&nbsp;4.8</span>
+                    <span class="sl-dim">41k ctx</span>
+                    <span class="sl-shield">&#128737;&#65039; <span class="sl-dot"></span> 5h 12% &middot; wk 17%</span>
+                    <span class="sl-dim">resets 9:19&nbsp;AM</span>
+                </div>
             </div>
         </div>
     </section>
