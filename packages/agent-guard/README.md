@@ -107,6 +107,55 @@ AGENT_GUARD_SESSION_HARD=10 claude          # one-off $10 ceiling
 
 A cap of `0` disables that check.
 
+## Subscription limits (Claude Code Pro / Max)
+
+Dollar caps are the wrong currency for a **Pro/Max subscription**: you pay a flat fee, so the
+scarce resource isn't dollars — it's your plan's rate-limit quota, in two rolling windows:
+
+- a **5-hour** window (burst protection), and
+- a **weekly** (7-day) window — the real lockout risk, "resets a couple times a month".
+
+Anthropic reports exactly where you stand on every response via `anthropic-ratelimit-unified-*`
+headers. Run Claude Code **through the proxy** and agent-guard reads them — no estimation:
+
+```sh
+agent-guard proxy                                    # meters Anthropic + reads limit headers
+ANTHROPIC_BASE_URL=http://localhost:8787 claude
+```
+
+Once those headers are seen, the session is in **subscription mode**: alert-only. agent-guard
+**never blocks** a flat-fee plan (you already paid; Anthropic's own limit is the real wall) —
+instead it *paces* you. For each window it computes burn-rate vs. a sustainable pace and
+projects whether you'll exhaust the window **before it resets**, then warns in-session and via
+your alert channels:
+
+```
+🟥 Claude Code plan limits  ·  observed just now
+  [████████████░░░░░░░░]  weekly limit 62% used, resets Sat 6:00 PM, burning 3.1× pace,
+                          → lockout in ~14h (5.1d before reset)
+```
+
+`status` shows it; the hook injects it into the session even when only the hook is running
+(it reads the snapshot the proxy persisted). No proxy and want a rough read? Pin your tier and
+agent-guard *estimates* from the ledger (clearly labelled, never blocks):
+
+```sh
+ks guard config --plan max5        # auto | pro | max5 | max20
+```
+
+Tune the thresholds (0–1 utilization) if the defaults are too eager:
+
+| Setting | Meaning | Default |
+|---|---|---|
+| `--plan` (`AGENT_GUARD_PLAN`) | `auto` (headers only) or a tier for estimation | `auto` |
+| `--weekly-soft` / `--weekly-danger` | weekly warn / danger utilization | 0.6 / 0.85 |
+| `--5h-soft` / `--5h-danger` | 5-hour warn / danger utilization | 0.7 / 0.9 |
+| `--burn-ratio` | pace multiplier that triggers a warning | 1.5 |
+
+> Because subscription mode is alert-only, the "don't run both hook *and* proxy" caveat below
+> doesn't bite here — running Claude Code through the proxy is exactly what feeds the limit
+> headers, and dollars no longer gate anything.
+
 ## Alerts
 
 On the first soft/hard trip per scope, agent-guard:
@@ -132,8 +181,9 @@ rates so the guard never *under*-counts. Override any model in
 ```
 agent-guard install [--global] [--command <cmd>]   wire the Claude Code hook
 agent-guard proxy   [--port 8787] [--flavor anthropic|openai] [--upstream URL]
-agent-guard status  [--json]                        spend vs budget
+agent-guard status  [--json]                        spend vs budget + plan limits
 agent-guard config  [--session-hard N ...]          view/set caps
+agent-guard config  [--plan max5 --weekly-soft 0.6 ...]   view/set plan limits
 agent-guard reset   [--all|--today|--session <id>]  clear the ledger
 agent-guard hook                                    (internal) Claude Code entrypoint
 ```

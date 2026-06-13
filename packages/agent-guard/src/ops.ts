@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
-import { configPath, ensureGuardDir, DEFAULT_BUDGET, type GuardConfig } from "./config.js";
+import { configPath, ensureGuardDir, DEFAULT_BUDGET, DEFAULT_LIMITS, type GuardConfig, type LimitsConfig } from "./config.js";
 import type { Budget } from "./budget.js";
 import { loadLedger, saveLedger, emptyLedger } from "./ledger.js";
 
@@ -98,6 +98,41 @@ export function setBudget(patch: BudgetPatch): Budget {
   ensureGuardDir();
   writeFileSync(configPath(), JSON.stringify(file, null, 2) + "\n");
   return budget;
+}
+
+/** Partial subscription-limits update. Merges onto the existing config file. */
+export interface LimitsPatch {
+  plan?: LimitsConfig["plan"];
+  fiveHourSoftPct?: number;
+  fiveHourDangerPct?: number;
+  weeklySoftPct?: number;
+  weeklyDangerPct?: number;
+  burnRatioWarn?: number;
+}
+
+/** Write subscription-limit overrides to the config file. Returns the saved limits. */
+export function setLimits(patch: LimitsPatch): LimitsConfig {
+  let file: Partial<GuardConfig> = {};
+  try {
+    file = JSON.parse(readFileSync(configPath(), "utf8"));
+  } catch {
+    /* new */
+  }
+  const limits: LimitsConfig = { ...DEFAULT_LIMITS, ...(file.limits ?? {}) };
+  if (patch.plan && ["auto", "pro", "max5", "max20"].includes(patch.plan)) limits.plan = patch.plan;
+  const setPct = (k: keyof LimitsConfig, v: number | undefined) => {
+    if (v !== undefined && Number.isFinite(v)) (limits[k] as number) = v;
+  };
+  setPct("fiveHourSoftPct", patch.fiveHourSoftPct);
+  setPct("fiveHourDangerPct", patch.fiveHourDangerPct);
+  setPct("weeklySoftPct", patch.weeklySoftPct);
+  setPct("weeklyDangerPct", patch.weeklyDangerPct);
+  setPct("burnRatioWarn", patch.burnRatioWarn);
+  file.limits = limits;
+
+  ensureGuardDir();
+  writeFileSync(configPath(), JSON.stringify(file, null, 2) + "\n");
+  return limits;
 }
 
 /** Clear the spend ledger. Scope: all | a single session | today's sessions. */

@@ -31,6 +31,8 @@ import {
 } from "./ledger.js";
 import { evaluate, warnKey, type Verdict } from "./budget.js";
 import { dispatchAlert, type AlertEvent } from "./alert.js";
+import { buildStatusReport } from "./report.js";
+import type { Ledger, SessionRecord } from "./ledger.js";
 
 interface HookInput {
   session_id?: string;
@@ -175,18 +177,55 @@ export async function runHook(): Promise<void> {
       process.exit(0);
     }
 
+    // Subscription rate-limit pacing — alert-only, surfaced in-session. Reads the
+    // snapshot the proxy persisted from Anthropic's headers (or a tier estimate),
+    // so even a hook-only session learns when it's about to lock out. Deduped per
+    // window+level so it doesn't repeat every tool call.
+    const limitMsg = limitNudge(rec, ledger, now);
+
     // Surface the warn nudge only on the first trip per scope (shouldAlert), not
     // on every subsequent tool call — otherwise the agent's context fills with
     // duplicate notices. After that, warnings stay silent until the hard cap.
     if (verdict.level === "warn" && shouldAlert) {
-      const ctx = renderWarnContext(verdict);
+      const ctx = limitMsg ? `${renderWarnContext(verdict)} ${limitMsg}` : renderWarnContext(verdict);
       emit(warnDecision(event, ctx, `⚠️ Kill Switch: ${verdict.reasons[0] ?? "approaching budget"}.`));
+      process.exit(0);
+    }
+
+    if (limitMsg) {
+      emit(warnDecision(
+        event,
+        `Kill Switch — Claude Code plan pacing (informational, you may continue): ${limitMsg}`,
+        `⚠️ Kill Switch: ${limitMsg}`,
+      ));
       process.exit(0);
     }
 
     process.exit(0);
   } catch {
     process.exit(0); // fail open on any unexpected error
+  }
+}
+
+/**
+ * Most-urgent subscription-window nudge, fired once per window+level. Mutates the
+ * session's notified map (and persists it) so the same warning doesn't repeat on
+ * every tool call. Returns null when there's nothing to surface.
+ */
+function limitNudge(rec: SessionRecord, ledger: Ledger, now: number): string | null {
+  try {
+    const limits = buildStatusReport(now).limits;
+    if (!limits.windows.length) return null;
+    const urgent =
+      limits.windows.find((w) => w.level === "danger") ?? limits.windows.find((w) => w.level === "warn");
+    if (!urgent) return null;
+    const key = `limit:${urgent.window}:${urgent.level}`;
+    if (rec.notified[key]) return null;
+    rec.notified[key] = true;
+    saveLedger(ledger);
+    return urgent.message;
+  } catch {
+    return null;
   }
 }
 

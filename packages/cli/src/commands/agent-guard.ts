@@ -13,6 +13,7 @@ import {
   buildStatusReport,
   installHook,
   setBudget,
+  setLimits,
   resetLedger,
   writePause,
   clearPause,
@@ -22,6 +23,7 @@ import {
   startProxy,
   resolveUpstream,
   fmtUSD,
+  formatLimitsLines,
 } from "@kill-switch/agent-guard";
 import { outputJson, colors as c } from "../output.js";
 
@@ -76,6 +78,13 @@ export function registerAgentGuardCommands(program: Command) {
         }
       }
       for (const r of report.reasons) console.log(`  ${c.yellow("•")} ${r}`);
+
+      // Subscription rate-limit pacing (Claude Code Pro/Max).
+      const limitLines = formatLimitsLines(report.limits);
+      if (limitLines.length) {
+        console.log("");
+        for (const line of limitLines) console.log(`  ${line}`);
+      }
       console.log("");
     });
 
@@ -100,35 +109,57 @@ export function registerAgentGuardCommands(program: Command) {
   // ks guard config
   guard
     .command("config")
-    .description("View or set agent-guard budget caps")
+    .description("View or set agent-guard budget caps + Claude Code plan limits")
     .option("--session-soft <usd>", "Per-session soft cap (warn)")
     .option("--session-hard <usd>", "Per-session hard cap (block)")
     .option("--daily-soft <usd>", "Daily rolling soft cap (warn)")
     .option("--daily-hard <usd>", "Daily rolling hard cap (block)")
     .option("--slack-webhook <url>", "Slack incoming-webhook for breach alerts")
+    .option("--plan <tier>", "Claude Code plan: auto | pro | max5 | max20 (subscription limit awareness)")
+    .option("--weekly-soft <pct>", "Weekly limit soft threshold, 0–1 (warn)")
+    .option("--weekly-danger <pct>", "Weekly limit danger threshold, 0–1")
+    .option("--5h-soft <pct>", "5-hour limit soft threshold, 0–1 (warn)")
+    .option("--5h-danger <pct>", "5-hour limit danger threshold, 0–1")
+    .option("--burn-ratio <n>", "Burn-rate multiplier that triggers a pacing warning")
     .action((opts) => {
       const json = program.opts().json;
-      const anySet = ["sessionSoft", "sessionHard", "dailySoft", "dailyHard", "slackWebhook"].some((k) => opts[k] !== undefined);
+      const budgetKeys = ["sessionSoft", "sessionHard", "dailySoft", "dailyHard", "slackWebhook"];
+      const limitKeys = ["plan", "weeklySoft", "weeklyDanger", "5hSoft", "5hDanger", "burnRatio"];
+      const anyBudget = budgetKeys.some((k) => opts[k] !== undefined);
+      const anyLimit = limitKeys.some((k) => opts[k] !== undefined);
 
-      if (!anySet) {
+      if (!anyBudget && !anyLimit) {
         const report = buildStatusReport();
-        if (json) return outputJson({ budget: report.budget, configPath: configPath() });
-        console.log(JSON.stringify(report.budget, null, 2));
+        if (json) return outputJson({ budget: report.budget, limits: report.limits, configPath: configPath() });
+        console.log(JSON.stringify({ budget: report.budget, limits: report.limits }, null, 2));
         console.log(c.dim(`\nConfig file: ${configPath()}`));
         return;
       }
 
       const num = (v: string | undefined) => (v !== undefined ? Number(v) : undefined);
-      const budget = setBudget({
-        sessionSoftUSD: num(opts.sessionSoft),
-        sessionHardUSD: num(opts.sessionHard),
-        dailySoftUSD: num(opts.dailySoft),
-        dailyHardUSD: num(opts.dailyHard),
-        slackWebhook: opts.slackWebhook,
-      });
-      if (json) return outputJson({ budget, saved: true });
+      const out: Record<string, unknown> = {};
+      if (anyBudget) {
+        out.budget = setBudget({
+          sessionSoftUSD: num(opts.sessionSoft),
+          sessionHardUSD: num(opts.sessionHard),
+          dailySoftUSD: num(opts.dailySoft),
+          dailyHardUSD: num(opts.dailyHard),
+          slackWebhook: opts.slackWebhook,
+        });
+      }
+      if (anyLimit) {
+        out.limits = setLimits({
+          plan: opts.plan,
+          weeklySoftPct: num(opts.weeklySoft),
+          weeklyDangerPct: num(opts.weeklyDanger),
+          fiveHourSoftPct: num(opts["5hSoft"]),
+          fiveHourDangerPct: num(opts["5hDanger"]),
+          burnRatioWarn: num(opts.burnRatio),
+        });
+      }
+      if (json) return outputJson({ ...out, saved: true });
       console.log(`✅ Saved → ${configPath()}`);
-      console.log(JSON.stringify(budget, null, 2));
+      console.log(JSON.stringify(out, null, 2));
     });
 
   // ks guard pause

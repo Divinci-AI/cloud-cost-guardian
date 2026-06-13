@@ -13,20 +13,26 @@
 
 import { appendFileSync } from "node:fs";
 import { eventsPath, ensureGuardDir, type GuardConfig } from "./config.js";
-import type { Verdict } from "./budget.js";
 import { fmtUSD } from "./cost.js";
 import { isSafeEndpoint, warnIfUnexpectedHost } from "./net.js";
+
+/** Spend verdicts are ok/warn/block; pacing assessments are ok/warn/danger. */
+export type AlertLevel = "ok" | "warn" | "block" | "danger";
 
 export interface AlertEvent {
   ts: number;
   source: "hook" | "proxy";
+  /** "spend" = dollar budget trip (default); "limit" = subscription pacing alert. */
+  kind?: "spend" | "limit";
   sessionId: string;
-  level: Verdict["level"];
+  level: AlertLevel;
   sessionUSD: number;
   dailyUSD: number;
   reasons: string[];
   action: string;
   cwd?: string;
+  /** For kind:"limit" — per-window utilization summary (0–1) for the payload. */
+  limits?: Array<{ window: string; utilization: number; resetAt: number | null; level: string }>;
 }
 
 const TIMEOUT_MS = 2500;
@@ -58,6 +64,17 @@ function writeLocal(evt: AlertEvent): void {
 }
 
 function slackText(evt: AlertEvent): string {
+  if (evt.kind === "limit") {
+    const icon = evt.level === "danger" ? "🟥" : "🟡";
+    return [
+      `${icon} *Kill Switch — Claude Code subscription pacing*`,
+      `• Status: ${evt.action}`,
+      evt.cwd ? `• Project: \`${evt.cwd}\`` : "",
+      ...evt.reasons.map((r) => `• ${r}`),
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
   const icon = evt.level === "block" ? "🛑" : "⚠️";
   const verb = evt.level === "block" ? "BLOCKED a coding agent" : "warning on a coding agent";
   return [

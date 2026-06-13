@@ -26,7 +26,8 @@ import {
 import { loadLedger, rollingDailyCost } from "./ledger.js";
 import { evaluate } from "./budget.js";
 import { fmtUSD } from "./cost.js";
-import { installHook, setBudget, resetLedger } from "./ops.js";
+import { installHook, setBudget, setLimits, resetLedger } from "./ops.js";
+import { buildStatusReport, formatLimitsLines } from "./report.js";
 
 const program = new Command();
 program
@@ -93,6 +94,7 @@ program
         verdict: verdict.level,
         reasons: verdict.reasons,
         sessions: sessions.map(([id, s]) => ({ id, ...s })),
+        limits: buildStatusReport(now).limits,
       }, null, 2));
       return;
     }
@@ -124,6 +126,13 @@ program
     if (verdict.reasons.length) {
       console.log("");
       for (const r of verdict.reasons) console.log(`  • ${r}`);
+    }
+
+    // Subscription rate-limit pacing (Claude Code Pro/Max).
+    const limitLines = formatLimitsLines(buildStatusReport(now).limits, now);
+    if (limitLines.length) {
+      console.log("");
+      for (const line of limitLines) console.log(line);
     }
   });
 
@@ -172,33 +181,55 @@ program
 // ── config ───────────────────────────────────────────────────────────────────
 program
   .command("config")
-  .description("View or set budget caps (written to ~/.kill-switch/agent-guard/config.json)")
+  .description("View or set budget caps + Claude Code plan limits (written to ~/.kill-switch/agent-guard/config.json)")
   .option("--session-soft <usd>", "Per-session soft cap (warn)")
   .option("--session-hard <usd>", "Per-session hard cap (block)")
   .option("--daily-soft <usd>", "Daily rolling soft cap (warn)")
   .option("--daily-hard <usd>", "Daily rolling hard cap (block)")
   .option("--slack-webhook <url>", "Slack incoming-webhook for breach alerts")
+  .option("--plan <tier>", "Claude Code plan: auto | pro | max5 | max20 (subscription limit awareness)")
+  .option("--weekly-soft <pct>", "Weekly limit soft threshold, 0–1 (warn)")
+  .option("--weekly-danger <pct>", "Weekly limit danger threshold, 0–1")
+  .option("--5h-soft <pct>", "5-hour limit soft threshold, 0–1 (warn)")
+  .option("--5h-danger <pct>", "5-hour limit danger threshold, 0–1")
+  .option("--burn-ratio <n>", "Burn-rate multiplier that triggers a pacing warning")
   .action((opts) => {
-    const anySet = ["sessionSoft", "sessionHard", "dailySoft", "dailyHard", "slackWebhook"]
-      .some((k) => opts[k] !== undefined);
+    const budgetKeys = ["sessionSoft", "sessionHard", "dailySoft", "dailyHard", "slackWebhook"];
+    const limitKeys = ["plan", "weeklySoft", "weeklyDanger", "5hSoft", "5hDanger", "burnRatio"];
+    const anyBudget = budgetKeys.some((k) => opts[k] !== undefined);
+    const anyLimit = limitKeys.some((k) => opts[k] !== undefined);
 
-    if (!anySet) {
+    if (!anyBudget && !anyLimit) {
       const cfg = loadConfig();
-      console.log(JSON.stringify({ budget: cfg.budget, slackWebhook: cfg.slackWebhook ? "(set)" : undefined }, null, 2));
+      console.log(JSON.stringify({ budget: cfg.budget, limits: cfg.limits, slackWebhook: cfg.slackWebhook ? "(set)" : undefined }, null, 2));
       console.log(`\nConfig file: ${configPath()}`);
       return;
     }
 
     const num = (v: string | undefined) => (v !== undefined ? Number(v) : undefined);
-    const budget = setBudget({
-      sessionSoftUSD: num(opts.sessionSoft),
-      sessionHardUSD: num(opts.sessionHard),
-      dailySoftUSD: num(opts.dailySoft),
-      dailyHardUSD: num(opts.dailyHard),
-      slackWebhook: opts.slackWebhook,
-    });
-    console.log(`✅ Saved → ${configPath()}`);
-    console.log(JSON.stringify(budget, null, 2));
+    if (anyBudget) {
+      const budget = setBudget({
+        sessionSoftUSD: num(opts.sessionSoft),
+        sessionHardUSD: num(opts.sessionHard),
+        dailySoftUSD: num(opts.dailySoft),
+        dailyHardUSD: num(opts.dailyHard),
+        slackWebhook: opts.slackWebhook,
+      });
+      console.log(`✅ Budget saved → ${configPath()}`);
+      console.log(JSON.stringify(budget, null, 2));
+    }
+    if (anyLimit) {
+      const limits = setLimits({
+        plan: opts.plan,
+        weeklySoftPct: num(opts.weeklySoft),
+        weeklyDangerPct: num(opts.weeklyDanger),
+        fiveHourSoftPct: num(opts["5hSoft"]),
+        fiveHourDangerPct: num(opts["5hDanger"]),
+        burnRatioWarn: num(opts.burnRatio),
+      });
+      console.log(`✅ Plan limits saved → ${configPath()}`);
+      console.log(JSON.stringify(limits, null, 2));
+    }
   });
 
 // ── reset ────────────────────────────────────────────────────────────────────

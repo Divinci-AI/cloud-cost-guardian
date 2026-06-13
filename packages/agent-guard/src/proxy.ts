@@ -32,6 +32,14 @@ import {
 import { evaluate } from "./budget.js";
 import { dispatchAlert } from "./alert.js";
 import { assertSafeEndpoint, warnIfUnexpectedHost } from "./net.js";
+import {
+  parseUnifiedHeaders,
+  loadLimitsState,
+  saveLimitsState,
+  limitNotifyKey,
+  type HeaderGetter,
+} from "./limits.js";
+import { assessSnapshot, worstLevel } from "./pacing.js";
 
 export interface ProxyOptions {
   port: number;
@@ -160,6 +168,52 @@ function meter(
   saveLedger(ledger);
 }
 
+/**
+ * Read Anthropic's `unified-*` rate-limit headers off a response, persist the
+ * snapshot, latch subscription mode on, and fire a deduped pacing alert when a
+ * window crosses into warn/danger. Returns true if subscription headers were
+ * seen. Alert-only by design — this never blocks (a subscription session already
+ * paid a flat fee; the scarce resource is quota, and Anthropic's own limit is
+ * the real wall).
+ */
+function captureLimits(cfg: GuardConfig, headers: HeaderGetter, sessionId: string, now: number): boolean {
+  const snap = parseUnifiedHeaders(headers, now);
+  if (!snap) return false;
+
+  const state = loadLimitsState();
+  state.subscriptionDetected = true;
+  state.snapshot = snap;
+
+  const assessments = assessSnapshot(snap, cfg.limits, now);
+  const fresh = assessments.filter((a) => {
+    if (a.level === "ok") return false;
+    const key = limitNotifyKey(a.window, a.level, a.resetAt);
+    if (state.notified[key]) return false;
+    state.notified[key] = true;
+    return true;
+  });
+
+  saveLimitsState(state);
+
+  if (fresh.length) {
+    const level = worstLevel(fresh);
+    dispatchAlert(cfg, {
+      ts: now,
+      source: "proxy",
+      kind: "limit",
+      sessionId,
+      level: level === "danger" ? "danger" : "warn",
+      sessionUSD: 0,
+      dailyUSD: 0,
+      reasons: fresh.map((a) => a.message),
+      action: level === "danger" ? "on pace to lock out before reset" : "approaching plan limit",
+      limits: fresh.map((a) => ({ window: a.window, utilization: a.utilization, resetAt: a.resetAt, level: a.level })),
+    }).catch(() => {});
+  }
+
+  return true;
+}
+
 export function startProxy(opts: ProxyOptions): Server {
   const cfg = loadConfig();
   const upstreamOrigin = assertSafeEndpoint(opts.upstream, "upstream").replace(/\/$/, "");
@@ -171,12 +225,16 @@ export function startProxy(opts: ProxyOptions): Server {
 
     // 1) Pre-flight budget check — block before spending anything.
     // Escape hatch: while a human has paused enforcement, never block (but still meter).
+    // Subscription mode is ALERT-ONLY: once we've seen Anthropic's unified
+    // rate-limit headers, the session is on a flat-fee plan where dollars are
+    // meaningless, so we never 402 it — we only pace + warn.
+    const subscriptionMode = loadLimitsState().subscriptionDetected;
     const ledger = loadLedger();
     const sessionUSD = ledger.sessions[sessionId]?.costUSD ?? 0;
     const dailyUSD = rollingDailyCost(ledger, now);
     const verdict = evaluate({ sessionUSD, dailyUSD }, cfg.budget);
 
-    if (verdict.level === "block" && !isPaused(now)) {
+    if (verdict.level === "block" && !isPaused(now) && !subscriptionMode) {
       if (!blockedNotified[sessionId]) {
         blockedNotified[sessionId] = true;
         dispatchAlert(cfg, {
@@ -217,6 +275,15 @@ export function startProxy(opts: ProxyOptions): Server {
       res.writeHead(502, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "kill-switch proxy: upstream fetch failed", detail: String(err) }));
       return;
+    }
+
+    // 2.5) Read Anthropic's subscription rate-limit headers (alert-only).
+    if (opts.flavor === "anthropic") {
+      try {
+        captureLimits(cfg, upstream.headers, sessionId, Date.now());
+      } catch {
+        /* limit capture must never break the proxied response */
+      }
     }
 
     // 3) Relay status + headers.
@@ -284,6 +351,9 @@ export function startProxy(opts: ProxyOptions): Server {
     process.stdout.write(
       `🛡  agent-guard proxy on http://localhost:${opts.port} → ${upstreamOrigin} (${opts.flavor})\n` +
         `   Caps: session hard ${fmtUSD(cfg.budget.sessionHardUSD)}, daily hard ${fmtUSD(cfg.budget.dailyHardUSD)}\n` +
+        (opts.flavor === "anthropic"
+          ? `   Subscription mode: reads Anthropic rate-limit headers → paces your Pro/Max plan (alert-only)\n`
+          : "") +
         `   Point your agent at it, e.g.:\n` +
         (opts.flavor === "anthropic"
           ? `     ANTHROPIC_BASE_URL=http://localhost:${opts.port} claude\n`

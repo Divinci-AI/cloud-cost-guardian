@@ -13,8 +13,31 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import type { Budget } from "./budget.js";
 import type { ModelPricing } from "./pricing.js";
 
+/**
+ * Subscription rate-limit config. Separate from the dollar {@link Budget}
+ * because a Claude Code Pro/Max session pays a flat fee — the scarce resource is
+ * the plan's 5-hour and weekly quota, not dollars. This is alert-only: the guard
+ * never blocks on these (you already paid), it just warns before you lock out.
+ */
+export interface LimitsConfig {
+  /**
+   * Plan tier. "auto" = derive everything from observed `unified-*` headers
+   * (proxy path); a pinned tier additionally enables hook-only estimation when
+   * no fresh header snapshot exists. See estimate.ts.
+   */
+  plan: "auto" | "pro" | "max5" | "max20";
+  /** Per-window soft (warn) / danger thresholds, as 0–1 utilization fractions. */
+  fiveHourSoftPct: number;
+  fiveHourDangerPct: number;
+  weeklySoftPct: number;
+  weeklyDangerPct: number;
+  /** Burn ratio (actual/expected pace) above which we escalate on pacing alone. */
+  burnRatioWarn: number;
+}
+
 export interface GuardConfig {
   budget: Budget;
+  limits: LimitsConfig;
   /** Optional pricing overrides merged onto the built-in table. */
   pricingOverrides?: Record<string, ModelPricing>;
   /** Kill Switch API key (ks_live_…) for reporting kill events to Guardian. */
@@ -32,6 +55,15 @@ export const DEFAULT_BUDGET: Budget = {
   dailyHardUSD: 100,
 };
 
+export const DEFAULT_LIMITS: LimitsConfig = {
+  plan: "auto",
+  fiveHourSoftPct: 0.7,
+  fiveHourDangerPct: 0.9,
+  weeklySoftPct: 0.6,
+  weeklyDangerPct: 0.85,
+  burnRatioWarn: 1.5,
+};
+
 /** ~/.kill-switch/agent-guard — created on demand. */
 export function guardDir(): string {
   return join(homedir(), ".kill-switch", "agent-guard");
@@ -47,6 +79,8 @@ export const ledgerPath = () => join(guardDir(), "ledger.json");
 export const configPath = () => join(guardDir(), "config.json");
 export const pricingPath = () => join(guardDir(), "pricing.json");
 export const eventsPath = () => join(guardDir(), "events.jsonl");
+/** Subscription rate-limit state (latest unified-header snapshot + dedup). */
+export const limitsPath = () => join(guardDir(), "limits.json");
 
 /**
  * Escape hatch. The hook/proxy fail OPEN while this sentinel exists, so a human
@@ -119,8 +153,22 @@ export function loadConfig(): GuardConfig {
     dailyHardUSD: num(process.env.AGENT_GUARD_DAILY_HARD, fileBudget.dailyHardUSD ?? DEFAULT_BUDGET.dailyHardUSD),
   };
 
+  const fileLimits: Partial<LimitsConfig> = fileCfg.limits ?? {};
+  const envPlan = process.env.AGENT_GUARD_PLAN as LimitsConfig["plan"] | undefined;
+  const validPlan = (p: string | undefined): p is LimitsConfig["plan"] =>
+    p === "auto" || p === "pro" || p === "max5" || p === "max20";
+  const limits: LimitsConfig = {
+    plan: validPlan(envPlan) ? envPlan : validPlan(fileLimits.plan) ? fileLimits.plan : DEFAULT_LIMITS.plan,
+    fiveHourSoftPct: fileLimits.fiveHourSoftPct ?? DEFAULT_LIMITS.fiveHourSoftPct,
+    fiveHourDangerPct: fileLimits.fiveHourDangerPct ?? DEFAULT_LIMITS.fiveHourDangerPct,
+    weeklySoftPct: fileLimits.weeklySoftPct ?? DEFAULT_LIMITS.weeklySoftPct,
+    weeklyDangerPct: fileLimits.weeklyDangerPct ?? DEFAULT_LIMITS.weeklyDangerPct,
+    burnRatioWarn: fileLimits.burnRatioWarn ?? DEFAULT_LIMITS.burnRatioWarn,
+  };
+
   return {
     budget,
+    limits,
     pricingOverrides: { ...(fileCfg.pricingOverrides ?? {}), ...(filePricing ?? {}) },
     apiKey: process.env.KILL_SWITCH_API_KEY ?? fileCfg.apiKey,
     apiUrl: process.env.KILL_SWITCH_API_URL ?? fileCfg.apiUrl ?? "https://api.kill-switch.net",

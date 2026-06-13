@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { startProxy } from "../src/proxy.js";
 import { loadLedger, saveLedger, emptyLedger, setSessionCost } from "../src/ledger.js";
 import { setBudget } from "../src/ops.js";
+import { loadLimitsState, saveLimitsState, emptyLimitsState } from "../src/limits.js";
 
 /**
  * Integration tests for the metering proxy's request/response forwarding (only
@@ -27,7 +28,7 @@ function listen(server: Server): Promise<number> {
 }
 
 /** Minimal upstream that records the request and returns a canned JSON body. */
-function makeUpstream(responseBody: string) {
+function makeUpstream(responseBody: string, extraHeaders: Record<string, string> = {}) {
   const seen: { method?: string; url?: string; body: string } = { body: "" };
   const server = createServer((req, res) => {
     seen.method = req.method;
@@ -36,7 +37,7 @@ function makeUpstream(responseBody: string) {
     req.on("data", (c) => (b += c));
     req.on("end", () => {
       seen.body = b;
-      res.writeHead(200, { "content-type": "application/json" });
+      res.writeHead(200, { "content-type": "application/json", ...extraHeaders });
       res.end(responseBody);
     });
   });
@@ -131,5 +132,53 @@ describe("proxy request forwarding + metering", () => {
     // give any (wrongly-issued) forward a moment to land
     await new Promise((r) => setTimeout(r, 50));
     expect(upstreamHit).toBe(false);
+  });
+
+  it("captures Anthropic unified rate-limit headers and latches subscription mode", async () => {
+    const { server: up } = makeUpstream(
+      JSON.stringify({ model: "claude-sonnet-4", usage: { input_tokens: 10, output_tokens: 5 } }),
+      {
+        "anthropic-ratelimit-unified-status": "allowed",
+        "anthropic-ratelimit-unified-5h-utilization": "0.4",
+        "anthropic-ratelimit-unified-7d-utilization": "0.62",
+        "anthropic-ratelimit-unified-7d-reset": "2026-06-20T01:00:00Z",
+      },
+    );
+    const upPort = await listen(up);
+    const proxy = startProxy({ port: 0, flavor: "anthropic", upstream: `http://127.0.0.1:${upPort}` });
+    const proxyPort = await listen(proxy);
+
+    await post(proxyPort, "/v1/messages", "{}", { "x-agent-guard-session": "sess-sub" });
+
+    const latched = await waitFor(() => loadLimitsState().subscriptionDetected);
+    expect(latched).toBe(true);
+    const snap = loadLimitsState().snapshot!;
+    expect(snap.weekly!.utilization).toBeCloseTo(0.62);
+    expect(snap.fiveHour!.utilization).toBeCloseTo(0.4);
+  });
+
+  it("never returns 402 once subscription mode is latched (alert-only)", async () => {
+    // Over the dollar cap AND flagged as a subscription session.
+    setBudget({ sessionHardUSD: 1, dailyHardUSD: 1000 });
+    const led = emptyLedger();
+    setSessionCost(led, "sess-sub-block", 50, 100, 100, Date.now());
+    saveLedger(led);
+    saveLimitsState({ ...emptyLimitsState(), subscriptionDetected: true });
+
+    let upstreamHit = false;
+    const up = createServer((_req, res) => {
+      upstreamHit = true;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end("{}");
+    });
+    const upPort = await listen(up);
+    const proxy = startProxy({ port: 0, flavor: "anthropic", upstream: `http://127.0.0.1:${upPort}` });
+    const proxyPort = await listen(proxy);
+
+    const res = await post(proxyPort, "/v1/messages", "{}", { "x-agent-guard-session": "sess-sub-block" });
+
+    // Flat-fee plan: dollars are meaningless, so we forward instead of blocking.
+    expect(res.status).toBe(200);
+    expect(await waitFor(() => upstreamHit)).toBe(true);
   });
 });

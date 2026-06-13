@@ -77,13 +77,26 @@ ks onboard --help-provider cloudflare
 # Agent Guard — cap runaway coding-agent (Claude Code / Cursor / Aider) spend
 ks guard install                                  # wire the Claude Code hook into ./.claude/settings.json
 ks guard config --session-hard 30 --daily-hard 150
-ks guard status [--json]                          # session + daily spend vs budget
+ks guard status [--json]                          # session + daily spend, AND Claude Code plan limits
 ks guard pause --minutes 30                       # escape hatch (also: ks guard resume)
 ks guard proxy --flavor openai                    # hard 402 wall for non-Claude-Code agents
+
+# Subscription limit awareness (Claude Code Pro/Max) — ALERT-ONLY, never blocks
+ks guard proxy                                    # run Claude Code THROUGH it (ANTHROPIC_BASE_URL=http://localhost:8787 claude)
+                                                  #   → reads anthropic-ratelimit-unified-* headers, paces 5h + weekly windows
+ks guard config --plan max5                       # auto|pro|max5|max20; a pinned tier enables hook-only estimation
+ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
 ```
 
 > `ks guard` is the same engine as the standalone `agent-guard` / `ksg` binary
 > (see `packages/agent-guard`) — both share one ledger, budget, and escape hatch.
+>
+> **Two currencies:** API-key users are gated on **dollars** (session + daily-rolling hard
+> caps, blocks at the cap). Pro/Max subscription sessions are flat-fee, so once the proxy sees
+> Anthropic's `unified-*` rate-limit headers it switches to **subscription mode**: it paces the
+> 5-hour + weekly quota (burn-rate vs. reset time, projected lockout) and only *warns* — it
+> never blocks, and it suppresses the dollar 402 for that session. State in
+> `~/.kill-switch/agent-guard/limits.json`.
 
 ### For AI Agent Setup
 When setting up Kill Switch for another project:

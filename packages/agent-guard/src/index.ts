@@ -26,25 +26,61 @@ export { parseTranscript, type TranscriptTotals } from "./transcript.js";
 export {
   loadConfig,
   DEFAULT_BUDGET,
+  DEFAULT_LIMITS,
   guardDir,
   ensureGuardDir,
   configPath,
+  limitsPath,
   pausePath,
   isPaused,
   pauseExpiry,
   writePause,
   clearPause,
   type GuardConfig,
+  type LimitsConfig,
 } from "./config.js";
-export { dispatchAlert, type AlertEvent } from "./alert.js";
+export { dispatchAlert, type AlertEvent, type AlertLevel } from "./alert.js";
 export { startProxy, resolveUpstream, type ProxyOptions } from "./proxy.js";
 export { runHook } from "./hook.js";
-export { buildStatusReport, type StatusReport } from "./report.js";
+export { buildStatusReport, formatLimitsLines, type StatusReport, type LimitsReport } from "./report.js";
+export {
+  parseUnifiedHeaders,
+  parseUtilization,
+  parseReset,
+  recordHeaders,
+  loadLimitsState,
+  saveLimitsState,
+  emptyLimitsState,
+  limitNotifyKey,
+  WINDOW_MS,
+  type LimitSnapshot,
+  type WindowState,
+  type LimitsState,
+  type LimitWindow,
+  type HeaderGetter,
+} from "./limits.js";
+export {
+  assessWindow,
+  assessSnapshot,
+  worstLevel,
+  type PacingAssessment,
+  type PacingLevel,
+  type PacingThresholds,
+} from "./pacing.js";
+export {
+  estimateSnapshot,
+  isEstimated,
+  TIER_BUDGETS,
+  type PlanTier,
+  type TierBudget,
+} from "./estimate.js";
 export {
   installHook,
   setBudget,
+  setLimits,
   resetLedger,
   type InstallOptions,
   type InstallResult,
   type BudgetPatch,
+  type LimitsPatch,
 } from "./ops.js";
