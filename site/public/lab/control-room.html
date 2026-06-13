@@ -12,7 +12,8 @@
          font-family:'JetBrains Mono', monospace; font-size:13px; opacity:.85; }
   .hud b { color:#fff; }
   .note { position:fixed; left:24px; bottom:16px; z-index:2; color:#6b73a0; max-width:560px;
-          font-family:'JetBrains Mono', monospace; font-size:12px; line-height:1.6; }
+          font-family:'JetBrains Mono', monospace; font-size:12px; line-height:1.6;
+          background:rgba(10,14,31,.72); padding:8px 12px; border-radius:8px; backdrop-filter:blur(4px); }
   .nowebgl { position:fixed; inset:0; display:none; place-items:center; color:#aeb6da;
              font-family:'JetBrains Mono', monospace; text-align:center; padding:40px; }
 </style>
@@ -117,8 +118,8 @@ const antTip = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), eyeMat); a
 head.add(skull, visor, eyeL, eyeR, antenna, antTip);
 head.position.y = 0.82;
 robot.add(head);
-robot.position.set(-2.9, -0.9, 2.4);
-robot.scale.setScalar(0.95);
+robot.position.set(-2.5, -0.95, 2.6);
+robot.scale.setScalar(0.82);
 world.add(robot);
 
 // ── Interaction ──
