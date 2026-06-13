@@ -566,6 +566,28 @@
         .terminal-body .tc { color: #6b7280; }
         @media (max-width: 860px) { .ag-top { grid-template-columns: 1fr; gap: 28px; margin-bottom: 32px; } }
 
+        /* ── Agent Guard: live rate-limit gauges ───────── */
+        .ag-cta { margin-top: 22px; }
+        .ag-cmd { font-family:'JetBrains Mono',monospace; font-size:14px; color:#5ce2e7;
+                  background:rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.1); border-radius:8px;
+                  padding:9px 13px; display:inline-block; }
+        .ag-panel { background:#0b1020; border:1px solid rgba(255,255,255,.1); border-radius:14px;
+                    box-shadow:0 24px 60px rgba(0,0,0,.5); padding:22px 22px 24px; }
+        .ag-chip { display:inline-flex; align-items:center; gap:9px; background:#0a0f24;
+                   border:1px solid rgba(255,255,255,.14); border-radius:9px; padding:7px 13px;
+                   font-family:'JetBrains Mono',monospace; font-size:14px; color:#dfe3ff; }
+        .ag-chip .dot { width:8px; height:8px; border-radius:50%; background:#5ce2e7; box-shadow:0 0 9px #5ce2e7; }
+        .ag-gauges { margin-top:18px; font-family:'JetBrains Mono',monospace; }
+        .ag-gauge { margin:15px 0; }
+        .ag-grow { display:flex; justify-content:space-between; font-size:13px; color:#aeb6da; margin-bottom:6px; }
+        .ag-grow b { color:#fff; font-weight:600; }
+        .ag-track { height:16px; border-radius:6px; background:#070b1c; border:1px solid rgba(255,255,255,.1); overflow:hidden; }
+        .ag-fill { height:100%; border-radius:5px 0 0 5px; background:linear-gradient(90deg,#5ce2e7,#49c6e0);
+                   box-shadow:0 0 12px -2px #5ce2e7; animation:agfill 1.3s cubic-bezier(.2,.8,.2,1) both; }
+        .ag-fill.warm { background:linear-gradient(90deg,#5ce2e7 55%,#ff9d42); box-shadow:0 0 12px -2px #ff9d42; }
+        @keyframes agfill { from { width:0; } }
+        .ag-reset { font-size:11.5px; color:#6b73a0; margin-top:5px; }
+
         /* ── Horror Stories ───────────────────────────── */
         .stories {
             display: grid;
@@ -1253,41 +1275,59 @@
     <section id="agent-guard">
         <div class="ag-top">
             <div class="ag-intro">
-                <div class="section-label">New</div>
-                <div class="section-title">Spend caps your coding agent <span class="gradient-text-warn">can't override</span></div>
+                <div class="section-label">New &middot; Agent Guard</div>
+                <div class="section-title">See your <span class="gradient-text-warn">real Claude&nbsp;Code limits</span> &#8212; and cap the spend</div>
                 <div class="section-desc">
-                    A coding agent re-sends its entire context on every tool call, so token spend compounds
-                    silently &#8212; the loop behind the $4,200 weekend, the $87K month, and the reported
-                    $500M month after a team &#8220;failed to put usage limits on Claude licenses.&#8221;
-                    Kill Switch caps that loop with <strong>per-session and daily-rolling limits</strong> &#8212;
-                    a soft warning, then a hard stop. It protects <strong>any</strong> coding agent, by design:
+                    Claude Code&#8217;s 5-hour and weekly limits are invisible until they lock you out mid-task.
+                    <strong>Agent Guard</strong> puts your real plan usage &#8212; the 5-hour window, the weekly cap,
+                    and the per-model weekly &#8212; right in your status bar, pulled straight from Anthropic, and
+                    warns you <em>before</em> you lock out. The same guard caps runaway API spend. Free,
+                    open-source, works with Claude Code today.
                 </div>
+                <div class="ag-cta"><code class="ag-cmd">npx @kill-switch/agent-guard usage</code></div>
             </div>
-            <div class="terminal" role="img" aria-label="Terminal: install and configure the Kill Switch agent guard">
-                <div class="terminal-bar">
-                    <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
-                    <span class="terminal-title">bash &#8212; agent-guard</span>
+
+            <div class="ag-panel" role="img" aria-label="Agent Guard showing real Claude Code plan limits: 5-hour 12%, weekly 17%, Sonnet 1%">
+                <div class="ag-chip"><span class="dot"></span> &#128737;&#65039; 5h 12% &middot; wk 17%</div>
+                <div class="ag-gauges">
+                    <div class="ag-gauge">
+                        <div class="ag-grow"><span>5-hour limit</span><b>12%</b></div>
+                        <div class="ag-track"><div class="ag-fill" style="width:12%"></div></div>
+                        <div class="ag-reset">resets 9:19&nbsp;AM</div>
+                    </div>
+                    <div class="ag-gauge">
+                        <div class="ag-grow"><span>weekly &middot; all models</span><b>17%</b></div>
+                        <div class="ag-track"><div class="ag-fill" style="width:17%"></div></div>
+                        <div class="ag-reset">resets Tue 7:59&nbsp;PM</div>
+                    </div>
+                    <div class="ag-gauge">
+                        <div class="ag-grow"><span>weekly &middot; Sonnet</span><b>1%</b></div>
+                        <div class="ag-track"><div class="ag-fill" style="width:3%"></div></div>
+                        <div class="ag-reset">resets Tue 7:59&nbsp;PM</div>
+                    </div>
+                    <div class="ag-gauge">
+                        <div class="ag-grow"><span>heavy week &middot; on pace to lock out</span><b>86%</b></div>
+                        <div class="ag-track"><div class="ag-fill warm" style="width:86%"></div></div>
+                        <div class="ag-reset">&#8594; lockout ~Thu &middot; resets Sat 6:00&nbsp;PM</div>
+                    </div>
                 </div>
-                <pre class="terminal-body">npm i -g @kill-switch/cli
-ks guard install      <span class="tc"># protect Claude Code</span>
-ks guard config --session-hard 30 --daily-hard 150</pre>
             </div>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon">&#129693;</div>
-                <h3>Native hook for Claude Code</h3>
-                <p>Reads the live session, prices real token usage, warns at your soft cap and <strong>blocks the next tool call</strong> at the hard cap. Fails open on any error &#8212; a guard bug never bricks your session.</p>
+                <div class="icon">&#128202;</div>
+                <h3>Your real limits, in your status bar</h3>
+                <p>5-hour, weekly, and per-model (Sonnet/Opus) &#8212; straight from Anthropic&#8217;s own usage endpoint. No proxy, no guessing from logs. It warns you <strong>before</strong> you lock out, not after.</p>
             </div>
             <div class="feature-card">
-                <div class="icon">&#128721;</div>
-                <h3>Hard proxy wall for everything else</h3>
-                <p>Point Cursor, Aider, or any script at the local metering proxy. At the cap it returns <strong>HTTP 402</strong> &#8212; the API simply stops answering. A wall the agent can&#8217;t argue past.</p>
+                <div class="icon">&#129693;</div>
+                <h3>Hard caps on runaway spend</h3>
+                <p>Pay-as-you-go on an API key? Per-session and daily-rolling dollar caps &#8212; soft warning, then a hard stop. The $4,200-weekend loop, prevented. (Flat-fee plans get paced, never blocked.)</p>
             </div>
             <div class="feature-card">
                 <div class="icon">&#9208;&#65039;</div>
                 <h3>The human holds the key</h3>
-                <p>The escape hatch lives outside the agent loop: <code>ks guard pause</code>, or a single file the agent can&#8217;t reach. The agent can hit the wall &#8212; it can&#8217;t move it.</p>
+                <p>Your OAuth token is read from your OS keychain and only ever sent to Anthropic &#8212; never logged, never stored. The escape hatch lives outside the agent loop: the agent can hit the wall, it can&#8217;t move it.</p>
             </div>
         </div>
     </section>
