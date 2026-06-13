@@ -536,7 +536,12 @@ ks alerts test</code></pre>
         </div>
 
         <div class="callout">
-            <strong>Two currencies: dollars and plan limits.</strong> The caps above gate <strong>dollars</strong> — right for API-key (pay-as-you-go) usage. A <strong>Claude Code Pro/Max subscription</strong> is flat-fee, so the scarce resource isn't dollars but your plan's <strong>rate-limit quota</strong> in two rolling windows (5-hour + weekly). Run Claude Code <em>through the proxy</em> and Agent Guard reads Anthropic's own <code>anthropic-ratelimit-unified-*</code> response headers — exact utilization + reset times — then paces your burn rate and warns <em>before</em> you lock out. This mode is <strong>alert-only</strong>: it never blocks a plan you've already paid for. The dollar 402 is suppressed only for the Anthropic proxy when you've pinned a subscription <code>--plan</code> or seen fresh headers — a billed OpenAI/other agent sharing the proxy keeps its hard wall. Set your tier with <code>--plan</code>.
+            <strong>Two currencies: dollars and plan limits.</strong> The caps above gate <strong>dollars</strong> — right for API-key (pay-as-you-go) usage. A <strong>Claude Code Pro/Max subscription</strong> is flat-fee, so the scarce resource isn't dollars but your plan's <strong>rate-limit quota</strong>. <code>ks guard usage</code> shows your <strong>real</strong> limits — the same numbers as Claude Code's <code>/usage</code> — pulled straight from Anthropic's usage endpoint: the 5-hour window, the weekly (all-models) window, and the per-model weekly (Sonnet/Opus). <code>ks guard status</code> auto-refreshes them, and the hook warns you in-session <em>before</em> you lock out. This is <strong>alert-only</strong> — it never blocks a plan you've already paid for. <em>(The token is read from your OS credential store and only ever sent to Anthropic; it's never logged or stored.)</em>
+        </div>
+
+        <div class="callout">
+            <strong>Always-on status bar.</strong> Wire <code>agent-guard statusline</code> as your Claude Code <code>statusLine</code> to keep a live <code>🛡 🟢 5h 12% · wk 17%</code> in the bar — it refreshes in the background (throttled, non-blocking) so your in-session warnings stay current:
+            <pre><code>{ "statusLine": { "type": "command", "command": "agent-guard statusline" } }</code></pre>
         </div>
 
         <div class="cmd-group">
@@ -544,8 +549,16 @@ ks alerts test</code></pre>
             <p>Wire the agent-guard hook into Claude Code settings. Defaults to <code>./.claude/settings.json</code>; pass <code>--global</code> to install into <code>~/.claude/settings.json</code>.</p>
         </div>
         <div class="cmd-group">
+            <h4>ks guard usage [--json]</h4>
+            <p>Fetch your <strong>real</strong> Claude Code plan limits from Anthropic's <code>/api/oauth/usage</code> endpoint &mdash; the 5-hour window, weekly (all-models), and per-model weekly (Sonnet/Opus), with reset times. No proxy and no workflow change. Reads your OAuth token from the macOS Keychain (<code>Claude Code-credentials</code>) or <code>~/.claude/.credentials.json</code>; the token is only sent to Anthropic and never logged or stored. The endpoint is undocumented, so it fails soft (falls back to the proxy / &ldquo;unknown&rdquo;).</p>
+            <pre><code>🟢 Claude Code plan limits  ·  observed just now
+  [██░░░░░░░░░░░░░░░░░░]  5-hour limit 12% used, resets 9:19 AM
+  [███░░░░░░░░░░░░░░░░░]  weekly limit 17% used, resets Tue 7:59 PM
+  [░░░░░░░░░░░░░░░░░░░░]  weekly · Sonnet   1%</code></pre>
+        </div>
+        <div class="cmd-group">
             <h4>ks guard status [--json]</h4>
-            <p>Show current session + daily agent spend against the budget &mdash; and, on a Pro/Max subscription, your Claude Code plan limits (5-hour + weekly utilization, reset times, and projected lockout).</p>
+            <p>Show current session + daily agent spend against the budget &mdash; and, on a Pro/Max subscription, your real Claude Code plan limits (auto-refreshed from the usage endpoint, throttled). Your plan tier is auto-detected from <code>~/.claude.json</code>; pin it with <code>--plan</code> if you prefer.</p>
         </div>
         <div class="cmd-group">
             <h4>ks guard config [options]</h4>
@@ -591,11 +604,9 @@ ks guard install
 ks guard config --session-hard 30 --daily-hard 150
 ks guard status
 
-# Pace a Pro/Max subscription instead (plan limits — alert-only)
-ks guard config --plan max5
-ks guard proxy                       # then run Claude Code through it:
-export ANTHROPIC_BASE_URL=http://localhost:8787
-ks guard status                      # 5-hour + weekly utilization, reset times, projected lockout
+# Pro/Max subscription? See your REAL plan limits (no proxy, alert-only)
+ks guard usage                       # 5-hour + weekly + per-model (Sonnet/Opus), with resets
+ks guard status                      # same, auto-refreshed; tier auto-detected from ~/.claude.json
 
 # Hard 402 wall for any other agent (Cursor, Aider, raw scripts)
 ks guard proxy --flavor openai --port 8787
