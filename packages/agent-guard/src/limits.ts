@@ -23,8 +23,8 @@
  * timestamp, an epoch (s or ms), or a relative seconds-until-reset.
  */
 
-import { readFileSync, writeFileSync, renameSync } from "node:fs";
-import { limitsPath, ensureGuardDir } from "./config.js";
+import { readFileSync, writeFileSync, renameSync, appendFileSync } from "node:fs";
+import { limitsPath, eventsPath, ensureGuardDir } from "./config.js";
 
 export type LimitWindow = "5h" | "weekly";
 
@@ -56,6 +56,8 @@ export interface LimitsState {
   snapshot: LimitSnapshot | null;
   /** Dedup flags so a given window/level/reset only alerts once. */
   notified: Record<string, boolean>;
+  /** Epoch ms we first logged the raw unified-* headers (write-once diagnostic). */
+  headersLoggedAt?: number;
 }
 
 /** Nominal window durations, used for pacing math when a reset time is unknown. */
@@ -77,6 +79,7 @@ export function loadLimitsState(): LimitsState {
         subscriptionDetected: data.subscriptionDetected ?? false,
         snapshot: data.snapshot ?? null,
         notified: data.notified ?? {},
+        headersLoggedAt: data.headersLoggedAt,
       };
     }
   } catch {
@@ -170,4 +173,33 @@ export function parseUnifiedHeaders(h: HeaderGetter, now: number): LimitSnapshot
 /** Stable dedup key for a pacing alert: re-alerts when the window resets. */
 export function limitNotifyKey(window: LimitWindow, level: string, resetAt: number | null): string {
   return `${window}:${level}:${resetAt ?? 0}`;
+}
+
+/**
+ * Pull every `anthropic-ratelimit-unified-*` header out of a raw record, verbatim.
+ * Used for the write-once diagnostic — Anthropic's value *formats* (fraction vs.
+ * percent, ISO vs. epoch reset) aren't fully documented, so capturing the raw
+ * strings the first time we see them makes verification a single `cat` away.
+ */
+export function unifiedHeaderDump(rec: Record<string, string | string[] | undefined>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rec)) {
+    if (v == null) continue;
+    const key = k.toLowerCase();
+    if (key.startsWith("anthropic-ratelimit-unified")) out[key] = Array.isArray(v) ? v.join(", ") : v;
+  }
+  return out;
+}
+
+/** Append a one-time raw-header diagnostic to events.jsonl. Best-effort, never throws. */
+export function logUnifiedHeaders(dump: Record<string, string>, now: number): void {
+  try {
+    ensureGuardDir();
+    appendFileSync(
+      eventsPath(),
+      JSON.stringify({ ts: now, kind: "unified-headers-observed", headers: dump }) + "\n",
+    );
+  } catch {
+    /* diagnostic only */
+  }
 }

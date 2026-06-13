@@ -21,8 +21,8 @@
  */
 
 import { createServer } from "node:http";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -120,19 +120,37 @@ async function main() {
   const state = loadLimitsState();
   const latched = state.subscriptionDetected === true;
 
+  // Show the write-once raw-header diagnostic the proxy logged on first sight —
+  // this is the "verification is one cat away" check for Anthropic's value formats.
+  let loggedHeaders = false;
+  try {
+    const events = readFileSync(join(homedir(), ".kill-switch", "agent-guard", "events.jsonl"), "utf8");
+    const line = events.split("\n").map((l) => l.trim()).filter(Boolean)
+      .map((l) => JSON.parse(l)).find((e) => e.kind === "unified-headers-observed");
+    if (line) {
+      loggedHeaders = true;
+      console.log("  ── raw unified-* headers captured (events.jsonl) ─────────────");
+      for (const [k, v] of Object.entries(line.headers)) console.log(`  ${k}: ${v}`);
+      console.log("");
+    }
+  } catch {
+    /* diagnostic only */
+  }
+
   console.log("  ── result ───────────────────────────────────────────────────");
   console.log(`  subscription mode latched : ${latched ? "✓" : "✗"}`);
   console.log(`  reached danger (lockout)  : ${sawDanger ? "✓" : "✗"}`);
+  console.log(`  raw headers logged once   : ${loggedHeaders ? "✓" : "✗"}`);
   console.log(`  blocked any request (402) : ✗ (alert-only by design)\n`);
 
   upstream.close();
   proxy.close();
 
-  if (latched && sawDanger) {
-    console.log("  ✅ e2e PASS — guard read real rate-limit headers, paced them, and warned of lockout without blocking.\n");
+  if (latched && sawDanger && loggedHeaders) {
+    console.log("  ✅ e2e PASS — guard read real rate-limit headers, logged them once, paced them, and warned of lockout without blocking.\n");
     process.exit(0);
   }
-  console.error("  ❌ e2e FAIL — expected subscription mode to latch and reach danger.\n");
+  console.error("  ❌ e2e FAIL — expected subscription mode to latch, log raw headers once, and reach danger.\n");
   process.exit(1);
 }
 

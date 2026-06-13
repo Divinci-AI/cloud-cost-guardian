@@ -34,10 +34,12 @@ import { dispatchAlert } from "./alert.js";
 import { assertSafeEndpoint, warnIfUnexpectedHost } from "./net.js";
 import {
   parseUnifiedHeaders,
+  recordHeaders,
+  unifiedHeaderDump,
+  logUnifiedHeaders,
   loadLimitsState,
   saveLimitsState,
   limitNotifyKey,
-  type HeaderGetter,
 } from "./limits.js";
 import { assessSnapshot, worstLevel } from "./pacing.js";
 
@@ -176,11 +178,22 @@ function meter(
  * paid a flat fee; the scarce resource is quota, and Anthropic's own limit is
  * the real wall).
  */
-function captureLimits(cfg: GuardConfig, headers: HeaderGetter, sessionId: string, now: number): boolean {
-  const snap = parseUnifiedHeaders(headers, now);
+function captureLimits(cfg: GuardConfig, headers: Headers, sessionId: string, now: number): boolean {
+  // Flatten to a lowercased record so we can both parse and dump the raw values.
+  const rec: Record<string, string> = {};
+  headers.forEach((v, k) => {
+    rec[k.toLowerCase()] = v;
+  });
+
+  const snap = parseUnifiedHeaders(recordHeaders(rec), now);
   if (!snap) return false;
 
   const state = loadLimitsState();
+  // Write-once raw-header diagnostic for format verification (`cat events.jsonl`).
+  if (!state.headersLoggedAt) {
+    logUnifiedHeaders(unifiedHeaderDump(rec), now);
+    state.headersLoggedAt = now;
+  }
   state.subscriptionDetected = true;
   state.snapshot = snap;
 

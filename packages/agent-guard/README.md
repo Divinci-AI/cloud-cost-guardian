@@ -152,6 +152,10 @@ Tune the thresholds (0–1 utilization) if the defaults are too eager:
 | `--5h-soft` / `--5h-danger` | 5-hour warn / danger utilization | 0.7 / 0.9 |
 | `--burn-ratio` | pace multiplier that triggers a warning | 1.5 |
 
+The first time the proxy sees the `unified-*` headers it writes the raw values once to
+`~/.kill-switch/agent-guard/events.jsonl` (`kind: "unified-headers-observed"`) — so you can
+confirm Anthropic's exact value formats with a single `cat`.
+
 > Because subscription mode is alert-only, the "don't run both hook *and* proxy" caveat below
 > doesn't bite here — running Claude Code through the proxy is exactly what feeds the limit
 > headers, and dollars no longer gate anything.

@@ -52,6 +52,8 @@ export {
   saveLimitsState,
   emptyLimitsState,
   limitNotifyKey,
+  unifiedHeaderDump,
+  logUnifiedHeaders,
   WINDOW_MS,
   type LimitSnapshot,
   type WindowState,

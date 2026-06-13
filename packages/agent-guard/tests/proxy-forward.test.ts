@@ -8,6 +8,8 @@ import { startProxy } from "../src/proxy.js";
 import { loadLedger, saveLedger, emptyLedger, setSessionCost } from "../src/ledger.js";
 import { setBudget } from "../src/ops.js";
 import { loadLimitsState, saveLimitsState, emptyLimitsState } from "../src/limits.js";
+import { eventsPath } from "../src/config.js";
+import { readFileSync } from "node:fs";
 
 /**
  * Integration tests for the metering proxy's request/response forwarding (only
@@ -155,6 +157,19 @@ describe("proxy request forwarding + metering", () => {
     const snap = loadLimitsState().snapshot!;
     expect(snap.weekly!.utilization).toBeCloseTo(0.62);
     expect(snap.fiveHour!.utilization).toBeCloseTo(0.4);
+
+    // Raw headers are dumped once for format verification…
+    const events = readFileSync(eventsPath(), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    const dumps = events.filter((e) => e.kind === "unified-headers-observed");
+    expect(dumps).toHaveLength(1);
+    expect(dumps[0].headers["anthropic-ratelimit-unified-7d-reset"]).toBe("2026-06-20T01:00:00Z");
+
+    // …and only once, even after more requests.
+    await post(proxyPort, "/v1/messages", "{}", { "x-agent-guard-session": "sess-sub" });
+    await waitFor(() => false, 150); // small settle
+    const after = readFileSync(eventsPath(), "utf8").trim().split("\n").map((l) => JSON.parse(l))
+      .filter((e) => e.kind === "unified-headers-observed");
+    expect(after).toHaveLength(1);
   });
 
   it("never returns 402 once subscription mode is latched (alert-only)", async () => {
