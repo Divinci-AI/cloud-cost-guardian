@@ -27,7 +27,7 @@ import { loadLedger, rollingDailyCost } from "./ledger.js";
 import { evaluate } from "./budget.js";
 import { fmtUSD } from "./cost.js";
 import { installHook, setBudget, setLimits, resetLedger } from "./ops.js";
-import { buildStatusReport, formatLimitsLines, formatStatusline } from "./report.js";
+import { buildStatusReport, formatLimitsLines, formatStatusline, formatStatusReport } from "./report.js";
 import { refreshUsage, triggerBackgroundRefresh } from "./claude-usage.js";
 
 const program = new Command();
@@ -83,64 +83,15 @@ program
     } catch {
       /* offline / no token */
     }
-    const cfg = loadConfig();
-    const ledger = loadLedger();
     const now = Date.now();
-    const dailyUSD = rollingDailyCost(ledger, now);
-    const sessions = Object.entries(ledger.sessions)
-      .filter(([, s]) => now - s.lastAt < 24 * 60 * 60 * 1000)
-      .sort((a, b) => b[1].lastAt - a[1].lastAt);
-
-    const topSession = sessions[0]?.[1].costUSD ?? 0;
-    const verdict = evaluate({ sessionUSD: topSession, dailyUSD }, cfg.budget);
-
+    const report = buildStatusReport(now);
     if (opts.json) {
-      console.log(JSON.stringify({
-        budget: cfg.budget,
-        dailyUSD,
-        verdict: verdict.level,
-        reasons: verdict.reasons,
-        sessions: sessions.map(([id, s]) => ({ id, ...s })),
-        limits: buildStatusReport(now).limits,
-      }, null, 2));
+      console.log(JSON.stringify(report, null, 2));
       return;
     }
-
-    const bar = (spent: number, hard: number) => {
-      const pct = hard > 0 ? Math.min(100, Math.round((spent / hard) * 100)) : 0;
-      const filled = Math.round(pct / 5);
-      return `[${"█".repeat(filled)}${"░".repeat(20 - filled)}] ${pct}%`;
-    };
-
-    const paused = isPaused(now);
-    const icon = paused ? "⏸ " : verdict.level === "block" ? "🛑" : verdict.level === "warn" ? "⚠️ " : "✅";
-    console.log(`${icon} agent-guard — ${paused ? "PAUSED (enforcement off)" : verdict.level.toUpperCase()}`);
-    if (paused) {
-      const until = pauseExpiry();
-      console.log(until ? `   resumes ${new Date(until).toLocaleString()}` : "   paused indefinitely — `agent-guard resume` to re-arm");
-    }
     console.log("");
-    console.log(`Daily (rolling 24h): ${fmtUSD(dailyUSD)} / ${fmtUSD(cfg.budget.dailyHardUSD)}  ${bar(dailyUSD, cfg.budget.dailyHardUSD)}`);
+    for (const line of formatStatusReport(report, now)) console.log(`  ${line}`);
     console.log("");
-    if (sessions.length === 0) {
-      console.log("No active sessions in the last 24h.");
-    } else {
-      console.log("Active sessions (24h):");
-      for (const [id, s] of sessions.slice(0, 8)) {
-        console.log(`  ${fmtUSD(s.costUSD).padStart(9)} / ${fmtUSD(cfg.budget.sessionHardUSD)}  ${bar(s.costUSD, cfg.budget.sessionHardUSD)}  ${id}`);
-      }
-    }
-    if (verdict.reasons.length) {
-      console.log("");
-      for (const r of verdict.reasons) console.log(`  • ${r}`);
-    }
-
-    // Subscription rate-limit pacing (Claude Code Pro/Max).
-    const limitLines = formatLimitsLines(buildStatusReport(now).limits, now);
-    if (limitLines.length) {
-      console.log("");
-      for (const line of limitLines) console.log(line);
-    }
   });
 
 // ── usage (real Claude Code plan limits) ─────────────────────────────────────

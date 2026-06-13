@@ -187,6 +187,57 @@ export function formatStatusline(limits: LimitsReport): string {
   return `🛡 ${label} · usage pending`;
 }
 
+/**
+ * Render the FULL `status` view (plain text lines) — shared by `agent-guard
+ * status` and `ks guard status` so they never drift. It leads with the signal
+ * that matters: real plan limits first, then the dollar budget. Disabled caps
+ * (hard = 0) render as "off" — never "$0.00 / NN%" — and on a subscription the
+ * dollar section is collapsed to advisory, since dollars don't apply there.
+ */
+export function formatStatusReport(r: StatusReport, now: number = Date.now()): string[] {
+  const out: string[] = [];
+  const onSub = r.limits.source === "headers";
+  const dollarsOff = r.budget.dailyHardUSD === 0 && r.budget.sessionHardUSD === 0;
+
+  const icon = r.paused ? "⏸" : onSub ? "🛡" : r.verdict === "block" ? "🛑" : r.verdict === "warn" ? "⚠️" : "🛡";
+  out.push(`${icon}  Agent Guard${r.paused ? " — PAUSED (enforcement off)" : ""}`);
+  if (r.paused) {
+    out.push(`   ${r.pauseUntil ? "resumes " + new Date(r.pauseUntil).toLocaleString() : "paused indefinitely — `ks guard resume` to re-arm"}`);
+  }
+  out.push("");
+
+  // 1) Plan limits — the signal that matters. (Self-describing: real %, or a nudge.)
+  for (const line of formatLimitsLines(r.limits, now)) out.push(line);
+  out.push("");
+
+  // 2) Dollar budget.
+  if (dollarsOff) {
+    out.push(onSub
+      ? "💲 Dollar caps: off — flat-fee plan, dollars aren't enforced."
+      : "💲 Dollar caps: off — `ks guard config --daily-hard 150` to enable.");
+  } else {
+    const dpct = r.budget.dailyHardUSD > 0 ? Math.min(1, r.dailyUSD / r.budget.dailyHardUSD) : 0;
+    const cap = r.budget.dailyHardUSD > 0 ? fmtUSD(r.budget.dailyHardUSD) : "off";
+    const note = onSub ? "   (advisory — flat-fee plan)" : "";
+    out.push(`💲 Daily (24h): ${fmtUSD(r.dailyUSD)} / ${cap}  ${bar(dpct)}${note}`);
+    for (const s of r.sessions.slice(0, 5)) {
+      if (r.budget.sessionHardUSD > 0) {
+        const sp = Math.min(1, s.costUSD / r.budget.sessionHardUSD);
+        out.push(`   ${fmtUSD(s.costUSD).padStart(9)} / ${fmtUSD(r.budget.sessionHardUSD)}  ${bar(sp)}  ${s.id.slice(0, 8)}`);
+      } else {
+        out.push(`   ${fmtUSD(s.costUSD).padStart(9)}  ${s.id.slice(0, 8)}`);
+      }
+    }
+  }
+
+  // 3) Reasons — dollar reasons are noise on a flat-fee plan, so skip them there.
+  if (!onSub && r.reasons.length) {
+    out.push("");
+    for (const reason of r.reasons) out.push(`  • ${reason}`);
+  }
+  return out;
+}
+
 /** Build the current status report from the on-disk config + ledger. */
 export function buildStatusReport(now: number = Date.now()): StatusReport {
   const cfg = loadConfig();

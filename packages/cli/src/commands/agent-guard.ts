@@ -22,7 +22,7 @@ import {
   pausePath,
   startProxy,
   resolveUpstream,
-  fmtUSD,
+  formatStatusReport,
   formatLimitsLines,
   refreshUsage,
 } from "@kill-switch/agent-guard";
@@ -34,12 +34,6 @@ function agentGuardCliPath(): string {
   // Resolve the package entry, then point at the sibling cli.js the hook uses.
   const pkgMain = require.resolve("@kill-switch/agent-guard");
   return pkgMain.replace(/index\.js$/, "cli.js");
-}
-
-function bar(spent: number, hard: number): string {
-  const pct = hard > 0 ? Math.min(100, Math.round((spent / hard) * 100)) : 0;
-  const filled = Math.round(pct / 5);
-  return `[${"█".repeat(filled)}${"░".repeat(20 - filled)}] ${pct}%`;
 }
 
 export function registerAgentGuardCommands(program: Command) {
@@ -67,32 +61,8 @@ export function registerAgentGuardCommands(program: Command) {
         return;
       }
 
-      const icon = report.paused ? "⏸ " : report.verdict === "block" ? "🛑" : report.verdict === "warn" ? "⚠️ " : "✅";
-      console.log(`\n${icon} ${c.bold("Agent Guard")} — ${report.paused ? "PAUSED (enforcement off)" : report.verdict.toUpperCase()}`);
-      if (report.paused) {
-        console.log(report.pauseUntil
-          ? c.dim(`   resumes ${new Date(report.pauseUntil).toLocaleString()}`)
-          : c.dim("   paused indefinitely — `ks guard resume` to re-arm"));
-      }
       console.log("");
-      console.log(`  ${c.bold("Daily (24h):")} ${fmtUSD(report.dailyUSD)} / ${fmtUSD(report.budget.dailyHardUSD)}  ${bar(report.dailyUSD, report.budget.dailyHardUSD)}`);
-      console.log("");
-      if (report.sessions.length === 0) {
-        console.log(c.dim("  No active sessions in the last 24h."));
-      } else {
-        console.log(c.bold("  Active sessions (24h):"));
-        for (const s of report.sessions.slice(0, 8)) {
-          console.log(`   ${fmtUSD(s.costUSD).padStart(9)} / ${fmtUSD(report.budget.sessionHardUSD)}  ${bar(s.costUSD, report.budget.sessionHardUSD)}  ${c.dim(s.id)}`);
-        }
-      }
-      for (const r of report.reasons) console.log(`  ${c.yellow("•")} ${r}`);
-
-      // Subscription rate-limit pacing (Claude Code Pro/Max).
-      const limitLines = formatLimitsLines(report.limits);
-      if (limitLines.length) {
-        console.log("");
-        for (const line of limitLines) console.log(`  ${line}`);
-      }
+      for (const line of formatStatusReport(report)) console.log(`  ${line}`);
       console.log("");
     });
 

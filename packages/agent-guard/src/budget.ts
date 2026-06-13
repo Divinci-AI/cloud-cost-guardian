@@ -58,7 +58,11 @@ export function evaluate(spend: Spend, budget: Budget): Verdict {
       reasons.push(`${c.scope} spend ${fmtUSD(c.spent)} reached the hard cap of ${fmtUSD(c.hard)}`);
     } else if (c.soft > 0 && c.spent >= c.soft) {
       triggers.push({ scope: c.scope, level: "warn", spentUSD: c.spent, limitUSD: c.soft, pct: pct(c.spent, c.soft) });
-      reasons.push(`${c.scope} spend ${fmtUSD(c.spent)} crossed the soft cap of ${fmtUSD(c.soft)} (${pct(c.spent, c.hard > 0 ? c.hard : c.soft)}% of hard cap)`);
+      // Reference the hard cap when set, otherwise the soft cap — never claim
+      // "% of hard cap" when the hard cap is disabled (0).
+      const refLimit = c.hard > 0 ? c.hard : c.soft;
+      const refLabel = c.hard > 0 ? "hard cap" : "soft cap";
+      reasons.push(`${c.scope} spend ${fmtUSD(c.spent)} crossed the soft cap of ${fmtUSD(c.soft)} (${pct(c.spent, refLimit)}% of ${refLabel})`);
     }
   }
 

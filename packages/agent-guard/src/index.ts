@@ -42,7 +42,7 @@ export {
 export { dispatchAlert, type AlertEvent, type AlertLevel } from "./alert.js";
 export { startProxy, resolveUpstream, type ProxyOptions } from "./proxy.js";
 export { runHook } from "./hook.js";
-export { buildStatusReport, buildLimitsReport, formatLimitsLines, formatStatusline, type StatusReport, type LimitsReport } from "./report.js";
+export { buildStatusReport, buildLimitsReport, formatLimitsLines, formatStatusline, formatStatusReport, type StatusReport, type LimitsReport } from "./report.js";
 export { detectPlanTier, mapRateLimitTier, tierLabel, type SubscriptionTier } from "./claude-code.js";
 export { readOAuthToken, fetchUsage, usageToSnapshot, refreshUsage, isAllowedUsageUrl, type UsageResponse } from "./claude-usage.js";
 export {

@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildLimitsReport, formatLimitsLines, formatStatusline } from "../src/report.js";
+import { buildLimitsReport, formatLimitsLines, formatStatusline, formatStatusReport, buildStatusReport } from "../src/report.js";
 import { saveLimitsState, emptyLimitsState, WINDOW_MS, type LimitSnapshot } from "../src/limits.js";
 import { DEFAULT_BUDGET, DEFAULT_LIMITS, type GuardConfig } from "../src/config.js";
-import { emptyLedger, type Ledger } from "../src/ledger.js";
+import { emptyLedger, saveLedger, setSessionCost, type Ledger } from "../src/ledger.js";
+import { setBudget } from "../src/ops.js";
 
 /**
  * Staleness (F2/F3) and estimate honesty (F4). buildLimitsReport reads
@@ -75,6 +76,38 @@ describe("buildLimitsReport — staleness (F2/F3)", () => {
     expect(r.tier).toBe("max5");
     expect(r.windows).toEqual([]);
     expect(r.cost.weeklyUSD).toBeCloseTo(12.5);
+  });
+});
+
+describe("formatStatusReport — adaptive status view", () => {
+  it("renders disabled dollar caps as 'off' — never $0.00 / '% of hard cap'", () => {
+    setBudget({ sessionHardUSD: 0, dailyHardUSD: 0, sessionSoftUSD: 100, dailySoftUSD: 300 });
+    const led = emptyLedger();
+    setSessionCost(led, "s", 800, 100, 100, now);
+    saveLedger(led);
+    const out = formatStatusReport(buildStatusReport(now), now).join("\n");
+    expect(out).toMatch(/Dollar caps: off/);
+    expect(out).not.toMatch(/% of hard cap/); // the old divide-by-zero nonsense
+    expect(out).not.toMatch(/\/ \$0\.00/);
+  });
+
+  it("leads with plan limits, then the dollar section, on a subscription", () => {
+    saveLimitsState({
+      ...emptyLimitsState(),
+      subscriptionDetected: true,
+      snapshot: {
+        fiveHour: { utilization: 0.25, resetAt: now + 3 * HOUR },
+        weekly: { utilization: 0.28, resetAt: now + 3 * DAY },
+        status: "oauth-usage",
+        observedAt: now,
+      },
+    });
+    setBudget({ sessionHardUSD: 0, dailyHardUSD: 0 });
+    const lines = formatStatusReport(buildStatusReport(now), now);
+    const planIdx = lines.findIndex((l) => l.includes("Claude Code plan limits"));
+    const dollarIdx = lines.findIndex((l) => l.includes("Dollar caps"));
+    expect(planIdx).toBeGreaterThanOrEqual(0);
+    expect(dollarIdx).toBeGreaterThan(planIdx); // real signal first
   });
 });
 
