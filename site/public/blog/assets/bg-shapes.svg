@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" fill="none">
+  <!-- circuit traces -->
+  <g stroke="#5ce2e7" stroke-width="1.4" opacity="0.06">
+    <path d="M0 130 H160 V70 H300"/>
+    <path d="M1440 250 H1230 V170 H1070"/>
+    <path d="M180 900 V770 H340 V840"/>
+    <path d="M1440 760 H1280 V680"/>
+    <path d="M60 430 H210 V360"/>
+    <circle cx="300" cy="70" r="3.5"/>
+    <circle cx="1070" cy="170" r="3.5"/>
+    <circle cx="340" cy="770" r="3.5"/>
+    <circle cx="210" cy="360" r="3.5"/>
+    <circle cx="1280" cy="680" r="3.5"/>
+  </g>
+  <!-- lightning bolts -->
+  <g fill="#5ce2e7" opacity="0.05">
+    <path d="M180 250 l46 -104 l-22 2 l34 -78 l-72 122 l24 -2 z"/>
+    <path d="M1180 470 l34 -78 l-16 1 l25 -58 l-54 92 l18 -2 z" transform="scale(1.3)" transform-origin="1180 470"/>
+    <path d="M760 720 l30 -68 l-14 1 l22 -52 l-48 82 l16 -2 z"/>
+  </g>
+  <!-- dollar signs -->
+  <g fill="#ffffff" opacity="0.035" font-family="'JetBrains Mono', monospace" font-size="72" font-weight="700">
+    <text x="1040" y="640">$</text>
+    <text x="250" y="560">$</text>
+    <text x="690" y="200">$</text>
+    <text x="1290" y="380" font-size="48">$</text>
+  </g>
+  <!-- cloud outlines -->
+  <g stroke="#9aa0c0" stroke-width="2.2" opacity="0.04">
+    <path d="M900 150 a40 40 0 0 1 78 -8 a30 30 0 0 1 40 38 h-130 a32 32 0 0 1 12 -30 z"/>
+    <path d="M120 700 a34 34 0 0 1 66 -7 a26 26 0 0 1 34 32 h-110 a27 27 0 0 1 10 -25 z"/>
+  </g>
+</svg>

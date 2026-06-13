@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>Privacy Policy | Kill Switch</title>
+    <meta name="description" content="Privacy Policy for Kill Switch — how Divinci AI collects, uses, and protects your data.">
+    <link rel="canonical" href="https://kill-switch.net/privacy.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/legal.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: rgb(12, 18, 41); color: #c4c5ca; -webkit-font-smoothing: antialiased; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: #fff; }
+        .navbar {
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 2em; height: var(--nav-h);
+            background: rgba(51, 51, 51, 0.55); backdrop-filter: blur(12px);
+            border-top: none;
+        }
+        .nav-brand { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; text-decoration: none; }
+        .nav-brand .icon { font-size: 24px; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: #fff; font-weight: 500; font-size: 14px; text-decoration: none; }
+        @media (max-width: 760px) { .nav-links a:not(.btn-github) { display: none; } }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><img class="brand-logo" src="/assets/logo-mark.svg" alt="Kill Switch" width="26" height="26" style="display:block;vertical-align:middle"><span>Kill Switch</span></a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://app.kill-switch.net">Dashboard</a>
+        </div>
+    </nav>
+
+    <main class="legal-wrap">
+        <h1>Privacy Policy</h1>
+        <p class="legal-meta">Effective date: June 3, 2026</p>
+
+        <p>Kill Switch (&ldquo;Kill Switch,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) is operated by <strong>Divinci AI</strong>. This Privacy Policy explains how we collect, use, disclose, and safeguard information when you use our website at <a href="https://kill-switch.net">kill-switch.net</a>, dashboard at <a href="https://app.kill-switch.net">app.kill-switch.net</a>, API, CLI, Agent Guard tools, and related services (collectively, the &ldquo;Service&rdquo;).</p>
+
+        <h2>1. Information We Collect</h2>
+
+        <h3>Account information</h3>
+        <p>When you create an account, we collect information through our authentication provider, Clerk, such as your name, email address, and profile image. Clerk may also collect device and session information needed to keep you signed in.</p>
+
+        <h3>Cloud and API credentials</h3>
+        <p>If you connect cloud providers or API services (for example Cloudflare, GCP, AWS, OpenAI, or Anthropic), you provide credentials so we can monitor usage and, when configured, execute protective actions. These credentials are encrypted at rest using AES-256-GCM before storage. We store a short preview (such as the last four characters) to help you identify credentials in the dashboard.</p>
+
+        <h3>Monitoring and usage data</h3>
+        <p>We collect metrics returned by connected providers, including cost estimates, request counts, resource identifiers, violation events, alert history, and the results of monitoring checks and kill-switch actions. If you use Agent Guard, we may receive session spend summaries and cap-trip events you choose to report to the Service.</p>
+
+        <h3>Configuration data</h3>
+        <p>We store your account settings, connected cloud accounts, monitoring thresholds, shield and rule configurations, protected service lists, alert channel settings, team memberships, organization settings, API keys you create, and activity log entries for team and enterprise accounts.</p>
+
+        <h3>Billing information</h3>
+        <p>Paid subscriptions are processed by Stripe. We receive subscription status, plan tier, Stripe customer and subscription identifiers, and limited billing metadata from Stripe. We do not store full payment card numbers on our servers.</p>
+
+        <h3>Technical and log data</h3>
+        <p>We automatically collect standard server and application logs, which may include IP address, browser type, operating system, referring URLs, timestamps, and API request metadata. This helps us operate, secure, and troubleshoot the Service.</p>
+
+        <h3>Communications</h3>
+        <p>If you contact us by email or support channels, we retain the content of those communications.</p>
+
+        <h2>2. How We Use Information</h2>
+        <p>We use the information we collect to:</p>
+        <ul>
+            <li>Provide, operate, and maintain the Service, including scheduled monitoring checks and alerts</li>
+            <li>Execute configured protective actions on your connected infrastructure when thresholds are exceeded</li>
+            <li>Authenticate users, manage organizations, and enforce plan limits</li>
+            <li>Process subscriptions and manage billing</li>
+            <li>Send service-related notifications, security alerts, and product updates</li>
+            <li>Improve reliability, detect abuse, and debug issues</li>
+            <li>Comply with legal obligations</li>
+        </ul>
+
+        <h2>3. How We Share Information</h2>
+        <p>We do not sell your personal information. We may share information in these circumstances:</p>
+        <ul>
+            <li><strong>Service providers:</strong> With vendors that help us run the Service, including Clerk (authentication), Stripe (billing), cloud hosting providers, and email delivery services. These providers process data on our behalf under contractual obligations.</li>
+            <li><strong>Your connected providers:</strong> When you connect a cloud or API account, we use your credentials to query that provider&rsquo;s APIs and, when configured, take actions in your account.</li>
+            <li><strong>Alert destinations you configure:</strong> When an alert fires, we send information you choose to channels such as PagerDuty, Slack, Discord, email, or GitHub.</li>
+            <li><strong>Legal and safety:</strong> If required by law, regulation, legal process, or to protect rights, safety, and security.</li>
+            <li><strong>Business transfers:</strong> In connection with a merger, acquisition, financing, or sale of assets, subject to appropriate confidentiality protections.</li>
+        </ul>
+
+        <h2>4. Data Retention</h2>
+        <p>We retain account and monitoring data for as long as your account is active or as needed to provide the Service. If you disconnect a cloud account or delete your Kill Switch account, we delete associated credentials and related data as part of that process, subject to reasonable backup retention periods. Billing records may be retained as required for accounting and tax purposes.</p>
+
+        <h2>5. Security</h2>
+        <p>We use administrative, technical, and organizational measures designed to protect your information, including encryption of stored credentials, access controls, and secure secret management for production systems. No method of transmission or storage is completely secure, and we cannot guarantee absolute security.</p>
+
+        <h2>6. Your Choices and Rights</h2>
+        <p>Depending on where you live, you may have rights to access, correct, delete, or export personal information, or to object to or restrict certain processing. You can update many account settings in the dashboard, disconnect cloud accounts, revoke API keys, and delete your account from Settings. To make a privacy request, contact us at <a href="mailto:admin@kill-switch.net">admin@kill-switch.net</a>.</p>
+
+        <h2>7. International Data Transfers</h2>
+        <p>We may process and store information in the United States and other countries where we or our service providers operate. By using the Service, you consent to the transfer of information to countries that may have different data protection laws than your country of residence.</p>
+
+        <h2>8. Cookies and Similar Technologies</h2>
+        <p>Our website and dashboard use cookies and similar technologies for authentication, session management, preferences, and security. You can control cookies through your browser settings, but disabling cookies may limit certain features.</p>
+
+        <h2>9. Children</h2>
+        <p>The Service is not directed to children under 16, and we do not knowingly collect personal information from children under 16. If you believe a child has provided us personal information, contact us and we will take appropriate steps to delete it.</p>
+
+        <h2>10. Third-Party Links and Services</h2>
+        <p>The Service may link to third-party websites or services. Their privacy practices are governed by their own policies, not this one.</p>
+
+        <h2>11. Changes to This Policy</h2>
+        <p>We may update this Privacy Policy from time to time. We will post the revised policy on this page and update the effective date. Material changes may also be communicated through the Service or by email.</p>
+
+        <h2>12. Contact Us</h2>
+        <p>Questions about this Privacy Policy can be sent to <a href="mailto:admin@kill-switch.net">admin@kill-switch.net</a>.</p>
+        <p>Divinci AI<br>Kill Switch<br><a href="https://kill-switch.net">kill-switch.net</a></p>
+    </main>
+
+    <footer class="site-footer">
+        <div class="social">
+            <a href="https://x.com/KillSwitchCloud" target="_blank" rel="noopener" aria-label="X (Twitter)">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </a>
+            <a href="https://www.youtube.com/@CloudKillSwitch/shorts" target="_blank" rel="noopener" aria-label="YouTube">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </a>
+            <a href="https://www.linkedin.com/company/cloud-kill-switch/" target="_blank" rel="noopener" aria-label="LinkedIn">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+            </a>
+            <a href="https://github.com/Divinci-AI/kill-switch" target="_blank" rel="noopener" aria-label="GitHub">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.898-.015 3.293 0 .322.218.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+            </a>
+        </div>
+        <p>
+            &copy; 2026 <a href="https://divinci.ai/"><img class="divinci-bot" src="/assets/divinci-robot.svg" alt="" width="16" height="16">Divinci AI</a>
+            <span class="divider">|</span>
+            <a href="/privacy.html">Privacy Policy</a>
+            <span class="divider">|</span>
+            <a href="/terms.html">Terms of Service</a>
+        </p>
+    </footer>
+</body>
+</html>

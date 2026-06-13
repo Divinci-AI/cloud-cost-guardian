@@ -11,6 +11,11 @@
     <meta property="og:url" content="https://kill-switch.net">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="canonical" href="https://kill-switch.net">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta property="og:image" content="https://kill-switch.net/icon-512.png">
+    <meta name="twitter:image" content="https://kill-switch.net/icon-512.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -28,14 +33,17 @@
         a:hover { color: #fff; }
 
         /* ── Nav ─────────────────────────────────────── */
-        .navbar {
+        .site-header {
             position: fixed; top: 0; left: 0; width: 100%;
             z-index: 1000;
+        }
+        .navbar {
+            position: relative; width: 100%;
             display: flex; justify-content: space-between; align-items: center;
             padding: 0 2em; height: 58px;
             background: rgba(51, 51, 51, 0.55);
             backdrop-filter: blur(12px);
-            border-top: 4px solid #0e102dab;
+            border-top: none;
         }
         .nav-brand {
             font-family: 'Outfit', sans-serif;
@@ -43,11 +51,13 @@
             display: flex; align-items: center; gap: 10px;
         }
         .nav-brand .icon { font-size: 24px; }
+        .nav-brand .brand-logo { width: 28px; height: 28px; display: block; }
         .nav-links { display: flex; gap: 24px; align-items: center; }
         .nav-links a { color: #fff; font-weight: 500; font-size: 14px; }
         .btn-github {
             background: #24292e; color: #fff !important;
-            padding: 7px 16px; border-radius: 6px;
+            padding: 0 16px; height: 32px; box-sizing: border-box; line-height: 1;
+            border-radius: 6px;
             font-weight: 600; font-size: 13px;
             display: flex; align-items: center; gap: 6px;
             border: 1px solid #444; transition: background 0.2s;
@@ -385,17 +395,56 @@
             z-index: 9998; pointer-events: none;
             background: #000;
             opacity: 0;
-            animation: blast-video-in 8.5s ease forwards;
+            animation: blast-video-in 11s ease forwards;
         }
         .kill-blast-video-wrap video {
             width: 100%; height: 100%;
-            object-fit: cover;
+            object-fit: contain;
         }
+        .kill-blast-close {
+            position: fixed; top: 24px; right: 24px; z-index: 10002;
+            width: 44px; height: 44px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: rgba(0, 0, 0, 0.5); color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            cursor: pointer; pointer-events: auto;
+            -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+        .kill-blast-close:hover { background: rgba(0, 0, 0, 0.78); transform: scale(1.08); }
+        .kill-blast-close svg { width: 22px; height: 22px; }
         @keyframes blast-video-in {
             0% { opacity: 0; }
-            5% { opacity: 1; }
-            85% { opacity: 1; }
+            4% { opacity: 1; }
+            90% { opacity: 1; }
             100% { opacity: 0; }
+        }
+        /* Positioned just right of the pillarboxed 9:16 short (video width = min(100vw, 56.25vh)). */
+        .kill-sound-btn {
+            position: fixed; top: 50%;
+            left: calc(50% + min(50vw, 28.125vh) + 18px);
+            transform: translateY(-50%);
+            z-index: 10001; pointer-events: auto; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 9px;
+            padding: 13px 24px; border-radius: 50px; border: none;
+            background: linear-gradient(135deg, #c25800, #e06800); color: #fff;
+            font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 15px;
+            box-shadow: 0 6px 24px rgba(224, 104, 0, 0.5);
+        }
+        .kill-sound-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+        .kill-sound-btn.throb { animation: sound-throb 1.1s ease-in-out infinite; }
+        @keyframes sound-throb {
+            0%, 100% { transform: translateY(-50%) scale(1); box-shadow: 0 6px 24px rgba(224, 104, 0, 0.5); }
+            50% { transform: translateY(-50%) scale(1.09); box-shadow: 0 10px 38px rgba(224, 104, 0, 0.9); }
+        }
+        /* On narrow screens the short fills the width (no right gutter) → fall back to bottom-center. */
+        @media (max-width: 700px) {
+            .kill-sound-btn { top: auto; bottom: 6%; left: 50%; transform: translateX(-50%); }
+            .kill-sound-btn.throb { animation: sound-throb-x 1.1s ease-in-out infinite; }
+        }
+        @keyframes sound-throb-x {
+            0%, 100% { transform: translateX(-50%) scale(1); box-shadow: 0 6px 24px rgba(224, 104, 0, 0.5); }
+            50% { transform: translateX(-50%) scale(1.09); box-shadow: 0 10px 38px rgba(224, 104, 0, 0.9); }
         }
         .kill-blast-flash {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -486,10 +535,41 @@
         .code-block .cmd { color: #5ce2e7; }
         .code-block .flag { color: #ffa07a; }
 
+        /* ── Agent Guard: two-column intro + terminal ──── */
+        .ag-top {
+            display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px;
+            align-items: center; margin-bottom: 48px;
+        }
+        .ag-intro .section-label,
+        .ag-intro .section-title { margin-bottom: 16px; }
+        .ag-intro .section-desc { margin-bottom: 0; max-width: none; }
+        .terminal {
+            background: #0b1020; border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px; overflow: hidden;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+        }
+        .terminal-bar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 11px 14px; background: rgba(255, 255, 255, 0.04);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        }
+        .tdot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .tdot.r { background: #ff5f57; } .tdot.y { background: #febc2e; } .tdot.g { background: #28c840; }
+        .terminal-title {
+            margin-left: 8px; font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: #6b7280;
+        }
+        .terminal-body {
+            margin: 0; padding: 20px 22px; font-family: 'JetBrains Mono', monospace;
+            font-size: 13.5px; line-height: 1.9; color: #c4c5ca; overflow-x: auto; white-space: pre;
+        }
+        .terminal-body .tc { color: #6b7280; }
+        @media (max-width: 860px) { .ag-top { grid-template-columns: 1fr; gap: 28px; margin-bottom: 32px; } }
+
         /* ── Horror Stories ───────────────────────────── */
         .stories {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 20px;
         }
         .story-card {
@@ -544,26 +624,49 @@
         }
         .story-card .source a:hover { color: #5ce2e7; border-bottom-color: #5ce2e7; }
         /* ── Bill Shock Wall (live social embeds) ─────── */
-        .embed-wall {
-            display: flex;
-            gap: 20px;
-            align-items: start;
+        .embed-wall-stage {
+            margin: 28px -24px 0;
+            padding: 0 24px;
+        }
+        .embed-wall-viewport {
+            /* Card height fixed in both states → no reflow.
+               Heights are literal so the value can never fall back as invalid:
+               collapsed = 1 row (420) + chrome (30) = 450px
+               expanded  = 3 rows (3*420) + 2 gaps (2*20) + chrome (30) = 1330px */
+            --card-h: 420px;
             overflow-x: auto;
             overflow-y: hidden;
-            margin: 28px -24px 0;          /* bleed to section edges for the scroll */
-            padding: 4px 24px 16px;
+            max-height: 450px;
+            padding: 4px 0 16px;
             scroll-snap-type: x proximity;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
             scrollbar-color: rgba(92,226,231,0.4) transparent;
+            transition: max-height 0.5s cubic-bezier(0.22, 1, 0.36, 1);
         }
-        .embed-wall::-webkit-scrollbar { height: 8px; }
-        .embed-wall::-webkit-scrollbar-thumb { background: rgba(92,226,231,0.35); border-radius: 999px; }
-        .embed-wall::-webkit-scrollbar-track { background: transparent; }
+        .embed-wall-viewport.embed-wall-viewport--grid {
+            max-height: 1330px;
+        }
+        .embed-wall-viewport::-webkit-scrollbar { height: 8px; }
+        .embed-wall-viewport::-webkit-scrollbar-thumb { background: rgba(92,226,231,0.35); border-radius: 999px; }
+        .embed-wall-viewport::-webkit-scrollbar-track { background: transparent; }
+        .embed-wall-track {
+            display: grid;
+            grid-auto-flow: column;
+            grid-template-rows: var(--card-h);
+            grid-auto-columns: 340px;
+            gap: 20px;
+            width: max-content;
+            align-items: start;
+        }
+        .embed-wall-viewport--grid .embed-wall-track {
+            grid-template-rows: repeat(3, var(--card-h));
+        }
         .embed-cell {
             position: relative;
-            flex: 0 0 340px;               /* one tweet per slide in the row */
-            max-height: 560px;
+            width: 340px;
+            max-width: 340px;
+            height: var(--card-h);
             overflow: hidden;
             border-radius: 14px;
             scroll-snap-align: start;
@@ -573,6 +676,24 @@
             position: absolute; left: 0; right: 0; bottom: 0; height: 96px;
             background: linear-gradient(to bottom, rgba(12,18,41,0) 0%, rgba(12,18,41,0.96) 78%);
             pointer-events: none; z-index: 1;
+        }
+        /* Cards assemble into place when the wall blooms open (scroll right).
+           Stagger by grid row (column-major fill: row1=3n+1, row2=3n+2, row3=3n)
+           so the rows cascade in top-to-bottom. Collapse animates away via the
+           container's max-height transition (see embed-wall.js keeps the 3-row
+           layout while the viewport shrinks, clipping the lower rows). */
+        @keyframes embedCellIn {
+            from { opacity: 0; transform: translateY(18px) scale(0.98); }
+            to   { opacity: 1; transform: none; }
+        }
+        .embed-wall-viewport--grid .embed-cell {
+            animation: embedCellIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .embed-wall-viewport--grid .embed-cell:nth-child(3n+2) { animation-delay: 0.09s; }
+        .embed-wall-viewport--grid .embed-cell:nth-child(3n)   { animation-delay: 0.18s; }
+        @media (prefers-reduced-motion: reduce) {
+            .embed-wall-viewport { transition: none; }
+            .embed-wall-viewport--grid .embed-cell { animation: none; }
         }
         .embed-cell .embed-more {
             position: absolute; bottom: 14px; left: 0; right: 0;
@@ -606,15 +727,71 @@
         }
         /* let the header sit over the visible video (shorter top fade) */
         .video-bg-section.show-video-top::before { height: 72px; }
-        .embed-wall .twitter-tweet,
-        .embed-wall .reddit-embed-bq {
+        .embed-wall-track .twitter-tweet,
+        .embed-wall-track .reddit-embed-bq {
             margin: 0 auto !important;
             width: 100% !important;
+        }
+        .embed-wall-hint {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #6b7280;
+            margin: 0 0 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 600;
+        }
+        .embed-wall-hint svg {
+            opacity: 0.7;
+            animation: embed-nudge 2s ease-in-out infinite;
+        }
+        @keyframes embed-nudge {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(6px); }
         }
         .embed-note {
             text-align: center; font-size: 12px; color: #6b7280;
             margin: 20px auto 0; max-width: 640px;
         }
+        /* ── Newsletter CTA ──────────────────────────── */
+        .newsletter-cta {
+            max-width: 560px; margin: 80px auto 0; text-align: center;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 16px; padding: 28px 24px;
+        }
+        .newsletter-title {
+            font-family: 'Outfit', sans-serif; font-weight: 700;
+            font-size: clamp(18px, 2.4vw, 22px); color: #f3f4f6;
+        }
+        .newsletter-sub {
+            font-size: 13px; color: #9ca3af; margin: 8px auto 18px; max-width: 440px;
+            line-height: 1.5;
+        }
+        .newsletter-form { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .newsletter-email {
+            flex: 1 1 260px; min-width: 0; max-width: 320px;
+            background: rgba(12,18,41,0.6); color: #f3f4f6;
+            border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+            padding: 12px 14px; font-size: 14px; outline: none;
+            transition: border-color 0.15s ease;
+        }
+        .newsletter-email::placeholder { color: #6b7280; }
+        .newsletter-email:focus { border-color: #5ce2e7; }
+        .newsletter-trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+        .newsletter-btn {
+            background: #5ce2e7; color: #0a0f24; font-weight: 700; font-size: 14px;
+            border: none; border-radius: 10px; padding: 12px 22px; cursor: pointer;
+            transition: filter 0.15s ease, opacity 0.15s ease; white-space: nowrap;
+        }
+        .newsletter-btn:hover { filter: brightness(1.08); }
+        .newsletter-btn:disabled { opacity: 0.6; cursor: default; }
+        .newsletter-status { font-size: 13px; margin: 14px 0 0; min-height: 18px; }
+        .newsletter-status.ok { color: #5ce2e7; }
+        .newsletter-status.err { color: #ff8a8a; }
 
         /* ── Pricing ─────────────────────────────────── */
         .pricing-grid {
@@ -676,23 +853,110 @@
         }
         .pricing-card .btn-plan.secondary:hover { background: rgba(255, 255, 255, 0.15); }
 
+        /* ── CTA + Footer shared video zone ──────────── */
+        .footer-zone {
+            position: relative;
+            overflow: hidden;
+        }
+        .footer-zone > .fz-video {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
+            object-fit: cover; opacity: 0.10;
+            z-index: 0; pointer-events: none;
+        }
+        .footer-zone > .fz-fade-top {
+            position: absolute; top: 0; left: 0; right: 0; height: 180px;
+            background: linear-gradient(to bottom, #0c1229, transparent);
+            z-index: 1; pointer-events: none;
+        }
+        .footer-zone > .fz-fade-bottom {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 120px;
+            background: linear-gradient(to top, #0c1229, transparent);
+            z-index: 1; pointer-events: none;
+        }
+
         /* ── CTA ─────────────────────────────────────── */
         .cta {
+            position: relative; z-index: 2;
             text-align: center;
-            padding: 80px 24px 120px;
+            padding: 80px 24px 100px;
         }
         .cta .section-title { max-width: none; }
 
         /* ── Footer ──────────────────────────────────── */
         footer {
-            text-align: center;
-            padding: 40px 24px;
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-            font-size: 13px; color: #6b7280;
+            position: relative; z-index: 2;
+            border-top: 1px solid rgba(255,255,255,0.07);
         }
-        footer a { color: #8b8fa3; }
-        footer .divider { margin: 0 12px; }
+        .footer-columns {
+            max-width: 1120px; margin: 0 auto;
+            padding: 56px 32px 40px;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+            gap: 40px 32px;
+        }
+        .footer-brand {}
+        .footer-brand .fb-logo {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+        }
+        .footer-brand .fb-logo img { width: 28px; height: 28px; }
+        .footer-brand .fb-logo span {
+            font-family: 'Outfit', sans-serif; font-size: 18px;
+            font-weight: 700; color: #fff; letter-spacing: -0.3px;
+        }
+        .footer-brand p {
+            font-size: 13px; line-height: 1.65; color: #8b8fa3; max-width: 240px;
+        }
+        .footer-brand .fb-social {
+            display: flex; gap: 14px; margin-top: 20px;
+        }
+        .footer-brand .fb-social a {
+            display: inline-flex; color: #6b7280; transition: color 0.15s;
+        }
+        .footer-brand .fb-social a:hover { color: #5ce2e7; }
+        .footer-brand .fb-social svg { width: 18px; height: 18px; fill: currentColor; }
 
+        .footer-col h4 {
+            font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+            text-transform: uppercase; color: #c4c5ca; margin: 0 0 14px;
+        }
+        .footer-col ul {
+            list-style: none; margin: 0; padding: 0;
+            display: flex; flex-direction: column; gap: 9px;
+        }
+        .footer-col ul li a {
+            font-size: 13px; color: #8b8fa3; transition: color 0.15s;
+        }
+        .footer-col ul li a:hover { color: #fff; }
+
+        .footer-bottom {
+            max-width: 1120px; margin: 0 auto;
+            padding: 20px 32px 36px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 12px;
+            font-size: 12px; color: #6b7280;
+        }
+        .footer-bottom a { color: #6b7280; }
+        .footer-bottom a:hover { color: #fff; }
+        .footer-bottom .divider { margin: 0 10px; opacity: 0.4; }
+        .footer-bottom .fb-credit { display: flex; align-items: center; gap: 5px; }
+        .footer-bottom .fb-credit img { width: 16px; height: 16px; }
+        footer .divinci-bot { width: 18px; height: 18px; vertical-align: -4px; margin-right: 5px; display: inline-block; }
+
+        @media (max-width: 960px) {
+            .footer-columns { grid-template-columns: 1fr 1fr 1fr; }
+            .footer-brand { grid-column: 1 / -1; }
+            .footer-brand p { max-width: 420px; }
+        }
+        @media (max-width: 600px) {
+            .footer-columns { grid-template-columns: 1fr 1fr; gap: 28px 20px; padding: 40px 20px 28px; }
+            .footer-bottom { flex-direction: column; align-items: flex-start; padding: 16px 20px 32px; }
+        }
+
+        @media (max-width: 1024px) {
+            .stories { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
         @media (max-width: 768px) {
             .navbar { padding: 0 16px; }
             .nav-links { gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
@@ -717,10 +981,11 @@
     </style>
 </head>
 <body>
+    <div class="site-header">
     <div class="beta-banner">&#128679; Beta Preview &mdash; We're onboarding early users. <a href="https://app.kill-switch.net?screen_hint=signup">Sign up</a> to lock in founding member pricing.</div>
     <nav class="navbar">
         <div class="nav-brand">
-            <span class="icon">&#9889;</span>
+            <img class="brand-logo" src="/assets/logo-mark.svg" alt="Kill Switch" width="28" height="28">
             <span>Kill Switch</span>
             <span class="beta-badge">Beta</span>
         </div>
@@ -728,24 +993,26 @@
             <a href="#how-it-works">How It Works</a>
             <a href="#features">Features</a>
             <a href="#pricing">Pricing</a>
+            <a href="/blog/">Blog</a>
             <a href="/docs">API Docs</a>
             <a href="https://github.com/Divinci-AI/kill-switch" class="btn-github">
                 <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
                 GitHub
             </a>
-            <a href="https://app.kill-switch.net" style="background: linear-gradient(135deg, #c25800, #e06800); color: #fff !important; padding: 7px 18px; border-radius: 6px; font-weight: 600; font-size: 13px;">Sign In</a>
+            <a href="https://app.kill-switch.net" style="background: linear-gradient(135deg, #c25800, #e06800); color: #fff !important; height: 32px; box-sizing: border-box; padding: 0 18px; display: inline-flex; align-items: center; border-radius: 6px; font-weight: 600; font-size: 13px;">Sign In</a>
         </div>
     </nav>
+    </div>
 
     <div class="hero" style="position: relative;">
-        <video autoplay muted loop playsinline class="hero-video" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0.25;z-index:0;">
-            <source src="assets/hero-video.webm" type="video/webm">
-            <source src="assets/hero-video.mp4" type="video/mp4">
+        <video autoplay muted loop playsinline poster="assets/hero-control-room.webp" class="hero-video" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0.25;z-index:0;">
+            <source src="assets/hero-control-room.webm" type="video/webm">
+            <source src="assets/hero-control-room.mp4" type="video/mp4">
         </video>
         <div class="hero-badge">&#9888;&#65039; Born from a $91K bill</div>
         <div style="margin-bottom: 24px; position: relative; z-index: 1;">
             <div id="kill-btn" style="position: relative; width: 160px; height: 160px; margin: 0 auto; cursor: pointer;" onclick="triggerKillSwitch(this);">
-                <img src="assets/kill-switch-btn.svg" alt="Kill Switch" style="width: 160px; height: 160px; position: absolute; top: 0; left: 0; z-index: 2; mix-blend-mode: screen; pointer-events: none;">
+                <img src="assets/logo-mark.svg" alt="Kill Switch" style="width: 160px; height: 160px; position: absolute; top: 0; left: 0; z-index: 2; pointer-events: none;">
                 <video muted playsinline style="width: 160px; height: 160px; border-radius: 50%; object-fit: cover; opacity: 0.6;">
                     <source src="assets/button-video.webm" type="video/webm">
                     <source src="assets/button-video.mp4" type="video/mp4">
@@ -984,14 +1251,27 @@
     </div>
 
     <section id="agent-guard">
-        <div class="section-label">New</div>
-        <div class="section-title">Spend caps your coding agent <span class="gradient-text-warn">can't override</span></div>
-        <div class="section-desc">
-            A coding agent re-sends its entire context on every tool call, so token spend compounds
-            silently &#8212; the loop behind the $4,200 weekend, the $87K month, and the reported
-            $500M month after a team &#8220;failed to put usage limits on Claude licenses.&#8221;
-            Kill Switch caps that loop with <strong>per-session and daily-rolling limits</strong> &#8212;
-            a soft warning, then a hard stop. It protects <strong>any</strong> coding agent, by design:
+        <div class="ag-top">
+            <div class="ag-intro">
+                <div class="section-label">New</div>
+                <div class="section-title">Spend caps your coding agent <span class="gradient-text-warn">can't override</span></div>
+                <div class="section-desc">
+                    A coding agent re-sends its entire context on every tool call, so token spend compounds
+                    silently &#8212; the loop behind the $4,200 weekend, the $87K month, and the reported
+                    $500M month after a team &#8220;failed to put usage limits on Claude licenses.&#8221;
+                    Kill Switch caps that loop with <strong>per-session and daily-rolling limits</strong> &#8212;
+                    a soft warning, then a hard stop. It protects <strong>any</strong> coding agent, by design:
+                </div>
+            </div>
+            <div class="terminal" role="img" aria-label="Terminal: install and configure the Kill Switch agent guard">
+                <div class="terminal-bar">
+                    <span class="tdot r"></span><span class="tdot y"></span><span class="tdot g"></span>
+                    <span class="terminal-title">bash &#8212; agent-guard</span>
+                </div>
+                <pre class="terminal-body">npm i -g @kill-switch/cli
+ks guard install      <span class="tc"># protect Claude Code</span>
+ks guard config --session-hard 30 --daily-hard 150</pre>
+            </div>
         </div>
         <div class="features-grid">
             <div class="feature-card">
@@ -1010,18 +1290,13 @@
                 <p>The escape hatch lives outside the agent loop: <code>ks guard pause</code>, or a single file the agent can&#8217;t reach. The agent can hit the wall &#8212; it can&#8217;t move it.</p>
             </div>
         </div>
-        <div class="code-block" style="max-width: 640px; margin: 28px auto 0;">
-            <pre><code>npm i -g @kill-switch/cli
-ks guard install                       # protect Claude Code
-ks guard config --session-hard 30 --daily-hard 150</code></pre>
-        </div>
     </section>
 
     <section>
         <div class="section-label">Quick Start</div>
         <div class="section-title">Two ways to get started</div>
         <div class="section-desc">Use our managed platform or self-host the open-source version.</div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; align-items: start;">
             <div style="background: rgba(194, 88, 0, 0.06); border: 1px solid rgba(194, 88, 0, 0.2); border-radius: 12px; padding: 28px;">
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 8px;">Managed Platform</h3>
                 <p style="font-size: 14px; color: #8b8fa3; margin-bottom: 16px;">Sign up, connect your cloud credentials, set your thresholds. Done.</p>
@@ -1055,7 +1330,7 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
             <source src="assets/money-video.webm" type="video/webm">
             <source src="assets/money-video.mp4" type="video/mp4">
         </video>
-        <section>
+        <section style="padding-top: 150px;">
             <div class="section-label">Why This Exists</div>
             <div class="section-title">Cloud providers have no spending caps</div>
             <div class="section-desc">Real incidents from the community. This is not theoretical.</div>
@@ -1093,9 +1368,6 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
                     <div class="cause">Two AI agents locked in a recursive loop, exchanging clarification requests thousands of times around the clock.</div>
                     <div class="source"><a href="https://dev.to/utibe_okodi_339fb47a13ef5/the-ai-agent-that-cost-47000-while-everyone-thought-it-was-working-1lg6" target="_blank" rel="noopener">DEV Community →</a></div>
                 </div>
-            </div>
-            <p class="scroll-hint">More incidents — scroll →</p>
-            <div class="stories-scroll">
                 <div class="story-card">
                     <div class="amount">$30,000</div>
                     <div class="cause">AWS Bedrock + Claude Opus billed $30K despite a cost-cap setting the customer believed was enabled.</div>
@@ -1107,66 +1379,43 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
                     <div class="source"><a href="https://www.makeuseof.com/someone-left-claude-code-running-overnight-and-it-cost-6000/" target="_blank" rel="noopener">MakeUseOf →</a></div>
                 </div>
             </div>
+            <div style="text-align: center; margin-top: 36px;">
+                <a href="/blog/" class="btn-secondary">Read the full stories on our blog →</a>
+            </div>
 
             <!-- ── Bill Shock Wall: live posts from the community ── -->
             <div class="section-label" style="margin-top: 72px;">Straight From the Source</div>
             <div class="section-title" style="font-size: clamp(22px, 3vw, 30px);">People are posting these in real time</div>
-            <div class="section-desc">From founders, indie devs, and us — the bill-shock conversation in real time. Scroll →</div>
-            <div class="embed-wall">
-                <!-- Kill Switch — pinned -->
-                <div class="embed-cell">
-                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/KillSwitchCloud/status/2060243063768068188"></a></blockquote>
-                    <div class="embed-more"><a href="https://x.com/KillSwitchCloud/status/2060243063768068188" target="_blank" rel="noopener">View on X →</a></div>
-                </div>
-                <!-- @mikeumus -->
-                <div class="embed-cell">
-                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/mikeumus/status/2054083570189341095"></a></blockquote>
-                    <div class="embed-more"><a href="https://x.com/mikeumus/status/2054083570189341095" target="_blank" rel="noopener">View on X →</a></div>
-                </div>
-                <!-- Cara / Vercel — Jingna Zhang -->
-                <div class="embed-cell">
-                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/zemotion/status/1798558292681343039"></a></blockquote>
-                    <div class="embed-more"><a href="https://x.com/zemotion/status/1798558292681343039" target="_blank" rel="noopener">View on X →</a></div>
-                </div>
-                <!-- Replit deleted prod DB — Jason Lemkin -->
-                <div class="embed-cell">
-                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/jasonlk/status/1946069562723897802"></a></blockquote>
-                    <div class="embed-more"><a href="https://x.com/jasonlk/status/1946069562723897802" target="_blank" rel="noopener">View on X →</a></div>
-                </div>
-                <!-- Firebase ~$70k overnight — @tamarajtran -->
-                <div class="embed-cell">
-                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/tamarajtran/status/1880036092906467841"></a></blockquote>
-                    <div class="embed-more"><a href="https://x.com/tamarajtran/status/1880036092906467841" target="_blank" rel="noopener">View on X →</a></div>
-                </div>
-                <!-- AWS billing horror / needs hard caps — @GergelyOrosz -->
-                <div class="embed-cell">
-                    <blockquote class="twitter-tweet" data-theme="dark" data-dnt="true"><a href="https://twitter.com/GergelyOrosz/status/1542449611440328704"></a></blockquote>
-                    <div class="embed-more"><a href="https://x.com/GergelyOrosz/status/1542449611440328704" target="_blank" rel="noopener">View on X →</a></div>
+            <div class="section-desc">From founders and indie devs — the bill-shock conversation, in real time.</div>
+            <p class="embed-wall-hint">
+                Scroll right to expand the wall
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </p>
+            <div class="embed-wall-stage">
+                <div class="embed-wall-viewport" id="embed-wall-viewport">
+                    <div class="embed-wall-track" id="embed-wall-track" aria-live="polite">
+                        <!-- Tweets loaded from /assets/embed-wall-tweets.json -->
+                    </div>
                 </div>
             </div>
-            <p class="embed-note">Embedded directly from the original posts — nothing here is altered or out of context. Got a bill-shock story? <a href="https://x.com/intent/post?text=Hey%20%40KillSwitchCloud%2C%20here%27s%20my%20runaway%20cloud%2FAI%20bill%20story%3A%20" target="_blank" rel="noopener" style="color:#5ce2e7;">Tell @KillSwitchCloud</a>.</p>
+            <p class="embed-note">Embedded directly from the original posts — nothing here is altered or out of context.<br>Got a bill-shock story? <a href="https://x.com/intent/post?text=Hey%20%40KillSwitchCloud%2C%20here%27s%20my%20runaway%20cloud%2FAI%20bill%20story%3A%20" target="_blank" rel="noopener" style="color:#5ce2e7;">Tell @KillSwitchCloud</a>.</p>
+
+            <!-- ── Newsletter: subscribe to the horror stories ── -->
+            <div class="newsletter-cta">
+                <div class="newsletter-title">Cloud Kill-Switch Horror Stories Newsletter &#128520; &#128140;</div>
+                <div class="newsletter-sub">New bill-shock cautionary tales, the lessons behind them, and Kill Switch updates. No spam — unsubscribe anytime.</div>
+                <form class="newsletter-form" id="newsletter-form" novalidate>
+                    <input class="newsletter-email" id="newsletter-email" type="email" name="email" inputmode="email" autocomplete="email" placeholder="you@company.com" aria-label="Email address" required>
+                    <!-- honeypot: hidden from humans, bots tend to fill it -->
+                    <input class="newsletter-trap" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
+                    <button class="newsletter-btn" type="submit">Subscribe</button>
+                </form>
+                <p class="newsletter-status" id="newsletter-status" role="status" aria-live="polite"></p>
+            </div>
+
             <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
-            <script>
-            /* Clip every embed to the first tweet's rendered height so the row is uniform.
-               Embed iframes load + resize async, so we re-measure on a short interval. */
-            (function () {
-                function equalize() {
-                    var cells = document.querySelectorAll('.embed-wall .embed-cell');
-                    if (!cells.length) return;
-                    var ref = cells[0];
-                    ref.style.height = 'auto';
-                    var h = ref.offsetHeight;
-                    if (h < 120) return; /* first embed not rendered yet */
-                    for (var i = 0; i < cells.length; i++) cells[i].style.height = h + 'px';
-                }
-                var ticks = 0;
-                var iv = setInterval(function () {
-                    equalize();
-                    if (++ticks > 24) clearInterval(iv); /* settle within ~12s */
-                }, 500);
-                window.addEventListener('resize', equalize);
-            }());
-            </script>
+            <script src="/assets/embed-wall.js" defer></script>
+            <script src="/assets/newsletter.js" defer></script>
         </section>
     </div>
 
@@ -1233,30 +1482,115 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
         </div>
     </section>
 
-    <div class="cta">
-        <div class="section-label">Open Source &amp; SaaS</div>
-        <div class="section-title">Stop your next surprise bill</div>
-        <p class="section-desc" style="margin: 0 auto 32px; text-align: center;">
-            Self-host the open source core or use our managed platform.<br>
-            Either way, you're protected in under 5 minutes.
-        </p>
-        <div class="hero-actions">
-            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started</a>
-            <a href="https://github.com/Divinci-AI/kill-switch" class="btn-secondary">View on GitHub</a>
-        </div>
-    </div>
+    <!-- Video-backed CTA + Footer zone — uses original hero-video -->
+    <div class="footer-zone">
+        <video autoplay muted loop playsinline class="fz-video">
+            <source src="assets/hero-video.webm" type="video/webm">
+            <source src="assets/hero-video.mp4" type="video/mp4">
+        </video>
+        <div class="fz-fade-top"></div>
+        <div class="fz-fade-bottom"></div>
 
-    <footer>
-        <p>
-            Built by <a href="https://divinci.ai">Divinci AI</a>
-            <span class="divider">|</span>
-            <a href="https://app.kill-switch.net">Dashboard</a>
-            <span class="divider">|</span>
-            <a href="https://github.com/Divinci-AI/kill-switch">GitHub</a>
-            <span class="divider">|</span>
-            <a href="https://github.com/Divinci-AI/kill-switch/blob/main/LICENSE">MIT License</a>
-        </p>
-    </footer>
+        <div class="cta">
+            <div class="section-label">Open Source &amp; SaaS</div>
+            <div class="section-title">Stop your next surprise bill</div>
+            <p class="section-desc" style="margin: 0 auto 32px; text-align: center;">
+                Self-host the open source core or use our managed platform.<br>
+                Either way, you're protected in under 5 minutes.
+            </p>
+            <div class="hero-actions">
+                <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-primary">Get Started Free</a>
+                <a href="https://github.com/Divinci-AI/kill-switch" class="btn-secondary">View on GitHub</a>
+            </div>
+        </div>
+
+        <footer>
+            <div class="footer-columns">
+                <!-- Brand + tagline -->
+                <div class="footer-brand">
+                    <a href="/" class="fb-logo" aria-label="Kill Switch home">
+                        <img src="/assets/logo-mark.svg" alt="Kill Switch logo" width="28" height="28">
+                        <span>Kill Switch</span>
+                    </a>
+                    <p>Automated cloud cost enforcement for developers and teams. Monitor spending across Cloudflare, GCP, AWS, RunPod, and 15+ providers — and auto-kill runaway services before they drain your account.</p>
+                    <div class="fb-social">
+                        <a href="https://x.com/KillSwitchCloud" target="_blank" rel="noopener" aria-label="X (Twitter)">
+                            <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                        </a>
+                        <a href="https://www.youtube.com/@CloudKillSwitch/shorts" target="_blank" rel="noopener" aria-label="YouTube">
+                            <svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                        </a>
+                        <a href="https://www.linkedin.com/company/cloud-kill-switch/" target="_blank" rel="noopener" aria-label="LinkedIn">
+                            <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+                        </a>
+                        <a href="https://github.com/Divinci-AI/kill-switch" target="_blank" rel="noopener" aria-label="GitHub">
+                            <svg viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.898-.015 3.293 0 .322.218.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Product column -->
+                <nav class="footer-col" aria-label="Product">
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="https://app.kill-switch.net?screen_hint=signup">Get Started</a></li>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#pricing">Pricing</a></li>
+                        <li><a href="/docs/cli.html#guard">Agent Guard</a></li>
+                        <li><a href="/blog/">Changelog</a></li>
+                    </ul>
+                </nav>
+
+                <!-- Documentation column -->
+                <nav class="footer-col" aria-label="Documentation">
+                    <h4>Documentation</h4>
+                    <ul>
+                        <li><a href="/docs/">Getting Started</a></li>
+                        <li><a href="/docs/cli.html">CLI Reference</a></li>
+                        <li><a href="/docs/integration.html">Integration Guide</a></li>
+                        <li><a href="/docs/github-remediation.html">GitHub Remediation</a></li>
+                        <li><a href="/docs/">API Reference</a></li>
+                    </ul>
+                </nav>
+
+                <!-- Open Source column -->
+                <nav class="footer-col" aria-label="Open Source">
+                    <h4>Open Source</h4>
+                    <ul>
+                        <li><a href="https://github.com/Divinci-AI/kill-switch" target="_blank" rel="noopener">GitHub</a></li>
+                        <li><a href="https://github.com/Divinci-AI/kill-switch/issues" target="_blank" rel="noopener">Issues</a></li>
+                        <li><a href="https://www.npmjs.com/package/kill-switch" target="_blank" rel="noopener">npm: kill-switch</a></li>
+                        <li><a href="https://www.npmjs.com/package/agent-guard" target="_blank" rel="noopener">npm: agent-guard</a></li>
+                        <li><a href="https://www.npmjs.com/package/@kill-switch/sdk" target="_blank" rel="noopener">npm: SDK</a></li>
+                    </ul>
+                </nav>
+
+                <!-- Company column -->
+                <nav class="footer-col" aria-label="Company">
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="/blog/">Blog</a></li>
+                        <li><a href="https://divinci.ai" target="_blank" rel="noopener">Divinci AI</a></li>
+                        <li><a href="mailto:hello@kill-switch.net">Contact</a></li>
+                        <li><a href="/privacy.html">Privacy Policy</a></li>
+                        <li><a href="/terms.html">Terms of Service</a></li>
+                    </ul>
+                </nav>
+            </div>
+
+            <div class="footer-bottom">
+                <span>&copy; 2025&ndash;2026 Kill Switch. All rights reserved.</span>
+                <span class="fb-credit">
+                    Built by <a href="https://divinci.ai" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-left:4px;"><img src="/assets/divinci-robot.svg" alt="Divinci AI" width="16" height="16"> Divinci AI</a>
+                    <span class="divider">|</span>
+                    <a href="/privacy.html">Privacy</a>
+                    <span class="divider">|</span>
+                    <a href="/terms.html">Terms</a>
+                </span>
+            </div>
+        </footer>
+    </div>
     <script>
     function triggerKillSwitch(btn) {
         // Play the button video
@@ -1298,10 +1632,10 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
         blastVid.playsInline = true;
         blastVid.autoplay = true;
         var srcWebm = document.createElement('source');
-        srcWebm.src = 'https://chat.assets.divinci.app/kill-switch/kill-blast-video.webm';
+        srcWebm.src = 'assets/kill-blast-video.webm';
         srcWebm.type = 'video/webm';
         var srcMp4 = document.createElement('source');
-        srcMp4.src = 'https://chat.assets.divinci.app/kill-switch/kill-blast-video.mp4';
+        srcMp4.src = 'assets/kill-blast-video.mp4';
         srcMp4.type = 'video/mp4';
         blastVid.appendChild(srcWebm);
         blastVid.appendChild(srcMp4);
@@ -1309,18 +1643,51 @@ ks guard config --session-hard 30 --daily-hard 150</code></pre>
         document.body.appendChild(videoWrap);
         blastVid.play();
 
-        // "KILLED" text stamp
+        // "PWNED!!!" text stamp
         var text = document.createElement('div');
         text.className = 'kill-blast-text';
-        text.textContent = 'KILLED';
+        text.textContent = 'PWNED!!!';
         document.body.appendChild(text);
 
-        // Clean up after video plays
-        setTimeout(function() {
+        // Throbbing "Sound on" button — toggles the short's audio (needs a user gesture)
+        var soundBtn = document.createElement('button');
+        soundBtn.type = 'button';
+        soundBtn.className = 'kill-sound-btn throb';
+        soundBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg><span>Sound on</span>';
+        soundBtn.addEventListener('click', function() {
+            if (blastVid.muted) {
+                blastVid.muted = false;
+                blastVid.play();
+                soundBtn.classList.remove('throb');
+                soundBtn.querySelector('span').textContent = 'Mute';
+            } else {
+                blastVid.muted = true;
+                soundBtn.querySelector('span').textContent = 'Sound on';
+            }
+        });
+        videoWrap.appendChild(soundBtn);
+
+        // Close button (✕) + Escape key — dismiss the video early and return to the page
+        function closeBlast() {
+            clearTimeout(cleanupTimer);
+            document.removeEventListener('keydown', onKey);
             flash.remove();
             videoWrap.remove();
             text.remove();
-        }, 9000);
+        }
+        function onKey(e) { if (e.key === 'Escape') closeBlast(); }
+        document.addEventListener('keydown', onKey);
+
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'kill-blast-close';
+        closeBtn.setAttribute('aria-label', 'Close video');
+        closeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        closeBtn.addEventListener('click', closeBlast);
+        videoWrap.appendChild(closeBtn);
+
+        // Auto clean up after the video plays (extended so the end of the short is visible)
+        var cleanupTimer = setTimeout(closeBlast, 11200);
     }
     </script>
     <script>

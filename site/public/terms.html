@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>Terms of Service | Kill Switch</title>
+    <meta name="description" content="Terms of Service for Kill Switch — rules and conditions for using the cloud cost monitoring and kill-switch platform.">
+    <link rel="canonical" href="https://kill-switch.net/terms.html">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/legal.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: rgb(12, 18, 41); color: #c4c5ca; -webkit-font-smoothing: antialiased; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: #fff; }
+        .navbar {
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 2em; height: var(--nav-h);
+            background: rgba(51, 51, 51, 0.55); backdrop-filter: blur(12px);
+            border-top: none;
+        }
+        .nav-brand { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; text-decoration: none; }
+        .nav-brand .icon { font-size: 24px; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: #fff; font-weight: 500; font-size: 14px; text-decoration: none; }
+        @media (max-width: 760px) { .nav-links a:not(.btn-github) { display: none; } }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><img class="brand-logo" src="/assets/logo-mark.svg" alt="Kill Switch" width="26" height="26" style="display:block;vertical-align:middle"><span>Kill Switch</span></a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://app.kill-switch.net">Dashboard</a>
+        </div>
+    </nav>
+
+    <main class="legal-wrap">
+        <h1>Terms of Service</h1>
+        <p class="legal-meta">Effective date: June 3, 2026</p>
+
+        <p>These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of Kill Switch, operated by <strong>Divinci AI</strong> (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;), including our website at <a href="https://kill-switch.net">kill-switch.net</a>, dashboard at <a href="https://app.kill-switch.net">app.kill-switch.net</a>, hosted API, CLI, Agent Guard tools, documentation, and related services (collectively, the &ldquo;Service&rdquo;). By creating an account or using the Service, you agree to these Terms.</p>
+
+        <h2>1. The Service</h2>
+        <p>Kill Switch helps you monitor cloud and API spending, detect anomalies, send alerts, and optionally execute protective actions (&ldquo;kill switches&rdquo;) on connected infrastructure when configured thresholds are exceeded. The Service includes managed monitoring, a web dashboard, programmatic API access, CLI tooling, optional Agent Guard features for coding-agent spend caps, and open-source components you may self-host separately.</p>
+        <p>The Service is currently offered as a <strong>beta preview</strong>. Features, pricing, limits, and availability may change. We may add, modify, or discontinue features with reasonable notice where practicable.</p>
+
+        <h2>2. Eligibility and Accounts</h2>
+        <p>You must be at least 18 years old and able to form a binding contract to use the Service. You are responsible for maintaining the confidentiality of your account credentials and for all activity under your account. You must provide accurate account information and promptly update it if it changes.</p>
+        <p>If you use the Service on behalf of an organization, you represent that you have authority to bind that organization to these Terms.</p>
+
+        <h2>3. Cloud Credentials and Customer Responsibility</h2>
+        <p>To use monitoring and kill-switch features, you may provide credentials for third-party cloud providers, databases, observability platforms, or API vendors. You represent that you have the right to provide those credentials and authorize Kill Switch to access the connected accounts for monitoring and configured actions.</p>
+        <p><strong>You are solely responsible for:</strong></p>
+        <ul>
+            <li>Configuring thresholds, shields, rules, protected services, and alert channels correctly</li>
+            <li>Understanding the impact of kill-switch actions, which may include stopping instances, scaling services to zero, disconnecting routes, deleting workers, rotating credentials, pausing resources, or other destructive or service-impacting operations depending on provider and configuration</li>
+            <li>Testing configurations in non-production environments where appropriate</li>
+            <li>Maintaining backups, disaster recovery plans, and operational safeguards independent of Kill Switch</li>
+        </ul>
+        <p>Kill Switch is a safety tool, not a guarantee against all bill shock, outages, security incidents, or provider billing errors.</p>
+
+        <h2>4. Acceptable Use</h2>
+        <p>You agree not to:</p>
+        <ul>
+            <li>Use the Service in violation of applicable law or third-party terms</li>
+            <li>Access or attempt to access another user&rsquo;s account or data without authorization</li>
+            <li>Interfere with or disrupt the Service, including by probing, scanning, or overloading systems</li>
+            <li>Reverse engineer, copy, or resell the hosted Service except as permitted by applicable open-source licenses for separate self-hosted components</li>
+            <li>Use the Service to monitor infrastructure you do not own or have permission to manage</li>
+            <li>Submit malicious code or attempt to bypass security controls</li>
+        </ul>
+        <p>We may suspend or terminate access if we reasonably believe you have violated these Terms or pose a risk to the Service or other users.</p>
+
+        <h2>5. Plans, Billing, and Subscriptions</h2>
+        <p>Kill Switch offers free and paid plans. Current plan features and limits are described on our website and in the dashboard. Paid subscriptions are billed through Stripe on a recurring basis unless canceled.</p>
+        <ul>
+            <li><strong>Free plan:</strong> Limited cloud accounts, check intervals, and alert channels as described in-product.</li>
+            <li><strong>Pro and Team plans:</strong> Billed monthly or annually at the prices shown at checkout unless otherwise agreed in writing.</li>
+            <li><strong>Enterprise:</strong> Available by separate agreement.</li>
+        </ul>
+        <p>Except where required by law, fees are non-refundable. You may cancel a paid subscription through the billing portal; cancellation takes effect at the end of the current billing period unless otherwise stated. If payment fails, we may downgrade your account or suspend paid features after a reasonable grace period.</p>
+        <p>We may change pricing for future billing periods with advance notice. Continued use after a price change constitutes acceptance of the new pricing for subsequent periods.</p>
+
+        <h2>6. Open Source and Self-Hosted Components</h2>
+        <p>Certain Kill Switch components are available under open-source licenses, including the MIT License. Self-hosting is separate from the managed Service. Open-source software is provided &ldquo;as is&rdquo; under its applicable license, and these Terms govern the hosted Service unless expressly stated otherwise.</p>
+
+        <h2>7. API Keys and Programmatic Access</h2>
+        <p>You may create API keys for programmatic access. You are responsible for securing API keys and for all API activity performed with your keys. API access may be subject to plan limits and rate limits.</p>
+
+        <h2>8. Agent Guard</h2>
+        <p>Agent Guard runs locally on your machine or environment and may intercept or meter requests to LLM providers according to your configuration. Local Agent Guard behavior, including fail-open behavior on errors, is provided as a convenience tool. You remain responsible for LLM usage, budgets, and any actions taken by coding agents in your environment.</p>
+
+        <h2>9. Intellectual Property</h2>
+        <p>We and our licensors own the Service, including software, branding, documentation, and website content, except for open-source components and content you provide. You retain ownership of your data and configurations. You grant us a limited license to use your data solely to provide and improve the Service, enforce these Terms, and comply with law.</p>
+
+        <h2>10. Feedback</h2>
+        <p>If you submit feedback, suggestions, or ideas, you grant us a perpetual, irrevocable, royalty-free license to use them without restriction or compensation.</p>
+
+        <h2>11. Third-Party Services</h2>
+        <p>The Service integrates with third-party providers such as cloud platforms, Clerk, Stripe, and alert destinations. Your use of those services is subject to their terms and policies. We are not responsible for third-party services or changes they make.</p>
+
+        <h2>12. Disclaimers</h2>
+        <p>THE SERVICE IS PROVIDED &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE.&rdquo; TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE DISCLAIM ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, COMPLETE, OR THAT MONITORING OR KILL-SWITCH ACTIONS WILL PREVENT ALL FINANCIAL LOSS, OUTAGES, OR DATA LOSS.</p>
+
+        <h2>13. Limitation of Liability</h2>
+        <p>TO THE MAXIMUM EXTENT PERMITTED BY LAW, NEITHER DIVINCI AI NOR ITS AFFILIATES, OFFICERS, EMPLOYEES, AGENTS, OR LICENSORS WILL BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, REVENUE, DATA, GOODWILL, OR BUSINESS INTERRUPTION, ARISING OUT OF OR RELATED TO THE SERVICE OR THESE TERMS, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
+        <p>OUR TOTAL LIABILITY FOR ALL CLAIMS ARISING OUT OF OR RELATED TO THE SERVICE OR THESE TERMS WILL NOT EXCEED THE GREATER OF (A) THE AMOUNTS YOU PAID US FOR THE SERVICE IN THE TWELVE (12) MONTHS BEFORE THE EVENT GIVING RISE TO THE CLAIM, OR (B) ONE HUNDRED U.S. DOLLARS (US $100).</p>
+        <p>Some jurisdictions do not allow certain limitations, so some of the above may not apply to you.</p>
+
+        <h2>14. Indemnification</h2>
+        <p>You will defend, indemnify, and hold harmless Divinci AI and its affiliates, officers, directors, employees, and agents from and against any claims, damages, losses, liabilities, costs, and expenses (including reasonable attorneys&rsquo; fees) arising out of or related to your use of the Service, your connected infrastructure, your configurations, your violation of these Terms, or your violation of any law or third-party rights.</p>
+
+        <h2>15. Suspension and Termination</h2>
+        <p>You may stop using the Service at any time and may delete your account from the dashboard. We may suspend or terminate your access if you breach these Terms, if required by law, or if continued provision poses security, legal, or operational risk. Upon termination, your right to use the hosted Service ends. Sections that by their nature should survive termination will survive, including payment obligations, disclaimers, limitations of liability, and indemnification.</p>
+
+        <h2>16. Changes to These Terms</h2>
+        <p>We may modify these Terms from time to time. We will post the updated Terms on this page and update the effective date. Material changes may also be communicated through the Service or by email. Continued use after changes become effective constitutes acceptance of the revised Terms.</p>
+
+        <h2>17. Governing Law</h2>
+        <p>These Terms are governed by the laws of the State of Delaware, United States, without regard to conflict-of-law principles, except where mandatory consumer protection laws in your jurisdiction provide otherwise.</p>
+
+        <h2>18. Dispute Resolution</h2>
+        <p>Before filing a claim, you agree to contact us at <a href="mailto:admin@kill-switch.net">admin@kill-switch.net</a> and attempt to resolve the dispute informally. If we cannot resolve a dispute within thirty (30) days, either party may bring a claim in the state or federal courts located in Delaware, and each party consents to personal jurisdiction there, except where prohibited by applicable law.</p>
+
+        <h2>19. General</h2>
+        <p>These Terms, together with our <a href="/privacy.html">Privacy Policy</a> and any order or enterprise agreement that expressly references them, constitute the entire agreement between you and Divinci AI regarding the Service. If any provision is held invalid, the remaining provisions remain in effect. Our failure to enforce a provision is not a waiver. You may not assign these Terms without our consent; we may assign them in connection with a merger, acquisition, or sale of assets.</p>
+
+        <h2>20. Contact</h2>
+        <p>Questions about these Terms can be sent to <a href="mailto:admin@kill-switch.net">admin@kill-switch.net</a>.</p>
+        <p>Divinci AI<br>Kill Switch<br><a href="https://kill-switch.net">kill-switch.net</a></p>
+    </main>
+
+    <footer class="site-footer">
+        <div class="social">
+            <a href="https://x.com/KillSwitchCloud" target="_blank" rel="noopener" aria-label="X (Twitter)">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </a>
+            <a href="https://www.youtube.com/@CloudKillSwitch/shorts" target="_blank" rel="noopener" aria-label="YouTube">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </a>
+            <a href="https://www.linkedin.com/company/cloud-kill-switch/" target="_blank" rel="noopener" aria-label="LinkedIn">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+            </a>
+            <a href="https://github.com/Divinci-AI/kill-switch" target="_blank" rel="noopener" aria-label="GitHub">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.898-.015 3.293 0 .322.218.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+            </a>
+        </div>
+        <p>
+            &copy; 2026 <a href="https://divinci.ai/"><img class="divinci-bot" src="/assets/divinci-robot.svg" alt="" width="16" height="16">Divinci AI</a>
+            <span class="divider">|</span>
+            <a href="/privacy.html">Privacy Policy</a>
+            <span class="divider">|</span>
+            <a href="/terms.html">Terms of Service</a>
+        </p>
+    </footer>
+</body>
+</html>

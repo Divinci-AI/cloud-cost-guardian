@@ -1,30 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
-      <stop offset="0%" stop-color="#cc2222"/>
-      <stop offset="100%" stop-color="#661111"/>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#1b2a55"/>
+      <stop offset="60%" stop-color="#0c1229"/>
+      <stop offset="100%" stop-color="#080d20"/>
     </radialGradient>
-    <radialGradient id="glow" cx="50%" cy="40%" r="50%">
-      <stop offset="0%" stop-color="#ff4444" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#661111" stop-opacity="0"/>
-    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff8a6b"/>
+      <stop offset="55%" stop-color="#ff6b6b"/>
+      <stop offset="100%" stop-color="#e0453f"/>
+    </linearGradient>
+    <linearGradient id="glyph" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#5ce2e7"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
   </defs>
 
-  <!-- Outer ring -->
-  <circle cx="256" cy="256" r="248" fill="#0d0d1a" stroke="#333" stroke-width="8"/>
+  <!-- background -->
+  <rect width="400" height="400" rx="0" fill="url(#bg)"/>
+  <circle cx="200" cy="186" r="150" fill="#ff6b6b" opacity="0.06" filter="url(#soft)"/>
 
-  <!-- Red button face -->
-  <circle cx="256" cy="256" r="200" fill="url(#bg)" stroke="#4a0e0e" stroke-width="6"/>
+  <!-- emergency-stop ring -->
+  <circle cx="200" cy="200" r="120" fill="none" stroke="url(#ring)" stroke-width="30"/>
 
-  <!-- Subtle highlight -->
-  <ellipse cx="256" cy="210" rx="100" ry="50" fill="rgba(255,255,255,0.07)"/>
-
-  <!-- Inner glow -->
-  <circle cx="256" cy="256" r="200" fill="url(#glow)"/>
-
-  <!-- Power icon — vertical line -->
-  <line x1="256" y1="170" x2="256" y2="240" stroke="white" stroke-width="28" stroke-linecap="round"/>
-
-  <!-- Power icon — arc -->
-  <path d="M 190 200 A 95 95 0 1 0 322 200" stroke="white" stroke-width="28" fill="none" stroke-linecap="round"/>
+  <!-- power / kill glyph: broken ring (gap at top) + vertical bar -->
+  <g stroke="url(#glyph)" stroke-width="22" stroke-linecap="round" fill="none">
+    <path d="M 230 143.5 A 64 64 0 1 1 170 143.5"/>
+    <line x1="200" y1="128" x2="200" y2="204"/>
+  </g>
 </svg>

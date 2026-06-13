@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>Blog | Kill Switch</title>
+    <meta name="description" content="Stories from the front lines of runaway cloud and AI bills — and how to stop them. From the team that got a $91,316 Cloudflare bill and built a kill switch.">
+    <link rel="canonical" href="https://kill-switch.net/blog/">
+    <meta property="og:title" content="Kill Switch Blog">
+    <meta property="og:description" content="Stories from the front lines of runaway cloud and AI bills — and how to stop them.">
+    <meta property="og:url" content="https://kill-switch.net/blog/">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/blog/blog.css">
+    <link rel="stylesheet" href="/legal.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --nav-h: 58px; --accent: #5ce2e7; }
+        body { font-family: 'Inter', sans-serif; background: rgb(12, 18, 41); color: #c4c5ca; -webkit-font-smoothing: antialiased; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: #fff; }
+        .navbar {
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 2em; height: var(--nav-h);
+            background: rgba(51, 51, 51, 0.55); backdrop-filter: blur(12px);
+            border-top: none;
+        }
+        .nav-brand { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .nav-brand .icon { font-size: 24px; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: #fff; font-weight: 500; font-size: 14px; }
+        .nav-links a.active { color: var(--accent); }
+        .btn-github { background: #24292e; color: #fff !important; padding: 7px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; border: 1px solid #444; }
+        .btn-github:hover { background: #444; }
+
+        .wrap { max-width: 760px; margin: 0 auto; padding: calc(var(--nav-h) + 56px) 24px 40px; }
+        .page-head { margin-bottom: 2.6em; }
+        .page-head h1 { font-family: 'Outfit', sans-serif; font-size: 2.6em; font-weight: 800; color: #fff; margin: 0 0 0.25em; letter-spacing: -0.01em; }
+        .page-head p { font-size: 1.12em; color: #aeb1bf; line-height: 1.6; max-width: 620px; }
+        .post {
+            display: block; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+            padding: 1.6em 1.7em; margin-bottom: 1.2em; transition: border-color 0.2s, background 0.2s, transform 0.2s;
+            background: rgba(255,255,255,0.02);
+        }
+        .post:hover { border-color: rgba(92,226,231,0.4); background: rgba(92,226,231,0.04); transform: translateY(-2px); }
+        .post .pmeta { font-size: 13px; color: #6b6e7e; margin-bottom: 0.5em; display: flex; gap: 12px; }
+        .post h2 { font-family: 'Outfit', sans-serif; font-size: 1.5em; font-weight: 700; color: #fff; margin: 0 0 0.4em; line-height: 1.25; }
+        .post:hover h2 { color: var(--accent); }
+        .post p { color: #aeb1bf; line-height: 1.65; font-size: 15.5px; margin: 0; }
+        .post .more { display: inline-block; margin-top: 0.9em; font-size: 14px; color: var(--accent); font-weight: 600; }
+        .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #ff9d42; background: rgba(255,152,0,0.12); border: 1px solid rgba(255,152,0,0.3); border-radius: 5px; padding: 2px 8px; }
+        /* Pinned post + its "alternative tellings" (compact rows attached beneath) */
+        .post-pinned { margin-bottom: 2.6em; }
+        .post-pinned .post { margin-bottom: 0; }
+        /* Center the newsletter between the last card and the footer (not butted against it). */
+        .newsletter-cta { margin: 0 auto 60px; }
+        .alt-tellings { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 0; padding-left: 1.7em; }
+        .alt-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6b6e7e; margin: 2px 0; }
+        .alt-row { display: flex; align-items: center; gap: 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 9px 14px 9px 9px; background: rgba(255,255,255,0.015); transition: border-color 0.2s, background 0.2s, transform 0.2s; }
+        .alt-row:hover { border-color: rgba(92,226,231,0.4); background: rgba(92,226,231,0.04); transform: translateX(3px); }
+        .alt-thumb { width: 104px; height: 58px; flex-shrink: 0; border-radius: 6px; object-fit: cover; border: 1px solid rgba(255,255,255,0.08); display: block; }
+        .alt-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+        .alt-title { font-family: 'Outfit', sans-serif; font-weight: 600; color: #fff; font-size: 15px; line-height: 1.3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .alt-row:hover .alt-title { color: var(--accent); }
+        .alt-sub { font-size: 12.5px; color: #8a8d9b; }
+        @media (max-width: 760px) { .alt-tellings { padding-left: 0; } .alt-thumb { width: 84px; height: 47px; } }
+        @media (max-width: 760px) { .nav-links a:not(.btn-github):not(.btn-signin) { display: none; } .page-head h1 { font-size: 2em; } }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><img class="brand-logo" src="/assets/logo-mark.svg" alt="Kill Switch" width="26" height="26" style="display:block;vertical-align:middle"><span>Kill Switch</span></a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/blog/" class="active">Blog</a>
+            <a href="/docs/cli.html">CLI</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/divinci-ai/kill-switch" class="btn-github">
+                <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub
+            </a>
+            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-signin" style="background: linear-gradient(135deg, #c25800, #e06800); color: #fff !important; height: 32px; box-sizing: border-box; padding: 0 18px; display: inline-flex; align-items: center; border-radius: 6px; font-weight: 600; font-size: 13px;">Sign up</a>
+        </div>
+    </nav>
+
+    <main class="wrap">
+        <div class="page-head">
+            <h1>The Kill Switch Blog</h1>
+            <p>Stories from the front lines of runaway cloud and AI bills &mdash; and how to stop them. Written by the team that got a $91,316 Cloudflare bill and decided to build a kill switch.</p>
+        </div>
+
+        <!-- 📌 PINNED POST — always keep "The $91,316 bug" first (flagship origin story). New posts go BELOW this group. -->
+        <div class="post-pinned">
+            <a class="post" href="/blog/the-91316-dollar-bug.html">
+                <div class="card-media">
+                    <video class="card-thumb" autoplay muted loop playsinline poster="/blog/assets/poster-the-91316-dollar-bug.webp">
+                        <source src="/blog/assets/thumb-the-91316-dollar-bug.webm" type="video/webm">
+                    </video>
+                    <img class="card-poster" src="/blog/assets/poster-the-91316-dollar-bug.webp" alt="" width="640" height="360" onerror="this.onerror=null;this.src='/blog/assets/poster-the-91316-dollar-bug.png'">
+                </div>
+                <div class="pmeta"><span>June 4, 2026</span><span>&bull;</span><span>6 min read</span><span class="tag">Origin story</span></div>
+                <h2>The $91,316 bug: I gave every unit in my RTS its own AI agent</h2>
+                <p>Side-vibing an RTS while Cursor wired every unit to its own Durable Object &mdash; connections that never closed. A few weeks later the invoice had five digits and a comma. The full autopsy &mdash; commits and all.</p>
+                <span class="more">Read the autopsy &rarr;</span>
+            </a>
+            <!-- Alternative tellings of the same story — keep these attached under the pinned post. -->
+            <div class="alt-tellings">
+                <div class="alt-label">Same story, told two more ways</div>
+                <a class="alt-row" href="/blog/the-91316-bug-video.html">
+                    <img class="alt-thumb" src="/blog/assets/poster-the-91316-bug-video.webp" alt="" width="104" height="58" loading="lazy">
+                    <span class="alt-body">
+                        <span class="alt-title">Watch: building a Cloud Kill-Switch <span class="tag">Video</span></span>
+                        <span class="alt-sub">~6 min watch &middot; YouTube</span>
+                    </span>
+                </a>
+                <a class="alt-row" href="/blog/the-91316-vibe-code-bill-podcast.html">
+                    <img class="alt-thumb" src="/blog/assets/poster-the-91316-vibe-code-bill-podcast.webp" alt="" width="104" height="58" loading="lazy">
+                    <span class="alt-body">
+                        <span class="alt-title">Listen: the $91,316 vibe code bill <span class="tag">Podcast</span></span>
+                        <span class="alt-sub">Podcast episode</span>
+                    </span>
+                </a>
+            </div>
+        </div>
+
+        <a class="post" href="/blog/the-empty-bucket-with-a-credit-card.html">
+            <div class="card-media">
+                <video class="card-thumb" autoplay muted loop playsinline poster="/blog/assets/poster-the-empty-bucket-with-a-credit-card.webp">
+                    <source src="/blog/assets/thumb-the-empty-bucket-with-a-credit-card.webm" type="video/webm">
+                </video>
+                <img class="card-poster" src="/blog/assets/poster-the-empty-bucket-with-a-credit-card.webp" alt="" width="640" height="360" onerror="this.onerror=null;this.src='/blog/assets/poster-the-empty-bucket-with-a-credit-card.png'">
+            </div>
+            <div class="pmeta"><span>May 30, 2026</span><span>&bull;</span><span>4 min read</span><span class="tag">AWS</span></div>
+            <h2>Your empty S3 bucket has a credit card</h2>
+            <p>An empty bucket, doing nothing, ran up a $1,300 bill on ~100 million requests the owner never sent. How the internet can spend your money &mdash; and why you need a floor under it.</p>
+            <span class="more">Read it &rarr;</span>
+        </a>
+
+        <a class="post" href="/blog/the-websocket-tax.html">
+            <div class="card-media">
+                <video class="card-thumb" autoplay muted loop playsinline poster="/blog/assets/poster-the-websocket-tax.webp">
+                    <source src="/blog/assets/thumb-the-websocket-tax.webm" type="video/webm">
+                </video>
+                <img class="card-poster" src="/blog/assets/poster-the-websocket-tax.webp" alt="" width="640" height="360" onerror="this.onerror=null;this.src='/blog/assets/poster-the-websocket-tax.png'">
+            </div>
+            <div class="pmeta"><span>May 30, 2026</span><span>&bull;</span><span>4 min read</span><span class="tag">Architecture</span></div>
+            <h2>The $1M default: how WebSockets quietly taxed Recall.ai</h2>
+            <p>Nothing failed. A completely reasonable WebSocket choice was just a little too slow, at enormous scale, for a year &mdash; and the cloud sent them the difference. The cloud bills your inefficiency, brutally.</p>
+            <span class="more">Read it &rarr;</span>
+        </a>
+    </main>
+    <script>
+    document.querySelectorAll('.card-thumb').forEach(function (v) {
+      function show() { v.classList.add('is-playing'); }
+      v.addEventListener('loadeddata', show);
+      v.addEventListener('canplay', show);
+      v.addEventListener('error', function () { v.remove(); });
+      if (v.readyState >= 2) show();
+    });
+    </script>
+
+    <!-- ── Newsletter: Cloud Kill-Switch Horror Stories ── -->
+    <aside class="newsletter-cta">
+        <div class="newsletter-title">Cloud Kill-Switch Horror Stories Newsletter &#128520; &#128140;</div>
+        <div class="newsletter-sub">New bill-shock cautionary tales, the lessons behind them, and Kill Switch updates. No spam &mdash; unsubscribe anytime.</div>
+        <form class="newsletter-form" id="newsletter-form" novalidate>
+            <input class="newsletter-email" id="newsletter-email" type="email" name="email" inputmode="email" autocomplete="email" placeholder="you@company.com" aria-label="Email address" required>
+            <!-- honeypot: hidden from humans, bots tend to fill it -->
+            <input class="newsletter-trap" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <button class="newsletter-btn" type="submit">Subscribe</button>
+        </form>
+        <p class="newsletter-status" id="newsletter-status" role="status" aria-live="polite"></p>
+    </aside>
+    <script src="/assets/newsletter.js" defer></script>
+
+    <footer class="site-footer">
+        <div class="social">
+            <a href="https://x.com/KillSwitchCloud" target="_blank" rel="noopener" aria-label="X (Twitter)">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </a>
+            <a href="https://www.youtube.com/@CloudKillSwitch/shorts" target="_blank" rel="noopener" aria-label="YouTube">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </a>
+            <a href="https://www.linkedin.com/company/cloud-kill-switch/" target="_blank" rel="noopener" aria-label="LinkedIn">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+            </a>
+            <a href="https://github.com/Divinci-AI/kill-switch" target="_blank" rel="noopener" aria-label="GitHub">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.898-.015 3.293 0 .322.218.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+            </a>
+        </div>
+        <p>
+            &copy; 2026 <a href="https://divinci.ai/"><img class="divinci-bot" src="/assets/divinci-robot.svg" alt="" width="16" height="16">Divinci AI</a>
+            <span class="divider">|</span>
+            <a href="/privacy.html">Privacy Policy</a>
+            <span class="divider">|</span>
+            <a href="/terms.html">Terms of Service</a>
+        </p>
+    </footer>
+    <script src="/blog/blog-viz.js" defer></script>
+</body>
+</html>

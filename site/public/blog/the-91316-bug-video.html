@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <title>The $91,316 bug: building a Cloud Kill-Switch (video) | Kill Switch</title>
+    <meta name="description" content="Watch the breakdown: the bill, the bug, and the kill switch we built so it can't happen again. A Cloud Kill Switch video on the $91,316 vibe-code invoice.">
+    <link rel="canonical" href="https://kill-switch.net/blog/the-91316-bug-video.html">
+    <meta property="og:type" content="video.other">
+    <meta property="og:title" content="The $91,316 bug: building a Cloud Kill-Switch">
+    <meta property="og:description" content="The bill, the bug, and the kill switch we built so it can't happen again. Watch the full breakdown.">
+    <meta property="og:url" content="https://kill-switch.net/blog/the-91316-bug-video.html">
+    <meta property="og:image" content="https://i.ytimg.com/vi/Alc-JSHpz4Q/maxresdefault.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/blog/blog.css">
+    <link rel="stylesheet" href="/blog/blog-post.css">
+    <link rel="stylesheet" href="/legal.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --nav-h: 58px; --accent: #5ce2e7; }
+        html { scroll-behavior: smooth; }
+        body { font-family: 'Inter', sans-serif; background: rgb(12, 18, 41); color: #c4c5ca; -webkit-font-smoothing: antialiased; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: #fff; }
+        .navbar { position: fixed; top: 0; left: 0; width: 100%; z-index: 1000; display: flex; justify-content: space-between; align-items: center; padding: 0 2em; height: var(--nav-h); background: rgba(51, 51, 51, 0.55); backdrop-filter: blur(12px); border-top: none; }
+        .nav-brand { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: #fff; font-weight: 500; font-size: 14px; }
+        .nav-links a.active { color: var(--accent); }
+        .btn-github { background: #24292e; color: #fff !important; padding: 7px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; border: 1px solid #444; }
+        .btn-github:hover { background: #444; }
+        .article { max-width: 760px; margin: 0 auto; padding: calc(var(--nav-h) + 48px) 24px 96px; }
+        .crumb { font-size: 13px; color: #6b6e7e; margin-bottom: 1.6em; }
+        .crumb a { color: #8a8d9b; }
+        h1 { font-family: 'Outfit', sans-serif; font-size: 2.5em; line-height: 1.15; font-weight: 800; color: #fff; margin: 0 0 0.4em; letter-spacing: -0.01em; }
+        .dek { font-size: 1.22em; line-height: 1.55; color: #aeb1bf; margin: 0 0 1.5em; font-weight: 400; }
+        .meta { font-size: 13.5px; color: #6b6e7e; margin: 0 0 2.4em; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+        .meta .dot { color: #3a3d4d; }
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.65em; font-weight: 700; color: #fff; margin: 1.8em 0 0.5em; }
+        p { line-height: 1.8; margin: 0 0 1.2em; font-size: 17px; }
+        ol, ul { margin: 0 0 1.4em 1.4em; line-height: 1.85; font-size: 17px; }
+        li { margin-bottom: 0.5em; }
+        strong { color: #eef0f5; }
+        code { font-family: 'JetBrains Mono', monospace; font-size: 0.86em; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; color: var(--accent); }
+        blockquote { border-left: 3px solid var(--accent); background: rgba(92,226,231,0.06); padding: 0.2em 1.3em; margin: 0 0 1.6em; border-radius: 0 6px 6px 0; }
+        blockquote p { color: #d6d8e0; font-size: 16px; margin: 0.8em 0; }
+        hr { border: none; border-top: 1px solid rgba(255,255,255,0.09); margin: 2.6em 0; }
+        .bignum { color: var(--accent); }
+        .endcta { background: rgba(92,226,231,0.05); border: 1px solid rgba(92,226,231,0.18); border-radius: 12px; padding: 1.5em 1.6em; margin-top: 1em; }
+        .endcta p { margin: 0; font-size: 16px; color: #c8cad4; }
+        .video-embed { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); margin: 0 0 1.8em; background: #000; }
+        .video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+        @media (max-width: 760px) { .nav-links a:not(.btn-github):not(.btn-signin) { display: none; } h1 { font-size: 1.95em; } .article { padding-top: calc(var(--nav-h) + 28px); } }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand"><img class="brand-logo" src="/assets/logo-mark.svg" alt="Kill Switch" width="26" height="26" style="display:block;vertical-align:middle"><span>Kill Switch</span></a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/blog/" class="active">Blog</a>
+            <a href="/docs/cli.html">CLI</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/divinci-ai/kill-switch" class="btn-github">
+                <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub
+            </a>
+            <a href="https://app.kill-switch.net?screen_hint=signup" class="btn-signin" style="background: linear-gradient(135deg, #c25800, #e06800); color: #fff !important; height: 32px; box-sizing: border-box; padding: 0 18px; display: inline-flex; align-items: center; border-radius: 6px; font-weight: 600; font-size: 13px;">Sign up</a>
+        </div>
+    </nav>
+
+    <!-- Table of Contents — fixed left rail, expands on hover (built by blog-post.js) -->
+    <nav class="table-of-contents" id="toc" aria-label="Table of contents">
+        <ul class="toc-list" id="toc-list"></ul>
+    </nav>
+
+    <!-- Social sharing — fixed right rail -->
+    <div class="social-sharing-fixed" aria-label="Share this article">
+        <div class="social-buttons-vertical">
+            <button class="social-btn-icon back-to-top" onclick="scrollToTop()" title="Back to top" aria-label="Back to top">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                <span class="btn-label">Top</span>
+            </button>
+            <button class="social-btn-icon twitter" onclick="shareOnTwitter()" title="Share on X" aria-label="Share on X">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                <span class="btn-label">Share on X</span>
+            </button>
+            <button class="social-btn-icon linkedin" onclick="shareOnLinkedIn()" title="Share on LinkedIn" aria-label="Share on LinkedIn">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+                <span class="btn-label">LinkedIn</span>
+            </button>
+            <button class="social-btn-icon facebook" onclick="shareOnFacebook()" title="Share on Facebook" aria-label="Share on Facebook">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                <span class="btn-label">Facebook</span>
+            </button>
+            <button class="social-btn-icon copy" onclick="copyLink(event)" title="Copy link" aria-label="Copy link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                <span class="btn-label">Copy link</span>
+            </button>
+            <button class="social-btn-icon focus-mode-toggle" id="focus-mode-toggle" title="Focus mode (F)" aria-label="Toggle focus mode">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span class="btn-label">Focus mode</span>
+            </button>
+        </div>
+    </div>
+
+    <article class="article">
+        <div class="crumb"><a href="/blog/">&larr; Blog</a></div>
+        <h1>The <span class="bignum">$91,316</span> bug: building a Cloud Kill-Switch</h1>
+        <p class="dek">Watch the breakdown: the bill, the bug, and the kill switch we built so it can&rsquo;t happen again.</p>
+        <div class="meta"><span>June 8, 2026</span><span class="dot">&bull;</span><span>Mike Mooring</span><span class="dot">&bull;</span><span>&#128250; ~6 min watch</span></div>
+
+        <h2>Watch</h2>
+        <div class="video-embed">
+            <iframe src="https://www.youtube-nocookie.com/embed/Alc-JSHpz4Q" title="The $91,316 Bug — Building a Cloud Kill-Switch" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
+        </div>
+
+        <h2>What&rsquo;s covered</h2>
+        <p>The short version of the story that started Kill Switch &mdash; told in about six minutes:</p>
+        <ul>
+            <li>How an AI coding agent gave <em>every unit</em> in a real-time strategy game its own always-on connection.</li>
+            <li>Why the connections never closed &mdash; and why no alert fired until the invoice did.</li>
+            <li>The fix, and the kill switch that trips a runaway off <em>before</em> it becomes a five-figure bill.</li>
+        </ul>
+
+        <h2>Go deeper</h2>
+        <p>Want the full autopsy with the code and commits? Read <a href="/blog/the-91316-dollar-bug.html">The $91,316 bug: I gave every unit in my RTS its own AI agent</a>. Prefer audio? There&rsquo;s a <a href="/blog/the-91316-vibe-code-bill-podcast.html">podcast version</a> too.</p>
+
+        <hr>
+        <div class="endcta">
+            <p>The bill was the first time we found out &mdash; that&rsquo;s the whole problem. <a href="https://kill-switch.net">Kill Switch</a> watches your cloud and AI spend and trips before a runaway becomes a five-figure surprise. Free tier, one account. Put the seatbelt on before the wreck.</p>
+        </div>
+    </article>
+
+    <div class="post-ctas">
+    <!-- ── Share this story (recycled bottom share CTA) ── -->
+    <aside class="share-cta">
+        <h3>Spread the warning &#128520;</h3>
+        <p>Know someone one runaway loop away from a five-figure invoice? Send them this video.</p>
+        <div class="share-buttons-overlay" role="group" aria-label="Share this article">
+            <button class="share-btn-overlay twitter" onclick="shareOnTwitter()" title="Share on X" aria-label="Share on X">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </button>
+            <button class="share-btn-overlay linkedin" onclick="shareOnLinkedIn()" title="Share on LinkedIn" aria-label="Share on LinkedIn">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+            </button>
+            <button class="share-btn-overlay facebook" onclick="shareOnFacebook()" title="Share on Facebook" aria-label="Share on Facebook">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+            </button>
+            <button class="share-btn-overlay copy" onclick="copyLink(event)" title="Copy link" aria-label="Copy link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- ── Newsletter: Cloud Kill-Switch Horror Stories ── -->
+    <aside class="newsletter-cta">
+        <div class="newsletter-title">Cloud Kill-Switch Horror Stories Newsletter &#128520; &#128140;</div>
+        <div class="newsletter-sub">New bill-shock cautionary tales, the lessons behind them, and Kill Switch updates. No spam &mdash; unsubscribe anytime.</div>
+        <form class="newsletter-form" id="newsletter-form" novalidate>
+            <input class="newsletter-email" id="newsletter-email" type="email" name="email" inputmode="email" autocomplete="email" placeholder="you@company.com" aria-label="Email address" required>
+            <!-- honeypot: hidden from humans, bots tend to fill it -->
+            <input class="newsletter-trap" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <button class="newsletter-btn" type="submit">Subscribe</button>
+        </form>
+        <p class="newsletter-status" id="newsletter-status" role="status" aria-live="polite"></p>
+    </aside>
+    </div>
+    <script src="/assets/newsletter.js" defer></script>
+
+    <footer class="site-footer">
+        <div class="social">
+            <a href="https://x.com/KillSwitchCloud" target="_blank" rel="noopener" aria-label="X (Twitter)">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </a>
+            <a href="https://www.youtube.com/@CloudKillSwitch/shorts" target="_blank" rel="noopener" aria-label="YouTube">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </a>
+            <a href="https://www.linkedin.com/company/cloud-kill-switch/" target="_blank" rel="noopener" aria-label="LinkedIn">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg>
+            </a>
+            <a href="https://github.com/Divinci-AI/kill-switch" target="_blank" rel="noopener" aria-label="GitHub">
+                <svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.898-.015 3.293 0 .322.218.694.825.576C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+            </a>
+        </div>
+        <p>
+            &copy; 2026 <a href="https://divinci.ai/"><img class="divinci-bot" src="/assets/divinci-robot.svg" alt="" width="16" height="16">Divinci AI</a>
+            <span class="divider">|</span>
+            <a href="/privacy.html">Privacy Policy</a>
+            <span class="divider">|</span>
+            <a href="/terms.html">Terms of Service</a>
+        </p>
+    </footer>
+    <script src="/blog/blog-post.js" defer></script>
+</body>
+</html>

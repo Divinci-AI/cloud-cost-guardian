@@ -1,0 +1,11 @@
+# Staging preview of the marketing site — isolated worker, *.workers.dev only.
+# Deliberately NO custom-domain routes, so this can never affect kill-switch.net.
+# Deploy: cd site && env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_EMAIL -u CLOUDFLARE_ACCOUNT_ID wrangler deploy --config wrangler.staging.toml
+name = "cloud-switch-site-staging"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"

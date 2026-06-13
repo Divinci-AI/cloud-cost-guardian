@@ -1,9 +1,12 @@
 name = "cloud-switch-site"
+main = "src/index.js"
 compatibility_date = "2024-09-23"
 
-# Serve static assets from ./public
+# Serve static assets from ./public; the ASSETS binding lets the Worker fall
+# through to them for everything except /api/* (see src/index.js).
 [assets]
 directory = "./public"
+binding = "ASSETS"
 
 # Custom domains (creates DNS records automatically)
 [[routes]]
