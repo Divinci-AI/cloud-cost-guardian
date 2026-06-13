@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { configPath, ensureGuardDir, DEFAULT_BUDGET, DEFAULT_LIMITS, type GuardConfig, type LimitsConfig } from "./config.js";
 import type { Budget } from "./budget.js";
 import { loadLedger, saveLedger, emptyLedger } from "./ledger.js";
+import { saveLimitsState, emptyLimitsState } from "./limits.js";
 
 export interface InstallOptions {
   /** Install into ~/.claude/settings.json instead of ./.claude/settings.json */
@@ -135,11 +136,21 @@ export function setLimits(patch: LimitsPatch): LimitsConfig {
   return limits;
 }
 
-/** Clear the spend ledger. Scope: all | a single session | today's sessions. */
-export function resetLedger(opts: { all?: boolean; session?: string; today?: boolean }): string {
+/**
+ * Clear guard state. Scope: all (ledger + limits) | limits only | a single
+ * session | today's sessions. The `limits` scope clears the subscription
+ * detection latch + last snapshot — useful when you stop using a Pro/Max plan
+ * and want the dollar wall fully re-armed.
+ */
+export function resetLedger(opts: { all?: boolean; limits?: boolean; session?: string; today?: boolean }): string {
   if (opts.all) {
     saveLedger(emptyLedger());
-    return "Ledger wiped.";
+    saveLimitsState(emptyLimitsState());
+    return "Ledger + subscription-limit state wiped.";
+  }
+  if (opts.limits) {
+    saveLimitsState(emptyLimitsState());
+    return "Subscription-limit state cleared (detection latch + snapshot).";
   }
   const ledger = loadLedger();
   if (opts.session) {
@@ -155,5 +166,5 @@ export function resetLedger(opts: { all?: boolean; session?: string; today?: boo
     saveLedger(ledger);
     return "Cleared today's sessions.";
   }
-  return "Specify all, session <id>, or today.";
+  return "Specify all, limits, session <id>, or today.";
 }

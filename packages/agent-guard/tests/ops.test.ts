@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { installHook, setBudget, resetLedger } from "../src/ops.js";
 import { configPath } from "../src/config.js";
 import { loadLedger, saveLedger, emptyLedger, setSessionCost } from "../src/ledger.js";
+import { loadLimitsState, saveLimitsState, emptyLimitsState } from "../src/limits.js";
 
 let prevHome: string | undefined;
 let home: string;
@@ -97,5 +98,23 @@ describe("resetLedger", () => {
     const msg = resetLedger({});
     expect(msg).toMatch(/specify/i);
     expect(Object.keys(loadLedger().sessions).sort()).toEqual(["s-old", "s-today"]);
+  });
+
+  it("limits clears the subscription latch + snapshot but keeps the ledger (F7)", () => {
+    seed();
+    saveLimitsState({ ...emptyLimitsState(), subscriptionDetected: true, snapshot: { fiveHour: null, weekly: null, status: "x", observedAt: 1 } });
+    const msg = resetLedger({ limits: true });
+    expect(msg).toMatch(/subscription-limit/i);
+    expect(loadLimitsState().subscriptionDetected).toBe(false);
+    expect(loadLimitsState().snapshot).toBeNull();
+    expect(Object.keys(loadLedger().sessions).sort()).toEqual(["s-old", "s-today"]); // ledger untouched
+  });
+
+  it("all wipes the subscription latch too (F7)", () => {
+    seed();
+    saveLimitsState({ ...emptyLimitsState(), subscriptionDetected: true });
+    resetLedger({ all: true });
+    expect(loadLimitsState().subscriptionDetected).toBe(false);
+    expect(Object.keys(loadLedger().sessions)).toEqual([]);
   });
 });

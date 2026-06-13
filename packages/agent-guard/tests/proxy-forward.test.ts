@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startProxy } from "../src/proxy.js";
 import { loadLedger, saveLedger, emptyLedger, setSessionCost } from "../src/ledger.js";
-import { setBudget } from "../src/ops.js";
+import { setBudget, setLimits } from "../src/ops.js";
 import { loadLimitsState, saveLimitsState, emptyLimitsState } from "../src/limits.js";
 import { eventsPath } from "../src/config.js";
 import { readFileSync } from "node:fs";
@@ -172,28 +172,72 @@ describe("proxy request forwarding + metering", () => {
     expect(after).toHaveLength(1);
   });
 
-  it("never returns 402 once subscription mode is latched (alert-only)", async () => {
-    // Over the dollar cap AND flagged as a subscription session.
+  // F1: the dollar-402 suppression is scoped (flavor + pinned-plan / fresh
+  // headers), NOT a permanent global latch. Seed an over-cap session, then vary
+  // what's known about subscription state.
+  async function overCapProxy(flavor: "anthropic" | "openai") {
     setBudget({ sessionHardUSD: 1, dailyHardUSD: 1000 });
     const led = emptyLedger();
-    setSessionCost(led, "sess-sub-block", 50, 100, 100, Date.now());
+    setSessionCost(led, "sess-block", 50, 100, 100, Date.now());
     saveLedger(led);
-    saveLimitsState({ ...emptyLimitsState(), subscriptionDetected: true });
-
-    let upstreamHit = false;
+    const hit = { v: false };
     const up = createServer((_req, res) => {
-      upstreamHit = true;
+      hit.v = true;
       res.writeHead(200, { "content-type": "application/json" });
       res.end("{}");
     });
     const upPort = await listen(up);
-    const proxy = startProxy({ port: 0, flavor: "anthropic", upstream: `http://127.0.0.1:${upPort}` });
+    const proxy = startProxy({ port: 0, flavor, upstream: `http://127.0.0.1:${upPort}` });
     const proxyPort = await listen(proxy);
+    return { proxyPort, hit };
+  }
 
-    const res = await post(proxyPort, "/v1/messages", "{}", { "x-agent-guard-session": "sess-sub-block" });
+  function freshSnapshotState() {
+    const now = Date.now();
+    return {
+      ...emptyLimitsState(),
+      subscriptionDetected: true,
+      snapshot: {
+        fiveHour: { utilization: 0.4, resetAt: now + 3 * 3600_000 },
+        weekly: { utilization: 0.6, resetAt: now + 5 * 86400_000 },
+        status: "allowed",
+        observedAt: now,
+      },
+    };
+  }
 
-    // Flat-fee plan: dollars are meaningless, so we forward instead of blocking.
+  it("suppresses the dollar 402 when a fresh subscription snapshot exists (anthropic)", async () => {
+    saveLimitsState(freshSnapshotState());
+    const { proxyPort, hit } = await overCapProxy("anthropic");
+    const res = await post(proxyPort, "/v1/messages", "{}", { "x-agent-guard-session": "sess-block" });
+    expect(res.status).toBe(200); // flat-fee plan: forward, don't block on meaningless dollars
+    expect(await waitFor(() => hit.v)).toBe(true);
+  });
+
+  it("suppresses the dollar 402 when a subscription plan is pinned (anthropic, no snapshot)", async () => {
+    setLimits({ plan: "max5" });
+    const { proxyPort, hit } = await overCapProxy("anthropic");
+    const res = await post(proxyPort, "/v1/messages", "{}", { "x-agent-guard-session": "sess-block" });
     expect(res.status).toBe(200);
-    expect(await waitFor(() => upstreamHit)).toBe(true);
+    expect(await waitFor(() => hit.v)).toBe(true);
+  });
+
+  it("F1 regression: still 402s on a bare/stale latch with no fresh snapshot (plan=auto)", async () => {
+    // The old bug: subscriptionDetected alone disarmed the wall forever.
+    saveLimitsState({ ...emptyLimitsState(), subscriptionDetected: true });
+    const { proxyPort, hit } = await overCapProxy("anthropic");
+    const res = await post(proxyPort, "/v1/messages", "{}", { "x-agent-guard-session": "sess-block" });
+    expect(res.status).toBe(402);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(hit.v).toBe(false);
+  });
+
+  it("F1 regression: still 402s on the openai flavor even if a subscription was detected", async () => {
+    saveLimitsState(freshSnapshotState()); // anthropic subscription seen…
+    const { proxyPort, hit } = await overCapProxy("openai"); // …but this is a billed OpenAI agent
+    const res = await post(proxyPort, "/v1/messages", "{}", { "x-agent-guard-session": "sess-block" });
+    expect(res.status).toBe(402);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(hit.v).toBe(false);
   });
 });

@@ -73,19 +73,13 @@ export function estimateSnapshot(
 
   const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
+  // resetAt is null, not fabricated: we have no per-event time series, so the
+  // true rolling reset is unknowable. A null reset means pacing reports
+  // utilization only (no burn-rate, no lockout projection, no bogus reset time) —
+  // the honest behaviour for an estimate.
   return {
-    fiveHour: {
-      utilization: clamp(fiveTokens / b.fiveHourTokens),
-      // Without a per-event time series we can't know the true rolling reset;
-      // report a full window from now as a conservative (latest-possible) reset.
-      resetAt: now + FIVE_HOUR_MS,
-      status: "estimated",
-    },
-    weekly: {
-      utilization: clamp(weekTokens / b.weeklyTokens),
-      resetAt: now + WEEK_MS,
-      status: "estimated",
-    },
+    fiveHour: { utilization: clamp(fiveTokens / b.fiveHourTokens), resetAt: null, status: "estimated" },
+    weekly: { utilization: clamp(weekTokens / b.weeklyTokens), resetAt: null, status: "estimated" },
     status: "estimated",
     observedAt: now,
   };

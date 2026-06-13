@@ -197,13 +197,14 @@ export function registerAgentGuardCommands(program: Command) {
   // ks guard reset
   guard
     .command("reset")
-    .description("Clear the agent spend ledger")
-    .option("--all", "Wipe all sessions")
+    .description("Clear the agent spend ledger and/or subscription-limit state")
+    .option("--all", "Wipe all sessions + subscription-limit state")
+    .option("--limits", "Clear subscription detection latch + snapshot only")
     .option("--session <id>", "Clear a single session")
     .option("--today", "Clear sessions active today")
     .action((opts) => {
       const json = program.opts().json;
-      const msg = resetLedger({ all: opts.all, session: opts.session, today: opts.today });
+      const msg = resetLedger({ all: opts.all, limits: opts.limits, session: opts.session, today: opts.today });
       if (json) return outputJson({ message: msg });
       console.log(`✅ ${msg}`);
     });

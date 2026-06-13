@@ -31,7 +31,8 @@ import {
 } from "./ledger.js";
 import { evaluate, warnKey, type Verdict } from "./budget.js";
 import { dispatchAlert, type AlertEvent } from "./alert.js";
-import { buildStatusReport } from "./report.js";
+import { buildLimitsReport } from "./report.js";
+import type { GuardConfig } from "./config.js";
 import type { Ledger, SessionRecord } from "./ledger.js";
 
 interface HookInput {
@@ -181,7 +182,7 @@ export async function runHook(): Promise<void> {
     // snapshot the proxy persisted from Anthropic's headers (or a tier estimate),
     // so even a hook-only session learns when it's about to lock out. Deduped per
     // window+level so it doesn't repeat every tool call.
-    const limitMsg = limitNudge(rec, ledger, now);
+    const limitMsg = limitNudge(cfg, rec, ledger, now);
 
     // Surface the warn nudge only on the first trip per scope (shouldAlert), not
     // on every subsequent tool call — otherwise the agent's context fills with
@@ -212,9 +213,9 @@ export async function runHook(): Promise<void> {
  * session's notified map (and persists it) so the same warning doesn't repeat on
  * every tool call. Returns null when there's nothing to surface.
  */
-function limitNudge(rec: SessionRecord, ledger: Ledger, now: number): string | null {
+function limitNudge(cfg: GuardConfig, rec: SessionRecord, ledger: Ledger, now: number): string | null {
   try {
-    const limits = buildStatusReport(now).limits;
+    const limits = buildLimitsReport(cfg, ledger, now);
     if (!limits.windows.length) return null;
     const urgent =
       limits.windows.find((w) => w.level === "danger") ?? limits.windows.find((w) => w.level === "warn");

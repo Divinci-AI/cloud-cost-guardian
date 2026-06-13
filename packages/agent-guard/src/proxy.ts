@@ -40,6 +40,8 @@ import {
   loadLimitsState,
   saveLimitsState,
   limitNotifyKey,
+  WINDOW_MS,
+  type LimitsState,
 } from "./limits.js";
 import { assessSnapshot, worstLevel } from "./pacing.js";
 
@@ -194,19 +196,33 @@ function captureLimits(cfg: GuardConfig, headers: Headers, sessionId: string, no
     logUnifiedHeaders(unifiedHeaderDump(rec), now);
     state.headersLoggedAt = now;
   }
-  state.subscriptionDetected = true;
-  state.snapshot = snap;
 
+  // Which windows newly cross into warn/danger (dedup vs. what we've alerted).
   const assessments = assessSnapshot(snap, cfg.limits, now);
+  const newlyNotified: string[] = [];
   const fresh = assessments.filter((a) => {
     if (a.level === "ok") return false;
     const key = limitNotifyKey(a.window, a.level, a.resetAt);
     if (state.notified[key]) return false;
-    state.notified[key] = true;
+    newlyNotified.push(key);
     return true;
   });
 
-  saveLimitsState(state);
+  // Re-read at write time to mitigate read-modify-write races: the file write is
+  // atomic (no corruption), but a concurrent response could otherwise clobber a
+  // newer snapshot or a just-set notified flag. Keep the newest snapshot by
+  // observedAt; union the notified flags.
+  const onDisk = loadLimitsState();
+  const keepNewer = onDisk.snapshot && onDisk.snapshot.observedAt > snap.observedAt;
+  const merged: LimitsState = {
+    version: 1,
+    subscriptionDetected: true,
+    snapshot: keepNewer ? onDisk.snapshot : snap,
+    notified: { ...onDisk.notified, ...state.notified },
+    headersLoggedAt: onDisk.headersLoggedAt ?? state.headersLoggedAt,
+  };
+  for (const key of newlyNotified) merged.notified[key] = true;
+  saveLimitsState(merged);
 
   if (fresh.length) {
     const level = worstLevel(fresh);
@@ -227,6 +243,38 @@ function captureLimits(cfg: GuardConfig, headers: Headers, sessionId: string, no
   return true;
 }
 
+function planIsSubscription(plan: string): boolean {
+  return plan === "pro" || plan === "max5" || plan === "max20";
+}
+
+/**
+ * Should the dollar hard-cap 402 be suppressed for THIS proxy/request?
+ *
+ * Only for the **Anthropic** flavor — an OpenAI / other-API agent is billed per
+ * token and must keep its wall, even if a *different* (Claude Code) session once
+ * latched subscription mode on the shared `limits.json`. And only when we have a
+ * live reason to believe this is a flat-fee plan: either the operator pinned a
+ * subscription tier (`--plan`), or we saw real `unified-*` headers **recently**
+ * (within the 5-hour window). A stale, months-old detection must never disarm
+ * the wall — that's the bug this replaces (a permanent global latch).
+ *
+ * Residual edge: an Anthropic-flavor *API-key* agent run within 5h of a Claude
+ * Code subscription session (or under a pinned `--plan`) would also be
+ * suppressed. That's a narrow, opt-in-ish overlap; the common dual-use case
+ * (Claude Code + an OpenAI-flavor agent) is fully covered by the flavor gate.
+ */
+function dollarWallSuppressed(
+  cfg: GuardConfig,
+  flavor: string,
+  state: LimitsState,
+  now: number,
+): boolean {
+  if (flavor !== "anthropic") return false;
+  if (planIsSubscription(cfg.limits.plan)) return true;
+  const snap = state.snapshot;
+  return !!snap && now - snap.observedAt < WINDOW_MS["5h"] && !!(snap.fiveHour || snap.weekly);
+}
+
 export function startProxy(opts: ProxyOptions): Server {
   const cfg = loadConfig();
   const upstreamOrigin = assertSafeEndpoint(opts.upstream, "upstream").replace(/\/$/, "");
@@ -238,10 +286,10 @@ export function startProxy(opts: ProxyOptions): Server {
 
     // 1) Pre-flight budget check — block before spending anything.
     // Escape hatch: while a human has paused enforcement, never block (but still meter).
-    // Subscription mode is ALERT-ONLY: once we've seen Anthropic's unified
-    // rate-limit headers, the session is on a flat-fee plan where dollars are
-    // meaningless, so we never 402 it — we only pace + warn.
-    const subscriptionMode = loadLimitsState().subscriptionDetected;
+    // Subscription mode is ALERT-ONLY: a flat-fee Pro/Max session is paced, not
+    // dollar-gated. Scope that suppression tightly (flavor + pinned plan / fresh
+    // headers) so it never disarms the wall for a genuinely-billed agent.
+    let subscriptionMode = dollarWallSuppressed(cfg, opts.flavor, loadLimitsState(), now);
     const ledger = loadLedger();
     const sessionUSD = ledger.sessions[sessionId]?.costUSD ?? 0;
     const dailyUSD = rollingDailyCost(ledger, now);
@@ -290,10 +338,12 @@ export function startProxy(opts: ProxyOptions): Server {
       return;
     }
 
-    // 2.5) Read Anthropic's subscription rate-limit headers (alert-only).
+    // 2.5) Read Anthropic's subscription rate-limit headers (alert-only). If this
+    // response carried them, treat the session as subscription for alert purposes
+    // too — even if the pre-flight check (run before we'd seen any headers) didn't.
     if (opts.flavor === "anthropic") {
       try {
-        captureLimits(cfg, upstream.headers, sessionId, Date.now());
+        if (captureLimits(cfg, upstream.headers, sessionId, Date.now())) subscriptionMode = true;
       } catch {
         /* limit capture must never break the proxied response */
       }
@@ -341,11 +391,12 @@ export function startProxy(opts: ProxyOptions): Server {
         const fresh = loadLedger();
         meter(cfg, fresh, sessionId, parsed, Date.now());
 
-        // Post-meter soft-cap alert (once).
+        // Post-meter soft-cap alert (once). Skipped in subscription mode — the
+        // dollars are meaningless on a flat-fee plan, so a USD warn is just noise.
         const after = fresh.sessions[sessionId]?.costUSD ?? 0;
         const afterDaily = rollingDailyCost(fresh, Date.now());
         const v2 = evaluate({ sessionUSD: after, dailyUSD: afterDaily }, cfg.budget);
-        if (v2.level === "warn" && !blockedNotified[`warn:${sessionId}`]) {
+        if (v2.level === "warn" && !subscriptionMode && !blockedNotified[`warn:${sessionId}`]) {
           blockedNotified[`warn:${sessionId}`] = true;
           dispatchAlert(cfg, {
             ts: Date.now(), source: "proxy", sessionId, level: "warn",

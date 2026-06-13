@@ -235,12 +235,13 @@ program
 // ── reset ────────────────────────────────────────────────────────────────────
 program
   .command("reset")
-  .description("Clear the spend ledger")
-  .option("--all", "Wipe all sessions")
+  .description("Clear the spend ledger and/or subscription-limit state")
+  .option("--all", "Wipe all sessions + subscription-limit state")
+  .option("--limits", "Clear subscription detection latch + snapshot only")
   .option("--session <id>", "Clear a single session")
   .option("--today", "Clear sessions active today")
   .action((opts) => {
-    console.log(`✅ ${resetLedger({ all: opts.all, session: opts.session, today: opts.today })}`);
+    console.log(`✅ ${resetLedger({ all: opts.all, limits: opts.limits, session: opts.session, today: opts.today })}`);
   });
 
 program.parseAsync();

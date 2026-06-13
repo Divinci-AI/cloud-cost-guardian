@@ -13,9 +13,11 @@ import { loadConfig } from "./config.js";
 import { isPaused, pauseExpiry } from "./config.js";
 import { loadLedger, rollingDailyCost, type SessionRecord } from "./ledger.js";
 import { evaluate, type Budget, type VerdictLevel } from "./budget.js";
-import { loadLimitsState } from "./limits.js";
+import { loadLimitsState, WINDOW_MS } from "./limits.js";
 import { assessSnapshot, worstLevel, type PacingAssessment, type PacingLevel } from "./pacing.js";
 import { estimateSnapshot, type PlanTier } from "./estimate.js";
+import type { GuardConfig } from "./config.js";
+import type { Ledger } from "./ledger.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -43,26 +45,37 @@ export interface StatusReport {
   limits: LimitsReport;
 }
 
-function buildLimitsReport(
-  cfg: ReturnType<typeof loadConfig>,
-  ledger: ReturnType<typeof loadLedger>,
-  now: number,
-): LimitsReport {
+/**
+ * Compute the subscription rate-limit section. Exported so the Claude Code hook
+ * can reuse its already-loaded cfg + ledger instead of paying for a second
+ * loadConfig/loadLedger on every tool call.
+ */
+export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number): LimitsReport {
   const state = loadLimitsState();
   const thresholds = cfg.limits;
   const plan = cfg.limits.plan;
 
-  // Prefer real header data when we have it.
-  if (state.snapshot) {
-    const windows = assessSnapshot(state.snapshot, thresholds, now);
-    return {
-      source: "headers",
-      plan,
-      subscriptionDetected: state.subscriptionDetected,
-      observedAt: state.snapshot.observedAt,
-      windows,
-      level: worstLevel(windows),
-    };
+  // Prefer real header data — but only while it's still usable. A snapshot older
+  // than the weekly window is too stale to trust at all; and any single window
+  // whose reset time has already passed has since rolled over (its utilization is
+  // from a prior window), so we drop it rather than present expired numbers — and
+  // a reset time in the past — as if they were live. If nothing usable remains we
+  // fall through to the estimate (or "none").
+  const snap = state.snapshot;
+  if (snap && now - snap.observedAt < WINDOW_MS.weekly) {
+    const windows = assessSnapshot(snap, thresholds, now).filter(
+      (w) => !(w.resetAt != null && w.resetAt <= now),
+    );
+    if (windows.length) {
+      return {
+        source: "headers",
+        plan,
+        subscriptionDetected: state.subscriptionDetected,
+        observedAt: snap.observedAt,
+        windows,
+        level: worstLevel(windows),
+      };
+    }
   }
 
   // Otherwise estimate, but only when the user pinned a tier (opt-in, fuzzy).
