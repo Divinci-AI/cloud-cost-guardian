@@ -7,6 +7,23 @@
 
 ---
 
+## STATUS (updated 2026-06-13)
+
+- **Task 2 (wire into `ks` CLI) — DONE.** `packages/cli/src/commands/agent-guard.ts` exists;
+  `ks guard install/status/config/pause/resume/reset/proxy` all work and call the package's
+  exported ops directly.
+- **Subscription rate-limit awareness — ADDED** (agent-guard ≥ 0.1.3). The proxy now reads
+  Anthropic's `anthropic-ratelimit-unified-*` headers and paces the Pro/Max 5-hour + weekly
+  windows (alert-only, never blocks). New files: `limits.ts`, `pacing.ts`, `estimate.ts`.
+- **`AlertEvent` shape changed** — whoever builds Task 1's endpoint must account for it:
+  - new field `kind?: "spend" | "limit"` (default `"spend"`). `"limit"` events carry a
+    `limits: Array<{ window, utilization, resetAt, level }>`, and `level` may be `"danger"`
+    (not just `ok`/`warn`/`block`). Server-side level validation must allow `"danger"`.
+  - `events.jsonl` also now contains `{ kind: "unified-headers-observed", headers }` diagnostic
+    lines (write-once, local only — NOT posted to the API). Ignore these server-side.
+- **Still pending:** Task 1 (server `POST /agent-guard/events`), Task 3 (web dashboard view),
+  Task 4 (publish ergonomics — partly done; published to npm).
+
 ## GOLD PROMPT
 
 You are continuing work on **Cloud Kill Switch**. PR #4 added `packages/agent-guard`

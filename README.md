@@ -59,6 +59,13 @@ stop for Claude Code; the proxy is the dumb hard backstop for everything else
 (Cursor, Aider, raw scripts). An **escape hatch** (`ks guard pause`, or
 `touch ~/.kill-switch/agent-guard/PAUSED`) always belongs to the human, never the agent.
 
+**On a Claude Code Pro/Max subscription**, dollars are the wrong currency — you pay a
+flat fee, so the scarce resource is your plan's **rate-limit quota** (5-hour + weekly
+windows). Run Claude Code through the proxy and agent-guard reads Anthropic's own
+`anthropic-ratelimit-unified-*` headers, paces your burn rate, and warns *before* you
+lock out (`ks guard config --plan max5`). This mode is **alert-only** — it never blocks
+a plan you've already paid for.
+
 ## Supported Providers (15)
 
 | Provider | Services Monitored | Kill Actions |

@@ -132,7 +132,7 @@ ks guard install
 # Set caps (USD)
 ks guard config --session-soft 5 --session-hard 20 --daily-soft 25 --daily-hard 100
 
-# Check spend vs budget
+# Check spend vs budget — and Claude Code plan limits
 ks guard status
 
 # Hard 402 wall for non-Claude-Code agents (Cursor, Aider, scripts)
@@ -146,11 +146,29 @@ ks guard resume
 | Command | Description |
 |---------|-------------|
 | `ks guard install` | Wire agent-guard hook into Claude Code settings |
-| `ks guard status` | Session + daily spend vs budget |
-| `ks guard config` | View or set soft/hard caps |
-| `ks guard proxy` | Start token-metering proxy (HTTP 402 at hard cap) |
+| `ks guard status` | Session + daily spend vs budget, **and** Claude Code plan limits |
+| `ks guard config` | View or set soft/hard caps **and plan limits** (`--plan`, thresholds) |
+| `ks guard proxy` | Start token-metering proxy (HTTP 402 at hard cap; reads plan-limit headers) |
 | `ks guard pause` / `resume` | Temporarily disable / re-arm enforcement |
 | `ks guard reset` | Clear the spend ledger |
+
+### Two currencies: dollars and plan limits
+
+API-key (pay-as-you-go) sessions are gated on **dollars** — the caps above block at the hard
+cap. A **Claude Code Pro/Max subscription** is flat-fee, so dollars are meaningless; the scarce
+resource is your plan's **rate-limit quota** in two rolling windows (5-hour + weekly).
+
+Run Claude Code **through the proxy** and agent-guard reads Anthropic's own
+`anthropic-ratelimit-unified-*` headers — exact 5h/weekly utilization + reset times — then
+paces your burn rate and warns *before* you lock out. This is **alert-only**: it never blocks a
+plan you've already paid for (and suppresses the dollar 402 for that session).
+
+```sh
+ks guard proxy                                  # then: ANTHROPIC_BASE_URL=http://localhost:8787 claude
+ks guard config --plan max5                     # auto | pro | max5 | max20 (a tier enables hook-only estimates)
+ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
+ks guard status                                 # shows "weekly 62% used, resets Sat, burning 3.1× → lockout ~Thu"
+```
 
 Full docs: [kill-switch.net/docs/cli.html#guard](https://kill-switch.net/docs/cli.html#guard)
 
