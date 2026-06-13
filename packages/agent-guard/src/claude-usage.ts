@@ -14,7 +14,7 @@
  * persisted** by us.
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
@@ -151,4 +151,29 @@ export async function refreshUsage(
   const fresh = loadLimitsState();
   saveLimitsState({ ...fresh, subscriptionDetected: true, snapshot, lastFetchAt: now });
   return snapshot;
+}
+
+/**
+ * Fire a throttled, NON-BLOCKING usage refresh in a detached child process, so
+ * the caller (the hook on a tool call, or the statusLine on a render) never
+ * blocks on the network. Staleness-gated with an optimistic `lastFetchAt` claim
+ * so concurrent calls don't stampede the endpoint. Best-effort; never throws.
+ *
+ * `cliJsPath` is the absolute path to this package's compiled cli.js (the child
+ * runs `<node> <cli.js> _refresh-usage`).
+ */
+export function triggerBackgroundRefresh(cliJsPath: string, now: number, throttleMs = DEFAULT_THROTTLE_MS): void {
+  try {
+    const state = loadLimitsState();
+    if (state.lastFetchAt && now - state.lastFetchAt < throttleMs) return; // recent enough
+    // Claim the slot now so other renders/tool-calls within the window skip the spawn.
+    saveLimitsState({ ...state, lastFetchAt: now });
+    const child = spawn(process.execPath, [cliJsPath, "_refresh-usage"], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+  } catch {
+    /* best-effort — a failed refresh just means slightly staler numbers */
+  }
 }

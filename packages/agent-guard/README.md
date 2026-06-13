@@ -137,6 +137,15 @@ soft — if it's unavailable, agent-guard falls back to the proxy or "unknown".
   [░░░░░░░░░░░░░░░░░░░░]  weekly · Sonnet   1%
 ```
 
+**Always-on:** wire `agent-guard statusline` as your Claude Code **statusLine** to keep a live
+`🛡 🟢 5h 12% · wk 17%` in the status bar — it refreshes the numbers in the background
+(throttled, non-blocking) so the hook's in-session pacing warnings stay current too:
+
+```jsonc
+// .claude/settings.json (or settings.local.json)
+{ "statusLine": { "type": "command", "command": "agent-guard statusline" } }
+```
+
 ### Alternative: the proxy
 
 Anthropic also reports your standing on every response via `anthropic-ratelimit-unified-*`

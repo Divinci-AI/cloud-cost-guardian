@@ -32,6 +32,7 @@ import {
 import { evaluate, warnKey, type Verdict } from "./budget.js";
 import { dispatchAlert, type AlertEvent } from "./alert.js";
 import { buildLimitsReport } from "./report.js";
+import { triggerBackgroundRefresh } from "./claude-usage.js";
 import type { GuardConfig } from "./config.js";
 import type { Ledger, SessionRecord } from "./ledger.js";
 
@@ -178,10 +179,19 @@ export async function runHook(): Promise<void> {
       process.exit(0);
     }
 
+    // Keep real plan limits fresh in the background (throttled, non-blocking) so
+    // the pacing nudge below — and `ks guard status` — reflect current numbers
+    // even without the statusLine rendering.
+    try {
+      const cliPath = fileURLToPath(import.meta.url).replace(/hook\.js$/, "cli.js");
+      triggerBackgroundRefresh(cliPath, now);
+    } catch {
+      /* best-effort */
+    }
+
     // Subscription rate-limit pacing — alert-only, surfaced in-session. Reads the
-    // snapshot the proxy persisted from Anthropic's headers (or a tier estimate),
-    // so even a hook-only session learns when it's about to lock out. Deduped per
-    // window+level so it doesn't repeat every tool call.
+    // snapshot the OAuth usage fetch / proxy persisted, so even a hook-only
+    // session learns when it's about to lock out. Deduped per window+level.
     const limitMsg = limitNudge(cfg, rec, ledger, now);
 
     // Surface the warn nudge only on the first trip per scope (shouldAlert), not

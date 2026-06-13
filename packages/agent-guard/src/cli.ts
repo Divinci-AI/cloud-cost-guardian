@@ -28,7 +28,9 @@ import { evaluate } from "./budget.js";
 import { fmtUSD } from "./cost.js";
 import { installHook, setBudget, setLimits, resetLedger } from "./ops.js";
 import { buildStatusReport, formatLimitsLines } from "./report.js";
-import { refreshUsage } from "./claude-usage.js";
+import { refreshUsage, triggerBackgroundRefresh } from "./claude-usage.js";
+import { tierLabel } from "./claude-code.js";
+import type { LimitsReport } from "./report.js";
 
 const program = new Command();
 program
@@ -167,6 +169,66 @@ program
     console.log("");
     for (const line of formatLimitsLines(report.limits)) console.log(line);
     console.log("");
+  });
+
+// ── statusline (Claude Code status bar) ──────────────────────────────────────
+/** One-line plan-limit summary for a status bar. */
+function renderStatusline(limits: LimitsReport): string {
+  if (limits.source === "headers" && limits.windows.length) {
+    const dot = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
+    const parts = limits.windows.map(
+      (w) => `${w.window === "5h" ? "5h" : "wk"} ${Math.round(w.utilization * 100)}%`,
+    );
+    return `🛡 ${dot} ${parts.join(" · ")}`;
+  }
+  const label = limits.tier ? tierLabel(limits.tier) : "limits";
+  return `🛡 ${label} · usage pending`;
+}
+
+program
+  .command("statusline")
+  .description("Claude Code statusLine command: print live plan limits (and keep them fresh)")
+  .action(async () => {
+    // Drain stdin (Claude Code pipes its render JSON) so we don't EPIPE; we don't
+    // need its contents for the limit display.
+    try {
+      if (!process.stdin.isTTY) {
+        await new Promise<void>((resolve) => {
+          process.stdin.on("data", () => {});
+          process.stdin.on("end", () => resolve());
+          process.stdin.on("error", () => resolve());
+          setTimeout(resolve, 200);
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+    // Refresh in the background (non-blocking) so the bar renders instantly from cache.
+    try {
+      const cliPath = fileURLToPath(import.meta.url);
+      triggerBackgroundRefresh(cliPath, Date.now());
+    } catch {
+      /* best-effort */
+    }
+    try {
+      process.stdout.write(renderStatusline(buildStatusReport().limits));
+    } catch {
+      process.stdout.write("🛡");
+    }
+    process.exit(0);
+  });
+
+// ── _refresh-usage (internal: detached throttled refresh) ────────────────────
+program
+  .command("_refresh-usage")
+  .description("(internal) fetch + persist real plan limits, then exit")
+  .action(async () => {
+    try {
+      await refreshUsage(Date.now(), { force: true });
+    } catch {
+      /* best-effort */
+    }
+    process.exit(0);
   });
 
 // ── pause / resume (escape hatch) ────────────────────────────────────────────
