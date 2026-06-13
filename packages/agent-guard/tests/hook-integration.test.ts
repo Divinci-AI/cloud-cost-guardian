@@ -121,6 +121,49 @@ describe.skipIf(!haveBuild)("hook integration (compiled cli.js hook)", () => {
     expect(stdout.trim()).toBe(""); // no usage → $0 → ok → silent
   });
 
+  it("does NOT hard-block a subscription user on the dollar cap — advises with real usage instead", () => {
+    // Fresh real snapshot (low usage) ⇒ subscription mode. Dollars way over the cap.
+    const now = Date.now();
+    writeLimitsSnapshot({
+      fiveHour: { utilization: 0.16, resetAt: now + 3 * 3600_000 },
+      weekly: { utilization: 0.26, resetAt: now + 4 * 86_400_000 },
+      status: "oauth-usage",
+      observedAt: now,
+    });
+    const transcript = writeTranscript("claude-sonnet-4", 1_000_000, 0); // $3.00, over a $1 hard cap
+
+    const { stdout, status } = runHook(
+      { session_id: "s-sub-block", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      { AGENT_GUARD_SESSION_HARD: "1", AGENT_GUARD_SESSION_SOFT: "0.5", AGENT_GUARD_NO_KEYCHAIN: "1" },
+    );
+    expect(status).toBe(0);
+    const out = JSON.parse(stdout);
+    // Crucially NOT a deny:
+    expect(out.hookSpecificOutput.permissionDecision).toBeUndefined();
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/NOT blocking/i);
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/5-hour: 16% used/);
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/weekly: 26% used/);
+
+    // …and it only advises once — a second over-cap call stays silent (allows).
+    const second = runHook(
+      { session_id: "s-sub-block", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      { AGENT_GUARD_SESSION_HARD: "1", AGENT_GUARD_SESSION_SOFT: "0.5", AGENT_GUARD_NO_KEYCHAIN: "1" },
+    );
+    expect(second.stdout.trim()).toBe("");
+  });
+
+  it("still HARD-BLOCKS an API-key user (no subscription data) over the dollar cap", () => {
+    // No snapshot ⇒ pay-as-you-go ⇒ real money ⇒ the wall stays.
+    const transcript = writeTranscript("claude-sonnet-4", 1_000_000, 0);
+    const { stdout } = runHook(
+      { session_id: "s-api-block", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      { AGENT_GUARD_SESSION_HARD: "1", AGENT_GUARD_NO_KEYCHAIN: "1" },
+    );
+    const out = JSON.parse(stdout);
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toMatch(/hard cap reached/i);
+  });
+
   it("injects a subscription pacing nudge from a persisted snapshot, even when dollars are fine", () => {
     // Dollar spend is trivial (under soft), but the proxy left a danger-level
     // weekly snapshot — the hook should read it and surface it in-session.

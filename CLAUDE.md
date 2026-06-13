@@ -96,10 +96,12 @@ ks guard reset --limits                           # clear the subscription detec
 > (see `packages/agent-guard`) — both share one ledger, budget, and escape hatch.
 >
 > **Two currencies:** API-key users are gated on **dollars** (session + daily-rolling hard
-> caps, blocks at the cap). Pro/Max subscription sessions are flat-fee, so once the proxy sees
-> Anthropic's `unified-*` rate-limit headers it switches to **subscription mode**: it paces the
-> 5-hour + weekly quota (burn-rate vs. reset time, projected lockout) and only *warns* — it
-> never blocks. The dollar 402 is suppressed **only** for the anthropic proxy when you've
+> caps, blocks at the cap). Pro/Max subscription sessions are flat-fee, so dollars are a
+> meaningless list-price *estimate*. **Both** the proxy AND the hook are subscription-aware:
+> when real plan-limit data exists (a fresh usage snapshot) or `--plan` is pinned, the hook
+> NEVER hard-blocks on dollars — it advises once (showing your real 5h/weekly %) and lets the
+> session run, pacing the real rate-limit quota instead (burn-rate vs. reset, projected lockout).
+> Dollar soft-cap warns are also suppressed in subscription mode. The dollar 402 is suppressed **only** for the anthropic proxy when you've
 > pinned a subscription `--plan` or seen fresh `unified-*` headers (within 5h) — so a billed
 > OpenAI/other agent sharing the proxy keeps its hard wall. State in
 > `~/.kill-switch/agent-guard/limits.json` (clear with `ks guard reset --limits`).
