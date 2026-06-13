@@ -154,7 +154,10 @@ Tune the thresholds (0–1 utilization) if the defaults are too eager:
 
 The first time the proxy sees the `unified-*` headers it writes the raw values once to
 `~/.kill-switch/agent-guard/events.jsonl` (`kind: "unified-headers-observed"`) — so you can
-confirm Anthropic's exact value formats with a single `cat`.
+confirm Anthropic's exact value formats with a single `cat`. Only `unified-*` headers are
+captured (an explicit allowlist — never `Authorization` / `x-api-key` / cookies), values are
+length-capped, and the dump stays local. In `auto` mode the dollar-wall suppression trusts the
+upstream's headers; pin `--plan` if you'd rather it not depend on what the upstream reports.
 
 > Because subscription mode is alert-only, the "don't run both hook *and* proxy" caveat below
 > doesn't bite here — running Claude Code through the proxy is exactly what feeds the limit

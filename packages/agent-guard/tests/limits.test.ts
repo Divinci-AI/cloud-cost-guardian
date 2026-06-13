@@ -5,6 +5,7 @@ import {
   parseUnifiedHeaders,
   recordHeaders,
   limitNotifyKey,
+  unifiedHeaderDump,
 } from "../src/limits.js";
 
 /**
@@ -79,6 +80,32 @@ describe("parseUnifiedHeaders", () => {
     const h = recordHeaders({ "ANTHROPIC-RateLimit-Unified-7d-Utilization": "0.9" });
     const snap = parseUnifiedHeaders(h, now)!;
     expect(snap.weekly!.utilization).toBeCloseTo(0.9);
+  });
+});
+
+describe("unifiedHeaderDump (security: allowlist + truncation)", () => {
+  it("captures only anthropic-ratelimit-unified-* headers — never credentials", () => {
+    const dump = unifiedHeaderDump({
+      authorization: "Bearer sk-ant-SECRET",
+      "x-api-key": "sk-ant-SECRET2",
+      cookie: "session=SECRET3",
+      "anthropic-ratelimit-unified-status": "allowed",
+      "anthropic-ratelimit-unified-7d-utilization": "0.62",
+      "content-type": "text/event-stream",
+    });
+    expect(Object.keys(dump).sort()).toEqual([
+      "anthropic-ratelimit-unified-7d-utilization",
+      "anthropic-ratelimit-unified-status",
+    ]);
+    // No credential material leaks in, by key or by value.
+    const serialized = JSON.stringify(dump);
+    expect(serialized).not.toMatch(/SECRET|authorization|x-api-key|cookie/i);
+  });
+
+  it("truncates an over-long header value (hostile-upstream bloat)", () => {
+    const dump = unifiedHeaderDump({ "anthropic-ratelimit-unified-status": "x".repeat(5000) });
+    expect(dump["anthropic-ratelimit-unified-status"].length).toBeLessThan(300);
+    expect(dump["anthropic-ratelimit-unified-status"]).toMatch(/truncated/);
   });
 });
 

@@ -262,6 +262,13 @@ function planIsSubscription(plan: string): boolean {
  * Code subscription session (or under a pinned `--plan`) would also be
  * suppressed. That's a narrow, opt-in-ish overlap; the common dual-use case
  * (Claude Code + an OpenAI-flavor agent) is fully covered by the flavor gate.
+ *
+ * Trust model: in `auto` mode this trusts the upstream's `unified-*` headers, so
+ * a malicious/compromised Anthropic-compatible gateway could disarm the dollar
+ * wall by emitting fake subscription headers. That upstream already holds your
+ * API key (you pointed the proxy at it), and `net.ts` enforces https + warns on
+ * an unexpected host — so this isn't a new trust boundary. Pin `--plan` if you
+ * want suppression to be an explicit, upstream-independent choice.
  */
 function dollarWallSuppressed(
   cfg: GuardConfig,

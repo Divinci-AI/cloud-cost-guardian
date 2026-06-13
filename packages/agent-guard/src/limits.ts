@@ -180,13 +180,21 @@ export function limitNotifyKey(window: LimitWindow, level: string, resetAt: numb
  * Used for the write-once diagnostic — Anthropic's value *formats* (fraction vs.
  * percent, ISO vs. epoch reset) aren't fully documented, so capturing the raw
  * strings the first time we see them makes verification a single `cat` away.
+ *
+ * Security: this is an explicit **allowlist** by the `anthropic-ratelimit-unified`
+ * prefix — credential headers (Authorization, x-api-key, cookies) are never
+ * captured, even though the caller hands us the full response header set. Values
+ * are length-capped so a hostile/compromised upstream can't bloat the log.
  */
+const MAX_DUMP_VALUE = 256;
 export function unifiedHeaderDump(rec: Record<string, string | string[] | undefined>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(rec)) {
     if (v == null) continue;
     const key = k.toLowerCase();
-    if (key.startsWith("anthropic-ratelimit-unified")) out[key] = Array.isArray(v) ? v.join(", ") : v;
+    if (!key.startsWith("anthropic-ratelimit-unified")) continue;
+    const val = Array.isArray(v) ? v.join(", ") : v;
+    out[key] = val.length > MAX_DUMP_VALUE ? val.slice(0, MAX_DUMP_VALUE) + "…[truncated]" : val;
   }
   return out;
 }
