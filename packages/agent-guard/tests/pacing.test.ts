@@ -69,6 +69,45 @@ describe("assessWindow — pacing math", () => {
   });
 });
 
+describe("assessWindow — boundary conditions", () => {
+  const now = 1_700_000_000_000;
+  const halfWeekReset = now + WEEK / 2; // on-pace baseline (50% elapsed)
+
+  it("exactly at the soft threshold (and under pace) is warn, not ok", () => {
+    // 60% used but 80% elapsed → under pace, no lockout, so the level is driven
+    // purely by the absolute soft threshold (= warn, not escalated to danger).
+    const underPaceReset = now + WEEK * 0.2;
+    const a = assessWindow("weekly", { utilization: 0.6, resetAt: underPaceReset }, T, now); // soft = 0.6
+    expect(a.willLockOutBeforeReset).toBe(false);
+    expect(a.level).toBe("warn");
+  });
+
+  it("exactly at the danger threshold is danger", () => {
+    const a = assessWindow("weekly", { utilization: 0.85, resetAt: halfWeekReset }, T, now); // danger = 0.85
+    expect(a.level).toBe("danger");
+  });
+
+  it("fully exhausted (100%) is danger with immediate lockout", () => {
+    const a = assessWindow("weekly", { utilization: 1, resetAt: halfWeekReset }, T, now);
+    expect(a.level).toBe("danger");
+    expect(a.willLockOutBeforeReset).toBe(true);
+    expect(a.projectedExhaustionAt).toBe(now); // already out
+  });
+
+  it("a reset time in the past yields no false lockout (window already rolled over)", () => {
+    // elapsed clamps to the full window; exhaustion projects into the future,
+    // which is AFTER a past reset → not flagged as lock-out-before-reset.
+    const a = assessWindow("weekly", { utilization: 0.5, resetAt: now - 1000 }, T, now);
+    expect(a.willLockOutBeforeReset).toBe(false);
+  });
+
+  it("zero utilization is always ok", () => {
+    const a = assessWindow("5h", { utilization: 0, resetAt: now + 60_000 }, T, now);
+    expect(a.level).toBe("ok");
+    expect(a.projectedExhaustionAt).toBeNull();
+  });
+});
+
 describe("worstLevel", () => {
   it("returns the most severe level present", () => {
     expect(worstLevel([{ level: "ok" } as any, { level: "warn" } as any])).toBe("warn");

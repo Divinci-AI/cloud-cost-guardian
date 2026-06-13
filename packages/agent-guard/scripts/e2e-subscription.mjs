@@ -39,7 +39,10 @@ try {
   console.error(`\n✗ Could not load ${dist}\n  Build first:  npm run build   (or use:  npm run e2e)\n`);
   process.exit(2);
 }
-const { startProxy, buildStatusReport, formatLimitsLines, loadLimitsState } = mod;
+const {
+  startProxy, buildStatusReport, formatLimitsLines, loadLimitsState,
+  setBudget, emptyLedger, setSessionCost, saveLedger,
+} = mod;
 
 const now = Date.now();
 const HOUR = 3600_000;
@@ -137,20 +140,49 @@ async function main() {
     /* diagnostic only */
   }
 
-  console.log("  ── result ───────────────────────────────────────────────────");
-  console.log(`  subscription mode latched : ${latched ? "✓" : "✗"}`);
-  console.log(`  reached danger (lockout)  : ${sawDanger ? "✓" : "✗"}`);
-  console.log(`  raw headers logged once   : ${loggedHeaders ? "✓" : "✗"}`);
-  console.log(`  blocked any request (402) : ✗ (alert-only by design)\n`);
-
   upstream.close();
   proxy.close();
 
-  if (latched && sawDanger && loggedHeaders) {
-    console.log("  ✅ e2e PASS — guard read real rate-limit headers, logged them once, paced them, and warned of lockout without blocking.\n");
+  // ── F1 scenario: a billed (OpenAI-flavor) agent sharing the proxy must STILL
+  // hit the dollar wall, even though subscription mode is now latched globally.
+  console.log("  Now a billed OpenAI-flavor agent (over its dollar cap) runs through the proxy…\n");
+  setBudget({ sessionHardUSD: 1, dailyHardUSD: 1000 });
+  const led = emptyLedger();
+  setSessionCost(led, "billed-agent", 50, 100, 100, now); // already $50, over the $1 cap
+  saveLedger(led);
+
+  let billedUpstreamHit = false;
+  const billedUpstream = createServer((_req, res) => {
+    billedUpstreamHit = true;
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end("{}");
+  });
+  const billedUpPort = await listen(billedUpstream);
+  const billedProxy = startProxy({ port: 0, flavor: "openai", upstream: `http://127.0.0.1:${billedUpPort}` });
+  const billedProxyPort = await listen(billedProxy);
+
+  const billedRes = await fetch(`http://127.0.0.1:${billedProxyPort}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-agent-guard-session": "billed-agent" },
+    body: "{}",
+  });
+  await sleep(60);
+  const walled = billedRes.status === 402 && billedUpstreamHit === false;
+  billedUpstream.close();
+  billedProxy.close();
+
+  console.log("  ── result ───────────────────────────────────────────────────");
+  console.log(`  subscription mode latched     : ${latched ? "✓" : "✗"}`);
+  console.log(`  reached danger (lockout)      : ${sawDanger ? "✓" : "✗"}`);
+  console.log(`  raw headers logged once       : ${loggedHeaders ? "✓" : "✗"}`);
+  console.log(`  subscription session blocked  : ✗ (alert-only by design)`);
+  console.log(`  billed agent STILL 402'd (F1) : ${walled ? "✓" : "✗"}  (status ${billedRes.status})\n`);
+
+  if (latched && sawDanger && loggedHeaders && walled) {
+    console.log("  ✅ e2e PASS — paced the subscription without blocking it, yet kept the dollar wall for the billed agent.\n");
     process.exit(0);
   }
-  console.error("  ❌ e2e FAIL — expected subscription mode to latch, log raw headers once, and reach danger.\n");
+  console.error("  ❌ e2e FAIL — expected: latch + danger + headers logged + billed agent still walled.\n");
   process.exit(1);
 }
 

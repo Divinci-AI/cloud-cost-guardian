@@ -54,6 +54,13 @@ function writeTranscript(model: string, inputTokens: number, outputTokens: numbe
   return p;
 }
 
+/** Seed limits.json in the isolated HOME with a fresh snapshot (as the proxy would). */
+function writeLimitsSnapshot(snapshot: object): void {
+  const dir = join(home, ".kill-switch", "agent-guard");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "limits.json"), JSON.stringify({ version: 1, subscriptionDetected: true, snapshot, notified: {} }));
+}
+
 describe.skipIf(!haveBuild)("hook integration (compiled cli.js hook)", () => {
   it("emits nothing and exits 0 when under the soft cap", () => {
     // 100k input on sonnet-4 @ $3/M = $0.30, under the $5 default soft cap.
@@ -101,5 +108,45 @@ describe.skipIf(!haveBuild)("hook integration (compiled cli.js hook)", () => {
     );
     expect(status).toBe(0);
     expect(stdout.trim()).toBe(""); // no usage → $0 → ok → silent
+  });
+
+  it("injects a subscription pacing nudge from a persisted snapshot, even when dollars are fine", () => {
+    // Dollar spend is trivial (under soft), but the proxy left a danger-level
+    // weekly snapshot — the hook should read it and surface it in-session.
+    const now = Date.now();
+    writeLimitsSnapshot({
+      fiveHour: { utilization: 0.4, resetAt: now + 3 * 3600_000 },
+      weekly: { utilization: 0.92, resetAt: now + 4 * 86_400_000 }, // ≥ danger
+      status: "warning",
+      observedAt: now,
+    });
+    const transcript = writeTranscript("claude-sonnet-4", 50_000, 0); // ~$0.15, well under soft
+
+    const { stdout, status } = runHook(
+      { session_id: "s-limit", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      {},
+    );
+    expect(status).toBe(0);
+    const out = JSON.parse(stdout);
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/plan pacing/i);
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/weekly limit 92% used/);
+    expect(out.systemMessage).toMatch(/Kill Switch/);
+  });
+
+  it("does NOT nudge on a stale snapshot whose window already reset (F2)", () => {
+    const now = Date.now();
+    writeLimitsSnapshot({
+      fiveHour: null,
+      weekly: { utilization: 0.95, resetAt: now - 3600_000 }, // reset already passed → must be dropped
+      status: "warning",
+      observedAt: now,
+    });
+    const transcript = writeTranscript("claude-sonnet-4", 50_000, 0);
+    const { stdout, status } = runHook(
+      { session_id: "s-stale", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      {},
+    );
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(""); // stale window dropped → nothing to surface
   });
 });

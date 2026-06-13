@@ -172,6 +172,44 @@ describe("proxy request forwarding + metering", () => {
     expect(after).toHaveLength(1);
   });
 
+  it("captures unified headers on a STREAMING (SSE) response too", async () => {
+    // Headers ride the HTTP response, independent of the streamed body — so a
+    // streaming Claude Code turn must still latch subscription mode.
+    const sse = [
+      `event: message_start`,
+      `data: ${JSON.stringify({ type: "message_start", message: { model: "claude-sonnet-4", usage: { input_tokens: 20 } } })}`,
+      ``,
+      `event: message_delta`,
+      `data: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 10 } })}`,
+      ``,
+      `data: [DONE]`,
+      ``,
+    ].join("\n");
+    const server = createServer((req, res) => {
+      let b = "";
+      req.on("data", (c) => (b += c));
+      req.on("end", () => {
+        res.writeHead(200, {
+          "content-type": "text/event-stream",
+          "anthropic-ratelimit-unified-status": "warning",
+          "anthropic-ratelimit-unified-7d-utilization": "0.81",
+          "anthropic-ratelimit-unified-7d-reset": "2026-06-20T01:00:00Z",
+        });
+        res.end(sse);
+      });
+    });
+    const upPort = await listen(server);
+    const proxy = startProxy({ port: 0, flavor: "anthropic", upstream: `http://127.0.0.1:${upPort}` });
+    const proxyPort = await listen(proxy);
+
+    const res = await post(proxyPort, "/v1/messages", JSON.stringify({ stream: true }), { "x-agent-guard-session": "sess-sse" });
+    expect(res.status).toBe(200);
+
+    const latched = await waitFor(() => loadLimitsState().subscriptionDetected);
+    expect(latched).toBe(true);
+    expect(loadLimitsState().snapshot!.weekly!.utilization).toBeCloseTo(0.81);
+  });
+
   // F1: the dollar-402 suppression is scoped (flavor + pinned-plan / fresh
   // headers), NOT a permanent global latch. Seed an over-cap session, then vary
   // what's known about subscription state.
