@@ -134,6 +134,10 @@ soft — if it's unavailable, agent-guard falls back to the proxy or "unknown".
 > **Always Allow** so it doesn't ask again. Background auto-refresh (from the hook/statusLine)
 > stays off until that first **foreground** command succeeds, so you never get a surprise prompt
 > mid-session.
+>
+> **Token safety:** the OAuth token is only ever sent to Anthropic (`*.anthropic.com` over https)
+> or loopback — even if `AGENT_GUARD_USAGE_URL` is set, an off-allowlist host is refused, so a
+> poisoned env var can't exfiltrate it. Set `AGENT_GUARD_NO_KEYCHAIN=1` to forbid Keychain reads.
 
 ```
 🟢 Claude Code plan limits  ·  observed just now

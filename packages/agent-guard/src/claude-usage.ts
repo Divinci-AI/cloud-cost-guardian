@@ -117,15 +117,37 @@ export interface UsageResponse {
   extra_usage?: { is_enabled?: boolean; monthly_limit?: number; used_credits?: number } | null;
 }
 
+/**
+ * Where may we send the account OAuth token? Only Anthropic (any `*.anthropic.com`
+ * over https) or a loopback address (for a local proxy / tests). This is a
+ * security control: the token grants account-level access, so a poisoned
+ * `AGENT_GUARD_USAGE_URL` must NEVER be able to exfiltrate it to an arbitrary host.
+ */
+export function isAllowedUsageUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.toLowerCase();
+    const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+    const isAnthropic = host === "anthropic.com" || host.endsWith(".anthropic.com");
+    const schemeOk = u.protocol === "https:" || (u.protocol === "http:" && isLocal);
+    return schemeOk && (isLocal || isAnthropic);
+  } catch {
+    return false;
+  }
+}
+
 /** GET the usage endpoint with the given token. Returns null on any failure. */
 export async function fetchUsage(token: string, timeoutMs = 8000): Promise<UsageResponse | null> {
+  // AGENT_GUARD_USAGE_URL may point at a local proxy or test server, but the
+  // token only ever leaves for Anthropic or loopback — never an arbitrary host.
+  const url = process.env.AGENT_GUARD_USAGE_URL || USAGE_URL;
+  if (!isAllowedUsageUrl(url)) return null; // refuse to send the credential off-limits
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     let res: Response;
     try {
-      // AGENT_GUARD_USAGE_URL lets you point at a gateway (and lets tests use a local server).
-      res = await fetch(process.env.AGENT_GUARD_USAGE_URL || USAGE_URL, {
+      res = await fetch(url, {
         headers: {
           authorization: `Bearer ${token}`,
           "anthropic-beta": OAUTH_BETA,

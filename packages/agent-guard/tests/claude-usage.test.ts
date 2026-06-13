@@ -10,6 +10,7 @@ import {
   triggerBackgroundRefresh,
   saveUsageMeta,
   loadUsageMeta,
+  isAllowedUsageUrl,
   type UsageResponse,
 } from "../src/claude-usage.js";
 import { saveLimitsState, emptyLimitsState, loadLimitsState } from "../src/limits.js";
@@ -54,6 +55,24 @@ describe("usageToSnapshot — OAuth usage endpoint mapping", () => {
   it("clamps an over-100 utilization to 1.0", () => {
     const s = usageToSnapshot({ five_hour: { utilization: 130, resets_at: null } }, now);
     expect(s.fiveHour!.utilization).toBe(1);
+  });
+});
+
+describe("isAllowedUsageUrl — token destination allowlist (security)", () => {
+  it("allows Anthropic over https and loopback", () => {
+    expect(isAllowedUsageUrl("https://api.anthropic.com/api/oauth/usage")).toBe(true);
+    expect(isAllowedUsageUrl("https://anthropic.com/x")).toBe(true);
+    expect(isAllowedUsageUrl("http://127.0.0.1:8080/u")).toBe(true);
+    expect(isAllowedUsageUrl("http://localhost:1234")).toBe(true);
+  });
+  it("refuses arbitrary hosts so the OAuth token can't be exfiltrated", () => {
+    expect(isAllowedUsageUrl("https://evil.com/steal")).toBe(false);
+    expect(isAllowedUsageUrl("http://evil.com")).toBe(false);
+    expect(isAllowedUsageUrl("https://api.anthropic.com.evil.com")).toBe(false); // suffix trick
+    expect(isAllowedUsageUrl("https://evil-anthropic.com")).toBe(false);
+    expect(isAllowedUsageUrl("http://api.anthropic.com")).toBe(false); // http to a non-loopback host
+    expect(isAllowedUsageUrl("not a url")).toBe(false);
+    expect(isAllowedUsageUrl("file:///etc/passwd")).toBe(false);
   });
 });
 
