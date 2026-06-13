@@ -27,10 +27,8 @@ import { loadLedger, rollingDailyCost } from "./ledger.js";
 import { evaluate } from "./budget.js";
 import { fmtUSD } from "./cost.js";
 import { installHook, setBudget, setLimits, resetLedger } from "./ops.js";
-import { buildStatusReport, formatLimitsLines } from "./report.js";
+import { buildStatusReport, formatLimitsLines, formatStatusline } from "./report.js";
 import { refreshUsage, triggerBackgroundRefresh } from "./claude-usage.js";
-import { tierLabel } from "./claude-code.js";
-import type { LimitsReport } from "./report.js";
 
 const program = new Command();
 program
@@ -173,19 +171,6 @@ program
   });
 
 // ── statusline (Claude Code status bar) ──────────────────────────────────────
-/** One-line plan-limit summary for a status bar. */
-function renderStatusline(limits: LimitsReport): string {
-  if (limits.source === "headers" && limits.windows.length) {
-    const dot = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
-    const parts = limits.windows.map(
-      (w) => `${w.window === "5h" ? "5h" : "wk"} ${Math.round(w.utilization * 100)}%`,
-    );
-    return `🛡 ${dot} ${parts.join(" · ")}`;
-  }
-  const label = limits.tier ? tierLabel(limits.tier) : "limits";
-  return `🛡 ${label} · usage pending`;
-}
-
 program
   .command("statusline")
   .description("Claude Code statusLine command: print live plan limits (and keep them fresh)")
@@ -212,7 +197,7 @@ program
       /* best-effort */
     }
     try {
-      process.stdout.write(renderStatusline(buildStatusReport().limits));
+      process.stdout.write(formatStatusline(buildStatusReport().limits));
     } catch {
       process.stdout.write("🛡");
     }

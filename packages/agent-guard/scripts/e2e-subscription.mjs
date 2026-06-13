@@ -21,7 +21,7 @@
  */
 
 import { createServer } from "node:http";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,7 +41,7 @@ try {
 }
 const {
   startProxy, buildStatusReport, formatLimitsLines, loadLimitsState,
-  setBudget, emptyLedger, setSessionCost, saveLedger,
+  setBudget, emptyLedger, setSessionCost, saveLedger, refreshUsage,
 } = mod;
 
 const now = Date.now();
@@ -90,6 +90,30 @@ function sleep(ms) {
 }
 
 async function main() {
+  // ── Scenario 0: real limits via the /api/oauth/usage endpoint (no proxy) ──
+  console.log("  Fetching REAL limits from a mock /api/oauth/usage endpoint (no proxy)…\n");
+  mkdirSync(join(homedir(), ".claude"), { recursive: true });
+  writeFileSync(join(homedir(), ".claude", ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "e2e-token" } }));
+  process.env.AGENT_GUARD_NO_KEYCHAIN = "1";
+  const usageServer = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({
+      five_hour: { utilization: 12, resets_at: new Date(now + 3 * HOUR).toISOString() },
+      seven_day: { utilization: 17, resets_at: new Date(now + 4 * DAY).toISOString() },
+      seven_day_sonnet: { utilization: 1, resets_at: null },
+    }));
+  });
+  const usagePort = await listen(usageServer);
+  process.env.AGENT_GUARD_USAGE_URL = `http://127.0.0.1:${usagePort}`;
+  await refreshUsage(Date.now(), { force: true, foreground: true });
+  const usageReport = buildStatusReport().limits;
+  for (const line of formatLimitsLines(usageReport)) console.log(`  ${line}`);
+  console.log("");
+  const usageWeekly = Math.round((usageReport.windows.find((w) => w.window === "weekly")?.utilization || 0) * 100);
+  const usageOk = usageReport.source === "headers" && usageWeekly === 17;
+  usageServer.close();
+  delete process.env.AGENT_GUARD_USAGE_URL;
+
   const upPort = await listen(upstream);
   const proxy = startProxy({ port: 0, flavor: "anthropic", upstream: `http://127.0.0.1:${upPort}` });
   const proxyPort = await listen(proxy);
@@ -172,17 +196,18 @@ async function main() {
   billedProxy.close();
 
   console.log("  ── result ───────────────────────────────────────────────────");
-  console.log(`  subscription mode latched     : ${latched ? "✓" : "✗"}`);
-  console.log(`  reached danger (lockout)      : ${sawDanger ? "✓" : "✗"}`);
-  console.log(`  raw headers logged once       : ${loggedHeaders ? "✓" : "✗"}`);
-  console.log(`  subscription session blocked  : ✗ (alert-only by design)`);
-  console.log(`  billed agent STILL 402'd (F1) : ${walled ? "✓" : "✗"}  (status ${billedRes.status})\n`);
+  console.log(`  REAL limits via usage endpoint : ${usageOk ? "✓" : "✗"}  (weekly ${usageWeekly}%)`);
+  console.log(`  subscription mode latched      : ${latched ? "✓" : "✗"}`);
+  console.log(`  reached danger (lockout)       : ${sawDanger ? "✓" : "✗"}`);
+  console.log(`  raw headers logged once        : ${loggedHeaders ? "✓" : "✗"}`);
+  console.log(`  subscription session blocked   : ✗ (alert-only by design)`);
+  console.log(`  billed agent STILL 402'd (F1)  : ${walled ? "✓" : "✗"}  (status ${billedRes.status})\n`);
 
-  if (latched && sawDanger && loggedHeaders && walled) {
-    console.log("  ✅ e2e PASS — paced the subscription without blocking it, yet kept the dollar wall for the billed agent.\n");
+  if (usageOk && latched && sawDanger && loggedHeaders && walled) {
+    console.log("  ✅ e2e PASS — real limits from the usage endpoint, proxy pacing, and the dollar wall all hold.\n");
     process.exit(0);
   }
-  console.error("  ❌ e2e FAIL — expected: latch + danger + headers logged + billed agent still walled.\n");
+  console.error("  ❌ e2e FAIL — expected: usage endpoint + latch + danger + headers logged + billed agent walled.\n");
   process.exit(1);
 }
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildLimitsReport, formatLimitsLines } from "../src/report.js";
+import { buildLimitsReport, formatLimitsLines, formatStatusline } from "../src/report.js";
 import { saveLimitsState, emptyLimitsState, WINDOW_MS, type LimitSnapshot } from "../src/limits.js";
 import { DEFAULT_BUDGET, DEFAULT_LIMITS, type GuardConfig } from "../src/config.js";
 import { emptyLedger, type Ledger } from "../src/ledger.js";
@@ -75,6 +75,31 @@ describe("buildLimitsReport — staleness (F2/F3)", () => {
     expect(r.tier).toBe("max5");
     expect(r.windows).toEqual([]);
     expect(r.cost.weeklyUSD).toBeCloseTo(12.5);
+  });
+});
+
+describe("formatStatusline — status-bar one-liner", () => {
+  it("shows real percentages with a level dot when we have headers", () => {
+    saveLimitsState({
+      ...emptyLimitsState(),
+      subscriptionDetected: true,
+      snapshot: snapshot({
+        fiveHour: { utilization: 0.26, resetAt: now + 3 * HOUR },
+        weekly: { utilization: 0.19, resetAt: now + 3 * DAY },
+      }),
+    });
+    const r = buildLimitsReport(cfg("auto"), emptyLedger(), now);
+    expect(formatStatusline(r)).toBe("🛡 🟢 5h 26% · wk 19%");
+  });
+
+  it("falls back to tier + 'usage pending' with no live data", () => {
+    const r = buildLimitsReport(cfg("max20"), emptyLedger(), now);
+    expect(formatStatusline(r)).toBe("🛡 Max 20x · usage pending");
+  });
+
+  it("says 'limits · usage pending' when the tier is unknown too", () => {
+    const r = buildLimitsReport(cfg("auto"), emptyLedger(), now);
+    expect(formatStatusline(r)).toBe("🛡 limits · usage pending");
   });
 });
 

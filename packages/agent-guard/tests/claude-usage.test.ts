@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import {
   usageToSnapshot,
   refreshUsage,
@@ -99,5 +101,66 @@ describe("triggerBackgroundRefresh — G1 authorization gate", () => {
     saveUsageMeta({ authorized: true });
     triggerBackgroundRefresh("/tmp/ks-nonexistent-refresh.js", now);
     expect(loadUsageMeta().lastFetchAt).toBe(now);
+  });
+});
+
+describe("refreshUsage — full flow against a mock endpoint", () => {
+  let prevHome: string | undefined;
+  let home: string;
+  let server: Server | undefined;
+
+  beforeEach(() => {
+    prevHome = process.env.HOME;
+    home = mkdtempSync(join(tmpdir(), "ag-flow-"));
+    process.env.HOME = home;
+    process.env.AGENT_GUARD_NO_KEYCHAIN = "1"; // never touch the real Keychain in tests
+  });
+  afterEach(async () => {
+    if (server) await new Promise<void>((r) => server!.close(() => r()));
+    server = undefined;
+    delete process.env.AGENT_GUARD_USAGE_URL;
+    delete process.env.AGENT_GUARD_NO_KEYCHAIN;
+    if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
+  });
+
+  it("reads the file token, fetches, maps, persists the snapshot, and sets authorized + stamp", async () => {
+    // token via the cross-platform creds file (file-first read)
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    writeFileSync(join(home, ".claude", ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "test-token" } }));
+
+    // mock usage endpoint
+    let sawAuth = "";
+    server = createServer((req, res) => {
+      sawAuth = (req.headers["authorization"] as string) || "";
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        five_hour: { utilization: 26, resets_at: "2026-06-13T16:20:00+00:00" },
+        seven_day: { utilization: 19, resets_at: "2026-06-17T03:00:00+00:00" },
+        seven_day_sonnet: { utilization: 1, resets_at: null },
+      }));
+    });
+    const port = await new Promise<number>((r) => server!.listen(0, "127.0.0.1", () => r((server!.address() as AddressInfo).port)));
+    process.env.AGENT_GUARD_USAGE_URL = `http://127.0.0.1:${port}`;
+
+    const snap = await refreshUsage(now, { force: true, foreground: true });
+
+    expect(snap).not.toBeNull();
+    expect(snap!.fiveHour!.utilization).toBeCloseTo(0.26);
+    expect(snap!.weekly!.utilization).toBeCloseTo(0.19);
+    expect(snap!.extras).toEqual([{ label: "weekly · Sonnet", utilization: 0.01, resetAt: null }]);
+    expect(sawAuth).toBe("Bearer test-token"); // token sent as Bearer
+    // persisted to limits.json
+    expect(loadLimitsState().snapshot!.weekly!.utilization).toBeCloseTo(0.19);
+    expect(loadLimitsState().subscriptionDetected).toBe(true);
+    // meta updated (separate file)
+    expect(loadUsageMeta().authorized).toBe(true);
+    expect(loadUsageMeta().lastFetchAt).toBe(now);
+  });
+
+  it("returns null and does NOT authorize when there's no token", async () => {
+    // no creds file, keychain disabled → no token
+    const snap = await refreshUsage(now, { force: true, foreground: true });
+    expect(snap).toBeNull();
+    expect(loadUsageMeta().authorized).toBeUndefined();
   });
 });

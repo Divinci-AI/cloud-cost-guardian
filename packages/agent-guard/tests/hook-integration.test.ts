@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -59,6 +59,17 @@ function writeLimitsSnapshot(snapshot: object): void {
   const dir = join(home, ".kill-switch", "agent-guard");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "limits.json"), JSON.stringify({ version: 1, subscriptionDetected: true, snapshot, notified: {} }));
+}
+
+function usageMetaPath(): string {
+  return join(home, ".kill-switch", "agent-guard", "usage-meta.json");
+}
+function writeUsageMeta(meta: object): void {
+  mkdirSync(join(home, ".kill-switch", "agent-guard"), { recursive: true });
+  writeFileSync(usageMetaPath(), JSON.stringify(meta));
+}
+function readUsageMeta(): any {
+  try { return JSON.parse(readFileSync(usageMetaPath(), "utf8")); } catch { return {}; }
 }
 
 describe.skipIf(!haveBuild)("hook integration (compiled cli.js hook)", () => {
@@ -131,6 +142,29 @@ describe.skipIf(!haveBuild)("hook integration (compiled cli.js hook)", () => {
     expect(out.hookSpecificOutput.additionalContext).toMatch(/plan pacing/i);
     expect(out.hookSpecificOutput.additionalContext).toMatch(/weekly limit 92% used/);
     expect(out.systemMessage).toMatch(/Kill Switch/);
+  });
+
+  it("fires a throttled background usage refresh when authorized (claims the stamp)", () => {
+    // authorized (a foreground command already opted in) → the hook should claim
+    // the refresh slot. NO_KEYCHAIN keeps the detached child inert (no real fetch).
+    writeUsageMeta({ authorized: true });
+    const transcript = writeTranscript("claude-sonnet-4", 10_000, 0);
+    const { status } = runHook(
+      { session_id: "s-bg", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      { AGENT_GUARD_NO_KEYCHAIN: "1" },
+    );
+    expect(status).toBe(0);
+    expect(typeof readUsageMeta().lastFetchAt).toBe("number"); // the hook claimed the slot
+  });
+
+  it("does NOT fire the background refresh until authorized (no surprise Keychain read)", () => {
+    writeUsageMeta({}); // not authorized
+    const transcript = writeTranscript("claude-sonnet-4", 10_000, 0);
+    runHook(
+      { session_id: "s-bg2", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      { AGENT_GUARD_NO_KEYCHAIN: "1" },
+    );
+    expect(readUsageMeta().lastFetchAt).toBeUndefined(); // gated off
   });
 
   it("does NOT nudge on a stale snapshot whose window already reset (F2)", () => {

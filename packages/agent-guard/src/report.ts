@@ -174,6 +174,19 @@ export function formatLimitsLines(limits: LimitsReport, now: number = Date.now()
   ];
 }
 
+/** One-line plan-limit summary for a status bar (e.g. Claude Code statusLine). */
+export function formatStatusline(limits: LimitsReport): string {
+  if (limits.source === "headers" && limits.windows.length) {
+    const dot = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
+    const parts = limits.windows.map(
+      (w) => `${w.window === "5h" ? "5h" : "wk"} ${Math.round(w.utilization * 100)}%`,
+    );
+    return `🛡 ${dot} ${parts.join(" · ")}`;
+  }
+  const label = limits.tier ? tierLabel(limits.tier) : "limits";
+  return `🛡 ${label} · usage pending`;
+}
+
 /** Build the current status report from the on-disk config + ledger. */
 export function buildStatusReport(now: number = Date.now()): StatusReport {
   const cfg = loadConfig();

@@ -70,25 +70,38 @@ const DEFAULT_THROTTLE_MS = 120_000; // don't hammer the endpoint
  * Best-effort read of the Claude Code OAuth access token from the OS credential
  * store. Returns null (never throws, never logs the token) if unavailable.
  */
-export function readOAuthToken(): string | null {
+function tokenFrom(raw: string): string | null {
   try {
-    let raw: string;
-    if (platform() === "darwin") {
-      raw = execFileSync("security", ["find-generic-password", "-s", "Claude Code-credentials", "-w"], {
-        encoding: "utf8",
-        timeout: 4000,
-        stdio: ["ignore", "pipe", "ignore"],
-      });
-    } else {
-      // Linux (and Windows, where this path usually won't exist → graceful null,
-      // i.e. no real-limits on Windows for now; the proxy still works there).
-      raw = readFileSync(join(homedir(), ".claude", ".credentials.json"), "utf8");
-    }
     const j = JSON.parse(raw) as { claudeAiOauth?: { accessToken?: string }; accessToken?: string };
     return j?.claudeAiOauth?.accessToken ?? j?.accessToken ?? null;
   } catch {
     return null;
   }
+}
+
+export function readOAuthToken(): string | null {
+  // 1) Credentials file (cross-platform; some setups write it, no prompt, testable).
+  try {
+    const t = tokenFrom(readFileSync(join(homedir(), ".claude", ".credentials.json"), "utf8"));
+    if (t) return t;
+  } catch {
+    /* no file — fall through */
+  }
+  // 2) macOS Keychain (skippable via AGENT_GUARD_NO_KEYCHAIN; Windows has neither → null).
+  if (process.env.AGENT_GUARD_NO_KEYCHAIN) return null;
+  if (platform() === "darwin") {
+    try {
+      const raw = execFileSync("security", ["find-generic-password", "-s", "Claude Code-credentials", "-w"], {
+        encoding: "utf8",
+        timeout: 4000,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      return tokenFrom(raw);
+    } catch {
+      /* not in keychain */
+    }
+  }
+  return null;
 }
 
 interface UsageWindow {
@@ -111,7 +124,8 @@ export async function fetchUsage(token: string, timeoutMs = 8000): Promise<Usage
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     let res: Response;
     try {
-      res = await fetch(USAGE_URL, {
+      // AGENT_GUARD_USAGE_URL lets you point at a gateway (and lets tests use a local server).
+      res = await fetch(process.env.AGENT_GUARD_USAGE_URL || USAGE_URL, {
         headers: {
           authorization: `Bearer ${token}`,
           "anthropic-beta": OAUTH_BETA,
