@@ -84,7 +84,7 @@ ks guard proxy --flavor openai                    # hard 402 wall for non-Claude
 # Subscription limit awareness (Claude Code Pro/Max) — ALERT-ONLY, never blocks
 ks guard proxy                                    # run Claude Code THROUGH it (ANTHROPIC_BASE_URL=http://localhost:8787 claude)
                                                   #   → reads anthropic-ratelimit-unified-* headers, paces 5h + weekly windows
-ks guard config --plan max5                       # auto|pro|max5|max20; a pinned tier enables hook-only estimation
+ks guard config --plan max5                       # auto (detect from ~/.claude.json) | pro | max5 | max20
 ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
 ks guard reset --limits                           # clear the subscription detection latch + snapshot (re-arm dollar wall)
 ```

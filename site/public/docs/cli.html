@@ -557,7 +557,7 @@ ks alerts test</code></pre>
                 <tr><td><code>--daily-soft &lt;usd&gt;</code></td><td>Daily rolling soft cap (warn)</td></tr>
                 <tr><td><code>--daily-hard &lt;usd&gt;</code></td><td>Daily rolling hard cap (block)</td></tr>
                 <tr><td><code>--slack-webhook &lt;url&gt;</code></td><td>Slack incoming-webhook for breach alerts</td></tr>
-                <tr><td><code>--plan &lt;tier&gt;</code></td><td>Claude Code plan: <code>auto</code> | <code>pro</code> | <code>max5</code> | <code>max20</code> (subscription limit awareness; a pinned tier enables hook-only estimation)</td></tr>
+                <tr><td><code>--plan &lt;tier&gt;</code></td><td>Claude Code plan: <code>auto</code> (auto-detected from <code>~/.claude.json</code>) | <code>pro</code> | <code>max5</code> | <code>max20</code>. Real 5h/weekly percentages come from the proxy; without it, status shows the detected tier + absolute cost.</td></tr>
                 <tr><td><code>--weekly-soft &lt;pct&gt;</code> / <code>--weekly-danger &lt;pct&gt;</code></td><td>Weekly limit warn / danger thresholds (0&ndash;1 utilization)</td></tr>
                 <tr><td><code>--5h-soft &lt;pct&gt;</code> / <code>--5h-danger &lt;pct&gt;</code></td><td>5-hour limit warn / danger thresholds (0&ndash;1 utilization)</td></tr>
                 <tr><td><code>--burn-ratio &lt;n&gt;</code></td><td>Burn-rate multiplier (actual vs. sustainable pace) that triggers a warning</td></tr>

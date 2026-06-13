@@ -42,7 +42,8 @@ export {
 export { dispatchAlert, type AlertEvent, type AlertLevel } from "./alert.js";
 export { startProxy, resolveUpstream, type ProxyOptions } from "./proxy.js";
 export { runHook } from "./hook.js";
-export { buildStatusReport, formatLimitsLines, type StatusReport, type LimitsReport } from "./report.js";
+export { buildStatusReport, buildLimitsReport, formatLimitsLines, type StatusReport, type LimitsReport } from "./report.js";
+export { detectPlanTier, mapRateLimitTier, tierLabel, type SubscriptionTier } from "./claude-code.js";
 export {
   parseUnifiedHeaders,
   parseUtilization,
@@ -69,13 +70,6 @@ export {
   type PacingLevel,
   type PacingThresholds,
 } from "./pacing.js";
-export {
-  estimateSnapshot,
-  isEstimated,
-  TIER_BUDGETS,
-  type PlanTier,
-  type TierBudget,
-} from "./estimate.js";
 export {
   installHook,
   setBudget,

@@ -167,7 +167,7 @@ sharing the proxy keeps its hard wall.
 
 ```sh
 ks guard proxy                                  # then: ANTHROPIC_BASE_URL=http://localhost:8787 claude
-ks guard config --plan max5                     # auto | pro | max5 | max20 (a tier enables hook-only estimates)
+ks guard config --plan max5                     # auto (detects tier from ~/.claude.json) | pro | max5 | max20
 ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
 ks guard reset --limits                         # clear detection latch + snapshot (re-arm the dollar wall)
 ks guard status                                 # shows "weekly 62% used, resets Sat, burning 3.1× → lockout ~Thu"

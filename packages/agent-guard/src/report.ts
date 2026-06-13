@@ -4,32 +4,41 @@
  *
  * Two halves:
  *   - the dollar budget (session + daily-rolling), always present; and
- *   - the subscription rate-limit standing (5-hour + weekly pacing), present
- *     once we've seen Anthropic's unified headers via the proxy, or estimated
- *     when the user has pinned a plan tier. Alert-only — never blocks.
+ *   - the subscription rate-limit standing. Real 5-hour/weekly utilization is
+ *     only knowable from Anthropic's `unified-*` headers, which the proxy
+ *     captures — so when we have a fresh snapshot we show real percentages, and
+ *     otherwise we show what's honestly knowable locally: the auto-detected plan
+ *     tier plus absolute rolling cost (NOT a fabricated "% of limit" — local cost
+ *     does not map to Anthropic's internal rate-limit units). Alert-only.
  */
 
-import { loadConfig } from "./config.js";
-import { isPaused, pauseExpiry } from "./config.js";
-import { loadLedger, rollingDailyCost, type SessionRecord } from "./ledger.js";
+import { loadConfig, isPaused, pauseExpiry, type GuardConfig } from "./config.js";
+import { loadLedger, rollingDailyCost, type SessionRecord, type Ledger } from "./ledger.js";
 import { evaluate, type Budget, type VerdictLevel } from "./budget.js";
+import { fmtUSD } from "./cost.js";
 import { loadLimitsState, WINDOW_MS } from "./limits.js";
 import { assessSnapshot, worstLevel, type PacingAssessment, type PacingLevel } from "./pacing.js";
-import { estimateSnapshot, type PlanTier } from "./estimate.js";
-import type { GuardConfig } from "./config.js";
-import type { Ledger } from "./ledger.js";
+import { detectPlanTier, tierLabel, type SubscriptionTier } from "./claude-code.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface LimitsReport {
-  /** Where the numbers came from. "none" = no data and no pinned plan to estimate from. */
-  source: "headers" | "estimated" | "none";
+  /** "headers" = real proxy data; "none" = no live data (show tier + cost only). */
+  source: "headers" | "none";
+  /** Configured plan ("auto" | tier). */
   plan: string;
+  /** Resolved subscription tier (from config or auto-detected from ~/.claude.json). */
+  tier: SubscriptionTier | null;
+  /** True when the tier came from ~/.claude.json rather than an explicit --plan. */
+  tierDetected: boolean;
   subscriptionDetected: boolean;
-  /** Epoch ms the snapshot was observed (headers) or computed (estimated). */
+  /** Epoch ms the headers snapshot was observed, or null. */
   observedAt: number | null;
+  /** Real per-window pacing (only when source === "headers"). */
   windows: PacingAssessment[];
   level: PacingLevel;
+  /** Absolute rolling cost (API-equivalent USD) — honest local signal, not a limit %. */
+  cost: { fiveHourUSD: number; dailyUSD: number; weeklyUSD: number };
 }
 
 export interface StatusReport {
@@ -38,11 +47,18 @@ export interface StatusReport {
   verdict: VerdictLevel;
   reasons: string[];
   paused: boolean;
-  /** Epoch ms the pause auto-expires, or null (indefinite / not paused). */
   pauseUntil: number | null;
   sessions: Array<{ id: string } & SessionRecord>;
-  /** Subscription rate-limit pacing — present whenever we have data to show. */
   limits: LimitsReport;
+}
+
+/** Sum metered cost across sessions whose last activity is within `windowMs`. */
+function costInWindow(ledger: Ledger, now: number, windowMs: number): number {
+  let total = 0;
+  for (const s of Object.values(ledger.sessions)) {
+    if (now - s.lastAt < windowMs) total += s.costUSD || 0;
+  }
+  return total;
 }
 
 /**
@@ -52,53 +68,59 @@ export interface StatusReport {
  */
 export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number): LimitsReport {
   const state = loadLimitsState();
-  const thresholds = cfg.limits;
   const plan = cfg.limits.plan;
 
-  // Prefer real header data — but only while it's still usable. A snapshot older
-  // than the weekly window is too stale to trust at all; and any single window
-  // whose reset time has already passed has since rolled over (its utilization is
-  // from a prior window), so we drop it rather than present expired numbers — and
-  // a reset time in the past — as if they were live. If nothing usable remains we
-  // fall through to the estimate (or "none").
+  // Resolve the effective tier: an explicit --plan wins; otherwise auto-detect
+  // from ~/.claude.json (oauthAccount.organizationRateLimitTier).
+  let tier: SubscriptionTier | null =
+    plan === "pro" || plan === "max5" || plan === "max20" ? plan : null;
+  let tierDetected = false;
+  if (!tier) {
+    const detected = detectPlanTier();
+    if (detected) {
+      tier = detected;
+      tierDetected = true;
+    }
+  }
+
+  const cost = {
+    fiveHourUSD: costInWindow(ledger, now, WINDOW_MS["5h"]),
+    dailyUSD: costInWindow(ledger, now, DAY_MS),
+    weeklyUSD: costInWindow(ledger, now, WINDOW_MS.weekly),
+  };
+
+  // Real data: a fresh snapshot, with any already-reset window dropped (stale).
   const snap = state.snapshot;
   if (snap && now - snap.observedAt < WINDOW_MS.weekly) {
-    const windows = assessSnapshot(snap, thresholds, now).filter(
+    const windows = assessSnapshot(snap, cfg.limits, now).filter(
       (w) => !(w.resetAt != null && w.resetAt <= now),
     );
     if (windows.length) {
       return {
         source: "headers",
         plan,
+        tier,
+        tierDetected,
         subscriptionDetected: state.subscriptionDetected,
         observedAt: snap.observedAt,
         windows,
         level: worstLevel(windows),
+        cost,
       };
     }
   }
 
-  // Otherwise estimate, but only when the user pinned a tier (opt-in, fuzzy).
-  if (plan === "pro" || plan === "max5" || plan === "max20") {
-    const snap = estimateSnapshot(ledger, plan as PlanTier, now);
-    const windows = assessSnapshot(snap, thresholds, now);
-    return {
-      source: "estimated",
-      plan,
-      subscriptionDetected: state.subscriptionDetected,
-      observedAt: snap.observedAt,
-      windows,
-      level: worstLevel(windows),
-    };
-  }
-
+  // No live data — honest local signal only (tier + absolute cost, never a fake %).
   return {
     source: "none",
     plan,
+    tier,
+    tierDetected,
     subscriptionDetected: state.subscriptionDetected,
     observedAt: null,
     windows: [],
     level: "ok",
+    cost,
   };
 }
 
@@ -118,32 +140,28 @@ function ageString(observedAt: number, now: number): string {
 
 /**
  * Render the subscription rate-limit section as plain text lines (no color), so
- * both the `agent-guard` and `ks guard` status views stay identical. Returns an
- * empty array when there's nothing useful to show.
+ * both the `agent-guard` and `ks guard` status views stay identical.
  */
 export function formatLimitsLines(limits: LimitsReport, now: number = Date.now()): string[] {
-  if (limits.source === "none") {
-    // Only nudge if they haven't opted into either path.
-    if (!limits.subscriptionDetected) {
-      return [
-        "Claude Code plan limits: unknown.",
-        "  Run `ks guard proxy` and point Claude Code at it for exact 5-hour + weekly usage,",
-        "  or set your tier (`ks guard config --plan max5`) for an estimate.",
-      ];
-    }
-    return [];
+  // Real proxy data → real percentages.
+  if (limits.source === "headers") {
+    const icon = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
+    const lines = [`${icon} Claude Code plan limits  ·  observed ${limits.observedAt ? ageString(limits.observedAt, now) : "—"}`];
+    for (const w of limits.windows) lines.push(`  ${bar(w.utilization)}  ${w.message}`);
+    return lines;
   }
 
-  const icon = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
-  const tag = limits.source === "estimated" ? " (estimated — run the proxy for exact)" : "";
-  const lines = [`${icon} Claude Code plan limits${tag}  ·  observed ${limits.observedAt ? ageString(limits.observedAt, now) : "—"}`];
-
-  for (const w of limits.windows) {
-    // w.message already leads with "<window> limit NN% used, …", so the bar
-    // carries the visual and the message carries the numbers + pacing.
-    lines.push(`  ${bar(w.utilization)}  ${w.message}`);
-  }
-  return lines;
+  // No live data: show what's honestly knowable — the tier and absolute cost,
+  // and steer to the proxy for the real percentages. Never a fabricated % bar.
+  const planStr = limits.tier
+    ? `Claude Code plan: ${tierLabel(limits.tier)}${limits.tierDetected ? " (detected)" : ""}`
+    : "Claude Code plan: unknown";
+  const c = limits.cost;
+  return [
+    `📊 ${planStr} — real 5-hour/weekly limit % needs the proxy`,
+    `   local rolling cost (API-equivalent, NOT a limit %): 5h ${fmtUSD(c.fiveHourUSD)} · 24h ${fmtUSD(c.dailyUSD)} · 7d ${fmtUSD(c.weeklyUSD)}`,
+    `   for exact limits: \`ks guard proxy\` → ANTHROPIC_BASE_URL=http://localhost:8787 claude`,
+  ];
 }
 
 /** Build the current status report from the on-disk config + ledger. */

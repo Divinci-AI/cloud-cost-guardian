@@ -61,7 +61,7 @@ describe("buildLimitsReport — staleness (F2/F3)", () => {
     expect(r.source).toBe("none"); // too old to trust, no pinned tier to estimate from
   });
 
-  it("falls through to the estimate when the snapshot is stale and a tier is pinned", () => {
+  it("with a stale snapshot and a pinned tier, shows tier + cost — no fake estimate", () => {
     saveLimitsState({
       ...emptyLimitsState(),
       subscriptionDetected: true,
@@ -69,21 +69,27 @@ describe("buildLimitsReport — staleness (F2/F3)", () => {
       snapshot: snapshot({ weekly: { utilization: 0.9, resetAt: now - HOUR } }),
     });
     const ledger: Ledger = emptyLedger();
-    ledger.sessions["s"] = { startedAt: now, lastAt: now, costUSD: 0, inputTokens: 1000, outputTokens: 500, notified: {} };
+    ledger.sessions["s"] = { startedAt: now, lastAt: now, costUSD: 12.5, inputTokens: 0, outputTokens: 0, notified: {} };
     const r = buildLimitsReport(cfg("max5"), ledger, now);
-    expect(r.source).toBe("estimated");
+    expect(r.source).toBe("none"); // no estimate — honest "no live data"
+    expect(r.tier).toBe("max5");
+    expect(r.windows).toEqual([]);
+    expect(r.cost.weeklyUSD).toBeCloseTo(12.5);
   });
 });
 
-describe("estimate honesty (F4)", () => {
-  it("estimated windows have no fabricated reset time, and no 'resets' clause", () => {
+describe("honest no-proxy output (no fabricated %)", () => {
+  it("shows the pinned/detected tier + absolute cost, never a limit %", () => {
     const ledger: Ledger = emptyLedger();
-    ledger.sessions["s"] = { startedAt: now, lastAt: now, costUSD: 0, inputTokens: 5_000_000, outputTokens: 1_000_000, notified: {} };
-    const r = buildLimitsReport(cfg("pro"), ledger, now);
-    expect(r.source).toBe("estimated");
-    for (const w of r.windows) expect(w.resetAt).toBeNull();
+    ledger.sessions["s"] = { startedAt: now, lastAt: now, costUSD: 5301, inputTokens: 0, outputTokens: 0, notified: {} };
+    const r = buildLimitsReport(cfg("max20"), ledger, now);
+    expect(r.source).toBe("none");
+    expect(r.tier).toBe("max20");
     const text = formatLimitsLines(r, now).join("\n");
-    expect(text).not.toMatch(/resets/);
-    expect(text).toMatch(/estimated/);
+    expect(text).toMatch(/Max 20x/);
+    expect(text).toMatch(/NOT a limit %/);
+    expect(text).toMatch(/ks guard proxy/);
+    expect(text).not.toMatch(/\d+% used/); // crucially: no fabricated percentage
+    expect(text).toMatch(/7d \$5301/); // honest absolute rolling cost
   });
 });

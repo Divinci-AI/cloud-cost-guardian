@@ -136,18 +136,24 @@ your alert channels:
 ```
 
 `status` shows it; the hook injects it into the session even when only the hook is running
-(it reads the snapshot the proxy persisted). No proxy and want a rough read? Pin your tier and
-agent-guard *estimates* from the ledger (clearly labelled, never blocks):
+(it reads the snapshot the proxy persisted).
+
+**Without the proxy, real percentages are unknowable** — Claude Code fetches them from Anthropic
+and never writes them to disk, and local cost does *not* map to Anthropic's internal rate-limit
+units (so we don't fake a "% of limit"). Instead, hook-only mode shows what's honestly knowable:
+your **auto-detected plan tier** (read from `~/.claude.json`) plus **absolute rolling cost** —
+and points you at the proxy for the real numbers. Your tier needs no flag; `--plan` only
+overrides the auto-detection.
 
 ```sh
-ks guard config --plan max5        # auto | pro | max5 | max20
+ks guard config --plan max5        # auto (detect) | pro | max5 | max20
 ```
 
-Tune the thresholds (0–1 utilization) if the defaults are too eager:
+Tune the thresholds (0–1 utilization) if the proxy's pacing is too eager:
 
 | Setting | Meaning | Default |
 |---|---|---|
-| `--plan` (`AGENT_GUARD_PLAN`) | `auto` (headers only) or a tier for estimation | `auto` |
+| `--plan` (`AGENT_GUARD_PLAN`) | `auto` (detect from ~/.claude.json) or pin a tier | `auto` |
 | `--weekly-soft` / `--weekly-danger` | weekly warn / danger utilization | 0.6 / 0.85 |
 | `--5h-soft` / `--5h-danger` | 5-hour warn / danger utilization | 0.7 / 0.9 |
 | `--burn-ratio` | pace multiplier that triggers a warning | 1.5 |
