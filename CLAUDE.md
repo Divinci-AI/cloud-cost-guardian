@@ -86,6 +86,7 @@ ks guard proxy                                    # run Claude Code THROUGH it (
                                                   #   → reads anthropic-ratelimit-unified-* headers, paces 5h + weekly windows
 ks guard config --plan max5                       # auto|pro|max5|max20; a pinned tier enables hook-only estimation
 ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
+ks guard reset --limits                           # clear the subscription detection latch + snapshot (re-arm dollar wall)
 ```
 
 > `ks guard` is the same engine as the standalone `agent-guard` / `ksg` binary
@@ -95,8 +96,10 @@ ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
 > caps, blocks at the cap). Pro/Max subscription sessions are flat-fee, so once the proxy sees
 > Anthropic's `unified-*` rate-limit headers it switches to **subscription mode**: it paces the
 > 5-hour + weekly quota (burn-rate vs. reset time, projected lockout) and only *warns* — it
-> never blocks, and it suppresses the dollar 402 for that session. State in
-> `~/.kill-switch/agent-guard/limits.json`.
+> never blocks. The dollar 402 is suppressed **only** for the anthropic proxy when you've
+> pinned a subscription `--plan` or seen fresh `unified-*` headers (within 5h) — so a billed
+> OpenAI/other agent sharing the proxy keeps its hard wall. State in
+> `~/.kill-switch/agent-guard/limits.json` (clear with `ks guard reset --limits`).
 
 ### For AI Agent Setup
 When setting up Kill Switch for another project:

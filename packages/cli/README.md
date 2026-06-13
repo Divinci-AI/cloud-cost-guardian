@@ -150,7 +150,7 @@ ks guard resume
 | `ks guard config` | View or set soft/hard caps **and plan limits** (`--plan`, thresholds) |
 | `ks guard proxy` | Start token-metering proxy (HTTP 402 at hard cap; reads plan-limit headers) |
 | `ks guard pause` / `resume` | Temporarily disable / re-arm enforcement |
-| `ks guard reset` | Clear the spend ledger |
+| `ks guard reset` | Clear the spend ledger (`--limits` clears subscription state) |
 
 ### Two currencies: dollars and plan limits
 
@@ -161,12 +161,15 @@ resource is your plan's **rate-limit quota** in two rolling windows (5-hour + we
 Run Claude Code **through the proxy** and agent-guard reads Anthropic's own
 `anthropic-ratelimit-unified-*` headers — exact 5h/weekly utilization + reset times — then
 paces your burn rate and warns *before* you lock out. This is **alert-only**: it never blocks a
-plan you've already paid for (and suppresses the dollar 402 for that session).
+plan you've already paid for. The dollar 402 is suppressed only for the anthropic proxy when
+you've pinned a subscription `--plan` or seen fresh headers — a billed OpenAI/other agent
+sharing the proxy keeps its hard wall.
 
 ```sh
 ks guard proxy                                  # then: ANTHROPIC_BASE_URL=http://localhost:8787 claude
 ks guard config --plan max5                     # auto | pro | max5 | max20 (a tier enables hook-only estimates)
 ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
+ks guard reset --limits                         # clear detection latch + snapshot (re-arm the dollar wall)
 ks guard status                                 # shows "weekly 62% used, resets Sat, burning 3.1× → lockout ~Thu"
 ```
 

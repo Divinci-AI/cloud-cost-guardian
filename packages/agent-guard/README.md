@@ -188,7 +188,7 @@ agent-guard proxy   [--port 8787] [--flavor anthropic|openai] [--upstream URL]
 agent-guard status  [--json]                        spend vs budget + plan limits
 agent-guard config  [--session-hard N ...]          view/set caps
 agent-guard config  [--plan max5 --weekly-soft 0.6 ...]   view/set plan limits
-agent-guard reset   [--all|--today|--session <id>]  clear the ledger
+agent-guard reset   [--all|--limits|--today|--session <id>]  clear the ledger / subscription-limit state
 agent-guard hook                                    (internal) Claude Code entrypoint
 ```
 
