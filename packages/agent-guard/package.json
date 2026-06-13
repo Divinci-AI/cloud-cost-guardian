@@ -1,6 +1,6 @@
 {
   "name": "@kill-switch/agent-guard",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Kill Switch for coding agents — stop runaway Claude Code / Cursor / Aider sessions from racking up an LLM bill. Native hook + token-metering proxy with per-session and daily-rolling budgets.",
   "type": "module",
   "bin": {

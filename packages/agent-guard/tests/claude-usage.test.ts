@@ -2,8 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { usageToSnapshot, refreshUsage, type UsageResponse } from "../src/claude-usage.js";
-import { saveLimitsState, emptyLimitsState } from "../src/limits.js";
+import {
+  usageToSnapshot,
+  refreshUsage,
+  triggerBackgroundRefresh,
+  saveUsageMeta,
+  loadUsageMeta,
+  type UsageResponse,
+} from "../src/claude-usage.js";
+import { saveLimitsState, emptyLimitsState, loadLimitsState } from "../src/limits.js";
 
 const now = 1_700_000_000_000;
 
@@ -48,7 +55,7 @@ describe("usageToSnapshot — OAuth usage endpoint mapping", () => {
   });
 });
 
-describe("refreshUsage — throttle", () => {
+describe("refreshUsage — throttle (uses usage-meta, never touches the snapshot — G3)", () => {
   let prevHome: string | undefined;
   beforeEach(() => {
     prevHome = process.env.HOME;
@@ -58,15 +65,39 @@ describe("refreshUsage — throttle", () => {
     if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
   });
 
-  it("skips the fetch (returns null, no network) when a recent snapshot exists", async () => {
+  it("skips the fetch when the meta stamp is recent and a snapshot exists", async () => {
+    saveUsageMeta({ lastFetchAt: now - 1000 }); // 1s ago — throttle stamp lives in usage-meta
     saveLimitsState({
       ...emptyLimitsState(),
       subscriptionDetected: true,
-      lastFetchAt: now - 1000, // 1s ago
       snapshot: { fiveHour: { utilization: 0.1, resetAt: now + 3600_000 }, weekly: null, status: "oauth-usage", observedAt: now - 1000 },
     });
-    // throttle is 120s by default; 1s-old → must skip without touching the network/token.
     const result = await refreshUsage(now, { throttleMs: 120_000 });
     expect(result).toBeNull();
+    // the snapshot must be untouched (the throttle stamp is a separate file)
+    expect(loadLimitsState().snapshot!.fiveHour!.utilization).toBeCloseTo(0.1);
+  });
+});
+
+describe("triggerBackgroundRefresh — G1 authorization gate", () => {
+  let prevHome: string | undefined;
+  beforeEach(() => {
+    prevHome = process.env.HOME;
+    process.env.HOME = mkdtempSync(join(tmpdir(), "ag-bg-"));
+  });
+  afterEach(() => {
+    if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
+  });
+
+  it("does NOT claim or spawn until a foreground command authorized it", () => {
+    // no authorized flag → must return early (no surprise Keychain read), no stamp claimed
+    triggerBackgroundRefresh("/tmp/ks-nonexistent-refresh.js", now);
+    expect(loadUsageMeta().lastFetchAt).toBeUndefined();
+  });
+
+  it("claims the stamp once authorized + stale", () => {
+    saveUsageMeta({ authorized: true });
+    triggerBackgroundRefresh("/tmp/ks-nonexistent-refresh.js", now);
+    expect(loadUsageMeta().lastFetchAt).toBe(now);
   });
 });

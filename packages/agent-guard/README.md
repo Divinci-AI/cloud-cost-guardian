@@ -130,6 +130,11 @@ header, **never logged or stored**) and GETs the `/api/oauth/usage` endpoint. `s
 auto-refreshes this (throttled to 120s). The endpoint is **undocumented**, so every call fails
 soft — if it's unavailable, agent-guard falls back to the proxy or "unknown".
 
+> **macOS Keychain:** the first `agent-guard usage`/`status` may pop a Keychain prompt — click
+> **Always Allow** so it doesn't ask again. Background auto-refresh (from the hook/statusLine)
+> stays off until that first **foreground** command succeeds, so you never get a surprise prompt
+> mid-session.
+
 ```
 🟢 Claude Code plan limits  ·  observed just now
   [██░░░░░░░░░░░░░░░░░░]  5-hour limit 12% used, resets 9:19 AM

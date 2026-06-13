@@ -79,8 +79,11 @@ export const ledgerPath = () => join(guardDir(), "ledger.json");
 export const configPath = () => join(guardDir(), "config.json");
 export const pricingPath = () => join(guardDir(), "pricing.json");
 export const eventsPath = () => join(guardDir(), "events.jsonl");
-/** Subscription rate-limit state (latest unified-header snapshot + dedup). */
+/** Subscription rate-limit state (latest snapshot + dedup). */
 export const limitsPath = () => join(guardDir(), "limits.json");
+/** Usage-fetch metadata (throttle stamp + authorization flag) — kept OUT of
+ * limits.json so claiming the throttle slot never rewrites the snapshot. */
+export const usageMetaPath = () => join(guardDir(), "usage-meta.json");
 
 /**
  * Escape hatch. The hook/proxy fail OPEN while this sentinel exists, so a human

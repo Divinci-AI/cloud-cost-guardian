@@ -67,8 +67,6 @@ export interface LimitsState {
   notified: Record<string, boolean>;
   /** Epoch ms we first logged the raw unified-* headers (write-once diagnostic). */
   headersLoggedAt?: number;
-  /** Epoch ms of the last OAuth usage-endpoint fetch (for throttling). */
-  lastFetchAt?: number;
 }
 
 /** Nominal window durations, used for pacing math when a reset time is unknown. */
@@ -91,7 +89,6 @@ export function loadLimitsState(): LimitsState {
         snapshot: data.snapshot ?? null,
         notified: data.notified ?? {},
         headersLoggedAt: data.headersLoggedAt,
-        lastFetchAt: data.lastFetchAt,
       };
     }
   } catch {

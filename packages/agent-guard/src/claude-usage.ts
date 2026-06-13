@@ -15,9 +15,10 @@
  */
 
 import { execFileSync, spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
+import { usageMetaPath, ensureGuardDir } from "./config.js";
 import {
   loadLimitsState,
   saveLimitsState,
@@ -26,6 +27,40 @@ import {
   type ExtraWindow,
   type WindowState,
 } from "./limits.js";
+
+/**
+ * Usage-fetch metadata — kept in its own small file (`usage-meta.json`), NOT in
+ * limits.json, so claiming the throttle slot can never clobber the snapshot.
+ *  - `lastFetchAt`: throttle timestamp.
+ *  - `authorized`: set true once a *foreground* command (status/usage) read the
+ *    token successfully — the gate that stops background refreshes from popping a
+ *    surprise Keychain prompt before the user has opted in.
+ */
+interface UsageMeta {
+  lastFetchAt?: number;
+  authorized?: boolean;
+}
+
+export function loadUsageMeta(): UsageMeta {
+  try {
+    return JSON.parse(readFileSync(usageMetaPath(), "utf8")) as UsageMeta;
+  } catch {
+    return {};
+  }
+}
+
+export function saveUsageMeta(patch: UsageMeta): void {
+  try {
+    ensureGuardDir();
+    const next = { ...loadUsageMeta(), ...patch };
+    const path = usageMetaPath();
+    const tmp = `${path}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(next));
+    renameSync(tmp, path);
+  } catch {
+    /* best-effort */
+  }
+}
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const OAUTH_BETA = "oauth-2025-04-20";
@@ -45,6 +80,8 @@ export function readOAuthToken(): string | null {
         stdio: ["ignore", "pipe", "ignore"],
       });
     } else {
+      // Linux (and Windows, where this path usually won't exist → graceful null,
+      // i.e. no real-limits on Windows for now; the proxy still works there).
       raw = readFileSync(join(homedir(), ".claude", ".credentials.json"), "utf8");
     }
     const j = JSON.parse(raw) as { claudeAiOauth?: { accessToken?: string }; accessToken?: string };
@@ -132,24 +169,29 @@ export function usageToSnapshot(u: UsageResponse, now: number): LimitSnapshot {
  */
 export async function refreshUsage(
   now: number,
-  opts: { force?: boolean; throttleMs?: number } = {},
+  opts: { force?: boolean; throttleMs?: number; timeoutMs?: number; foreground?: boolean } = {},
 ): Promise<LimitSnapshot | null> {
   const throttle = opts.throttleMs ?? DEFAULT_THROTTLE_MS;
-  const state = loadLimitsState();
-  if (!opts.force && state.lastFetchAt && now - state.lastFetchAt < throttle && state.snapshot) {
+  const meta = loadUsageMeta();
+  if (!opts.force && meta.lastFetchAt && now - meta.lastFetchAt < throttle && loadLimitsState().snapshot) {
     return null; // recent enough — use the cached snapshot
   }
   const token = readOAuthToken();
-  if (!token) return null;
-  const usage = await fetchUsage(token);
-  if (!usage) {
-    // mark the attempt so we don't retry every call when the endpoint is down
-    saveLimitsState({ ...loadLimitsState(), lastFetchAt: now });
+  if (!token) {
+    saveUsageMeta({ lastFetchAt: now }); // don't re-attempt every call when there's no token
     return null;
   }
+  // The token read succeeded — if this is a foreground command, the user has
+  // (in their own terminal) consented to the Keychain access, so it's now safe
+  // to let background refreshes run. This is the gate for G1.
+  if (opts.foreground) saveUsageMeta({ authorized: true });
+
+  const usage = await fetchUsage(token, opts.timeoutMs);
+  saveUsageMeta({ lastFetchAt: now }); // throttle stamp — separate file, never touches the snapshot
+  if (!usage) return null;
+
   const snapshot = usageToSnapshot(usage, now);
-  const fresh = loadLimitsState();
-  saveLimitsState({ ...fresh, subscriptionDetected: true, snapshot, lastFetchAt: now });
+  saveLimitsState({ ...loadLimitsState(), subscriptionDetected: true, snapshot });
   return snapshot;
 }
 
@@ -164,15 +206,23 @@ export async function refreshUsage(
  */
 export function triggerBackgroundRefresh(cliJsPath: string, now: number, throttleMs = DEFAULT_THROTTLE_MS): void {
   try {
-    const state = loadLimitsState();
-    if (state.lastFetchAt && now - state.lastFetchAt < throttleMs) return; // recent enough
-    // Claim the slot now so other renders/tool-calls within the window skip the spawn.
-    saveLimitsState({ ...state, lastFetchAt: now });
-    const child = spawn(process.execPath, [cliJsPath, "_refresh-usage"], {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
+    const meta = loadUsageMeta();
+    // G1: never read the Keychain from a background process until a foreground
+    // command (status/usage) has confirmed the user authorized that access —
+    // otherwise we'd pop a surprise Keychain prompt mid-session.
+    if (!meta.authorized) return;
+    if (meta.lastFetchAt && now - meta.lastFetchAt < throttleMs) return; // recent enough
+
+    // Claim the slot so concurrent renders/tool-calls skip the spawn…
+    const prev = meta.lastFetchAt;
+    saveUsageMeta({ lastFetchAt: now });
+    try {
+      const child = spawn(process.execPath, [cliJsPath, "_refresh-usage"], { detached: true, stdio: "ignore" });
+      child.unref();
+    } catch {
+      // …but if the spawn itself failed, release the claim so we retry next time (G5).
+      saveUsageMeta({ lastFetchAt: prev });
+    }
   } catch {
     /* best-effort — a failed refresh just means slightly staler numbers */
   }

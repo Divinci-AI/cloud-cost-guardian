@@ -80,7 +80,8 @@ program
   .option("--json", "Output as JSON")
   .action(async (opts) => {
     try {
-      await refreshUsage(Date.now()); // throttled real-limits pull; never fails status
+      // foreground: authorizes background refresh; shorter timeout keeps status snappy.
+      await refreshUsage(Date.now(), { foreground: true, timeoutMs: 4000 });
     } catch {
       /* offline / no token */
     }
@@ -152,7 +153,7 @@ program
   .action(async (opts) => {
     let snap;
     try {
-      snap = await refreshUsage(Date.now(), { force: true });
+      snap = await refreshUsage(Date.now(), { force: true, foreground: true });
     } catch {
       snap = null;
     }
@@ -220,7 +221,7 @@ program
 
 // ── _refresh-usage (internal: detached throttled refresh) ────────────────────
 program
-  .command("_refresh-usage")
+  .command("_refresh-usage", { hidden: true })
   .description("(internal) fetch + persist real plan limits, then exit")
   .action(async () => {
     try {

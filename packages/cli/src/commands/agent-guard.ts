@@ -54,8 +54,9 @@ export function registerAgentGuardCommands(program: Command) {
     .action(async () => {
       const json = program.opts().json;
       // Pull fresh real limits from Anthropic's usage endpoint (throttled; never fails status).
+      // foreground: authorizes background refresh; shorter timeout keeps status snappy.
       try {
-        await refreshUsage(Date.now());
+        await refreshUsage(Date.now(), { foreground: true, timeoutMs: 4000 });
       } catch {
         /* offline / no token → fall back to whatever's cached */
       }
@@ -103,7 +104,7 @@ export function registerAgentGuardCommands(program: Command) {
       const json = program.opts().json;
       let snap;
       try {
-        snap = await refreshUsage(Date.now(), { force: true });
+        snap = await refreshUsage(Date.now(), { force: true, foreground: true });
       } catch {
         snap = null;
       }

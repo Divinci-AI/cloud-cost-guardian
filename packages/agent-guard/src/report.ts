@@ -71,19 +71,11 @@ function costInWindow(ledger: Ledger, now: number, windowMs: number): number {
 export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number): LimitsReport {
   const state = loadLimitsState();
   const plan = cfg.limits.plan;
-
-  // Resolve the effective tier: an explicit --plan wins; otherwise auto-detect
-  // from ~/.claude.json (oauthAccount.organizationRateLimitTier).
-  let tier: SubscriptionTier | null =
+  // A pinned tier is free to know; auto-detection (a big ~/.claude.json parse) is
+  // deferred to the no-live-data branch below, where the tier is actually shown —
+  // so the hook's hot path doesn't parse that file on every tool call (G2).
+  const pinnedTier: SubscriptionTier | null =
     plan === "pro" || plan === "max5" || plan === "max20" ? plan : null;
-  let tierDetected = false;
-  if (!tier) {
-    const detected = detectPlanTier();
-    if (detected) {
-      tier = detected;
-      tierDetected = true;
-    }
-  }
 
   const cost = {
     fiveHourUSD: costInWindow(ledger, now, WINDOW_MS["5h"]),
@@ -101,8 +93,8 @@ export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number)
       return {
         source: "headers",
         plan,
-        tier,
-        tierDetected,
+        tier: pinnedTier, // headers view doesn't display the tier; skip the detection parse
+        tierDetected: false,
         subscriptionDetected: state.subscriptionDetected,
         observedAt: snap.observedAt,
         windows,
@@ -114,6 +106,16 @@ export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number)
   }
 
   // No live data — honest local signal only (tier + absolute cost, never a fake %).
+  // The tier IS shown here, so auto-detect it now (lazily).
+  let tier = pinnedTier;
+  let tierDetected = false;
+  if (!tier) {
+    const detected = detectPlanTier();
+    if (detected) {
+      tier = detected;
+      tierDetected = true;
+    }
+  }
   return {
     source: "none",
     plan,
