@@ -4,20 +4,26 @@
  * Ground truth for plan limits lives in the `anthropic-ratelimit-unified-*`
  * response headers, which only the proxy sees. A user running just the Claude
  * Code hook (the common, zero-config setup) never sees those headers — so when
- * they've told us their plan tier, we *estimate* where they stand by summing the
- * tokens the ledger recorded inside each rolling window and dividing by a
- * per-tier token budget.
+ * they've told us their plan tier, we *estimate* where they stand.
  *
- * This is deliberately approximate and always labelled as such:
- *   - Anthropic meters opaque "prompts" / "active hours", not tokens, so the
- *     token budgets below are calibrated rough equivalents, not contractual.
- *   - The ledger stores a session's cumulative tokens against a single
- *     `lastAt`, not a time series, so a long session is counted wholesale into
- *     whichever window its last activity falls in.
+ * We estimate from the ledger's **cost** (`costUSD`), not its token counts. That
+ * matters: a coding agent's volume is dominated by cache reads/writes, and the
+ * ledger only stores non-cache input/output token counts — so a token-based
+ * estimate undercounts real throughput (and thus rate-limit consumption) by a
+ * large factor. `costUSD` is priced from the *full* usage including cache, so it
+ * tracks actual consumption far better. We compare it against a rough per-tier
+ * **API-equivalent** dollar ceiling for each window.
  *
- * It exists to give hook-only users *a* signal and to nudge them toward
- * `ks guard proxy` for exact numbers — never to block (subscription mode is
- * alert-only). When in doubt it under-claims utilization so it won't cry wolf.
+ * This is still deliberately approximate and always labelled as such:
+ *   - Anthropic meters opaque "prompts" / "active hours", and the dollar ceilings
+ *     below are rough API-equivalent calibrations, not contractual.
+ *   - The ledger stores a session's cumulative cost against a single `lastAt`,
+ *     not a time series, so a long session is counted wholesale into whichever
+ *     window its last activity falls in.
+ *
+ * It exists to give hook-only users *a* directional signal and to nudge them
+ * toward `ks guard proxy` for exact numbers — never to block (subscription mode
+ * is alert-only).
  */
 
 import { WINDOW_MS, type LimitSnapshot } from "./limits.js";
@@ -26,40 +32,39 @@ import type { Ledger } from "./ledger.js";
 export type PlanTier = "pro" | "max5" | "max20";
 
 /**
- * Rough per-tier token-equivalent budgets per window. Pro is the published
- * baseline; Max 5x / 20x scale the 5-hour burst ~linearly with the multiplier,
- * while the weekly cap scales more conservatively (Anthropic's weekly multiplier
- * is smaller than the per-session one). Tune via config if your mileage differs.
+ * Rough per-tier **API-equivalent USD** ceilings per window — what the plan's
+ * rate limit lets you consume before lock-out, expressed in the same list-price
+ * dollars the ledger meters. Scaled by plan: Pro is the baseline, Max 5x/20x lift
+ * the burst (5h) roughly with the multiplier and the weekly cap more
+ * conservatively. These are estimates; the proxy's real headers override them.
  */
 export interface TierBudget {
-  fiveHourTokens: number;
-  weeklyTokens: number;
+  fiveHourUSD: number;
+  weeklyUSD: number;
 }
 
 export const TIER_BUDGETS: Record<PlanTier, TierBudget> = {
-  // Calibrated rough equivalents — Pro ≈ 45 prompts / 5h, modest weekly cap.
-  pro: { fiveHourTokens: 8_000_000, weeklyTokens: 120_000_000 },
-  max5: { fiveHourTokens: 40_000_000, weeklyTokens: 480_000_000 },
-  max20: { fiveHourTokens: 160_000_000, weeklyTokens: 1_400_000_000 },
+  pro: { fiveHourUSD: 16, weeklyUSD: 100 },
+  max5: { fiveHourUSD: 80, weeklyUSD: 500 },
+  max20: { fiveHourUSD: 300, weeklyUSD: 2000 },
 };
 
 const FIVE_HOUR_MS = WINDOW_MS["5h"];
 const WEEK_MS = WINDOW_MS.weekly;
 
-/** Sum tokens (input+output) across sessions whose last activity is within `windowMs`. */
-function tokensInWindow(ledger: Ledger, now: number, windowMs: number): number {
+/** Sum metered cost across sessions whose last activity is within `windowMs`. */
+function costInWindow(ledger: Ledger, now: number, windowMs: number): number {
   let total = 0;
   for (const s of Object.values(ledger.sessions)) {
-    if (now - s.lastAt < windowMs) total += (s.inputTokens || 0) + (s.outputTokens || 0);
+    if (now - s.lastAt < windowMs) total += s.costUSD || 0;
   }
   return total;
 }
 
 /**
  * Build an estimated {@link LimitSnapshot} from the ledger for a known tier.
- * Reset times are derived from the rolling window assumption (oldest in-window
- * activity + window length is unknowable here, so we report the window end from
- * `now` as a conservative upper bound on time remaining).
+ * `resetAt` is null (the true rolling reset is unknowable without a per-event
+ * time series), so pacing reports utilization only — no fabricated reset/lockout.
  */
 export function estimateSnapshot(
   ledger: Ledger,
@@ -68,18 +73,13 @@ export function estimateSnapshot(
   budgets: Record<PlanTier, TierBudget> = TIER_BUDGETS,
 ): LimitSnapshot {
   const b = budgets[tier];
-  const fiveTokens = tokensInWindow(ledger, now, FIVE_HOUR_MS);
-  const weekTokens = tokensInWindow(ledger, now, WEEK_MS);
-
+  const fiveUSD = costInWindow(ledger, now, FIVE_HOUR_MS);
+  const weekUSD = costInWindow(ledger, now, WEEK_MS);
   const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
-  // resetAt is null, not fabricated: we have no per-event time series, so the
-  // true rolling reset is unknowable. A null reset means pacing reports
-  // utilization only (no burn-rate, no lockout projection, no bogus reset time) —
-  // the honest behaviour for an estimate.
   return {
-    fiveHour: { utilization: clamp(fiveTokens / b.fiveHourTokens), resetAt: null, status: "estimated" },
-    weekly: { utilization: clamp(weekTokens / b.weeklyTokens), resetAt: null, status: "estimated" },
+    fiveHour: { utilization: clamp(fiveUSD / b.fiveHourUSD), resetAt: null, status: "estimated" },
+    weekly: { utilization: clamp(weekUSD / b.weeklyUSD), resetAt: null, status: "estimated" },
     status: "estimated",
     observedAt: now,
   };
