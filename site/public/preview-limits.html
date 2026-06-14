@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview · See your Claude Code limits</title>
+<style>
+  :root{ --navy:#0c1229; --navy2:#111936; --cyan:#5ce2e7; --amber:#f5a623; --red:#ff5470; --ink:#c4c5ca; --white:#fff; }
+  *{ margin:0; box-sizing:border-box; }
+  body{ font-family:'Inter',system-ui,sans-serif; background:
+        radial-gradient(1200px 600px at 50% -10%, #16204a 0%, var(--navy) 60%); color:var(--ink); min-height:100vh; padding:48px 20px; }
+  .wrap{ max-width:920px; margin:0 auto; }
+  .kicker{ color:var(--cyan); font-weight:600; letter-spacing:.12em; text-transform:uppercase; font-size:12px; }
+  h1{ color:var(--white); font-size:clamp(28px,5vw,46px); line-height:1.05; margin:.3em 0 .5em; font-weight:800; }
+  h1 .glow{ color:var(--cyan); }
+  p.sub{ font-size:18px; max-width:640px; }
+  .hero{ margin:34px 0; border-radius:16px; overflow:hidden; box-shadow:0 30px 80px -30px #000, 0 0 0 1px #ffffff14; }
+  .hero video{ display:block; width:100%; }
+
+  /* status-bar chip */
+  .bar{ display:inline-flex; align-items:center; gap:10px; background:#0a0f24; border:1px solid #ffffff1f;
+        border-radius:9px; padding:8px 14px; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:15px; color:#dfe3ff; }
+  .dot{ width:9px;height:9px;border-radius:50%; background:var(--cyan); box-shadow:0 0 10px var(--cyan); }
+  .muted{ color:#7c84a8; }
+
+  /* the ks guard usage panel */
+  .panel{ margin-top:30px; background:linear-gradient(180deg,#0e1733,#0a0f24); border:1px solid #ffffff1a; border-radius:14px;
+          padding:22px 22px 26px; font-family:'JetBrains Mono',ui-monospace,monospace; }
+  .panel .head{ color:#9aa3cc; font-size:13px; margin-bottom:18px; }
+  .gauge{ margin:16px 0; }
+  .glabel{ display:flex; justify-content:space-between; font-size:13.5px; color:#aeb6da; margin-bottom:7px; }
+  .glabel b{ color:#fff; font-weight:600; }
+  .track{ height:18px; border-radius:6px; background:#070b1c; border:1px solid #ffffff14; overflow:hidden; position:relative; }
+  .fill{ height:100%; border-radius:5px 0 0 5px; background:linear-gradient(90deg,var(--cyan),#49c6e0); position:relative;
+         box-shadow:0 0 14px -2px var(--cyan); animation:fill 1.4s cubic-bezier(.2,.8,.2,1) both; }
+  .fill.warm{ background:linear-gradient(90deg,var(--cyan) 60%, var(--amber)); box-shadow:0 0 14px -2px var(--amber); }
+  @keyframes fill{ from{ width:0 } }
+  .reset{ color:#6b73a0; font-size:12px; margin-top:6px; }
+  .foot{ margin-top:26px; color:#8089b0; font-size:14px; }
+  code.cmd{ background:#0a0f24; border:1px solid #ffffff1f; border-radius:7px; padding:4px 9px; color:var(--cyan); font-size:14px; }
+  .row{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">🛡 Kill Switch · Agent Guard</div>
+  <h1>See your <span class="glow">real</span> Claude&nbsp;Code limits</h1>
+  <p class="sub">The 5-hour window, the weekly cap, and the per-model weekly — in your status bar, before you lock out.</p>
+
+  <div class="hero">
+    <video autoplay loop muted playsinline poster="/blog/assets/poster-see-your-claude-code-limits.webp">
+      <source src="/blog/assets/thumb-see-your-claude-code-limits.webm" type="video/webm">
+      <source src="/blog/assets/thumb-see-your-claude-code-limits.mp4" type="video/mp4">
+    </video>
+  </div>
+
+  <div class="row">
+    <span class="muted">Status bar:</span>
+    <span class="bar"><span class="dot"></span> 🛡 5h 12% · wk 17%</span>
+  </div>
+
+  <div class="panel">
+    <div class="head">$ agent-guard usage</div>
+    <div class="head" style="color:#7be3a0">🟢 Claude Code plan limits · observed just now</div>
+
+    <div class="gauge">
+      <div class="glabel"><span>5-hour limit</span><b>12%</b></div>
+      <div class="track"><div class="fill" style="width:12%"></div></div>
+      <div class="reset">resets 9:19 AM</div>
+    </div>
+    <div class="gauge">
+      <div class="glabel"><span>weekly limit (all models)</span><b>17%</b></div>
+      <div class="track"><div class="fill" style="width:17%"></div></div>
+      <div class="reset">resets Tue 7:59 PM</div>
+    </div>
+    <div class="gauge">
+      <div class="glabel"><span>weekly · Sonnet</span><b>1%</b></div>
+      <div class="track"><div class="fill" style="width:3%"></div></div>
+      <div class="reset">resets Tue 7:59 PM</div>
+    </div>
+    <!-- A "danger" example so we can eyeball the warm/amber treatment -->
+    <div class="gauge">
+      <div class="glabel"><span>weekly limit (heavy week)</span><b>86%</b></div>
+      <div class="track"><div class="fill warm" style="width:86%"></div></div>
+      <div class="reset">→ on pace to lock out ~Thu · resets Sat 6:00 PM</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="row"><code class="cmd">npx @kill-switch/agent-guard usage</code> <span class="muted">— real numbers from Anthropic, no proxy.</span></div>
+    <p style="margin-top:14px" class="muted">Throwaway preview page for visualizing the gauge treatment. Not linked from the site.</p>
+  </div>
+</div>
+</body>
+</html>
