@@ -1,0 +1,41 @@
+# Divinci Docs — keep the Release knowledge + the docs site in sync.
+# Wired by Divinci Docs pipeline: uses repo secret DIVINCI_API_KEY + repo vars
+# DIVINCI_RELEASE_ID / DIVINCI_API_URL / DIVINCI_RAG_VECTOR_ID / DIVINCI_SITE_URL.
+# Activates once @divinci-ai/cli is published to npm. The build+deploy step
+# needs the docs-site committed in-repo + a CLOUDFLARE_API_TOKEN secret.
+name: divinci-docs-sync
+
+on:
+  workflow_dispatch:
+  # Auto-trigger (enable once @divinci-ai/cli is published + docs-site is in-repo):
+  # push:
+  #   branches: [main]
+  #   paths: ["docs/**", "README.md", "src/content/docs/**"]
+
+concurrency:
+  group: divinci-docs-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+
+      # Re-ingest changed docs into the Release's RAG vector (keeps the
+      # assistant answers current). Inputs via env per GitHub injection guidance.
+      - name: Sync Release knowledge
+        env:
+          DIVINCI_API_KEY: ${{ secrets.DIVINCI_API_KEY }}
+          PUBLIC_DIVINCI_RELEASE_ID: ${{ vars.DIVINCI_RELEASE_ID }}
+          PUBLIC_DIVINCI_API_URL: ${{ vars.DIVINCI_API_URL }}
+          RAG_VECTOR_ID: ${{ vars.DIVINCI_RAG_VECTOR_ID }}
+          SITE_URL: ${{ vars.DIVINCI_SITE_URL }}
+          SINCE_REF: ${{ github.event.before }}
+        run: >
+          npx --yes @divinci-ai/cli docs sync
+          --vector "$RAG_VECTOR_ID"
+          --base-url "$SITE_URL"
