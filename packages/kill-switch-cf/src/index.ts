@@ -165,28 +165,39 @@ const todayUTC = () => new Date().toISOString().split("T")[0];
 // #8 Batch all core datasets into ONE query under a single account{} selection.
 // 4 sequential queries → 1 request; avoids the 10429 rate-limit that silently
 // produced monitoring gaps.
+const doField = (today: string) => `durableObjectsInvocationsAdaptiveGroups(limit: 50, filter: {date_geq: "${today}"}, orderBy: [sum_requests_DESC]) {
+          dimensions { scriptName }
+          sum { requests wallTime }
+        }`;
+
+const workerField = (today: string) => `workersInvocationsAdaptive(limit: 50, filter: {date_geq: "${today}"}, orderBy: [sum_requests_DESC]) {
+          dimensions { scriptName }
+          sum { requests errors wallTime }
+        }`;
+
+// No orderBy: r2StorageAdaptiveGroups' objectCount/payloadSize are max-aggregated
+// gauges, so `sum_objectCount_DESC` is an invalid enum and errors the query. We
+// iterate all returned buckets anyway, so ordering is unnecessary.
+const r2Field = (today: string) => `r2StorageAdaptiveGroups(limit: 50, filter: {date_geq: "${today}"}) {
+          dimensions { bucketName }
+          sum { objectCount payloadSize uploadCount downloadCount }
+        }`;
+
+const d1Field = (today: string) => `d1AnalyticsAdaptiveGroups(limit: 50, filter: {date_geq: "${today}"}, orderBy: [sum_readQueries_DESC]) {
+          dimensions { databaseId }
+          sum { readQueries writeQueries rowsRead rowsWritten }
+        }`;
+
 function coreQuery(env: Env): string {
   const today = todayUTC();
   const acct = acctTag(env);
   return `{
     viewer {
       accounts(filter: {accountTag: "${acct}"}) {
-        durableObjectsInvocationsAdaptiveGroups(limit: 50, filter: {date_geq: "${today}"}, orderBy: [sum_requests_DESC]) {
-          dimensions { scriptName }
-          sum { requests wallTime }
-        }
-        workersInvocationsAdaptive(limit: 50, filter: {date_geq: "${today}"}, orderBy: [sum_requests_DESC]) {
-          dimensions { scriptName }
-          sum { requests errors wallTime }
-        }
-        r2StorageAdaptiveGroups(limit: 50, filter: {date_geq: "${today}"}, orderBy: [sum_objectCount_DESC]) {
-          dimensions { bucketName }
-          sum { objectCount payloadSize uploadCount downloadCount }
-        }
-        d1AnalyticsAdaptiveGroups(limit: 50, filter: {date_geq: "${today}"}, orderBy: [sum_readQueries_DESC]) {
-          dimensions { databaseId }
-          sum { readQueries writeQueries rowsRead rowsWritten }
-        }
+        ${doField(today)}
+        ${workerField(today)}
+        ${r2Field(today)}
+        ${d1Field(today)}
       }
     }
   }`;
@@ -230,28 +241,38 @@ function wrapAccount(field: string, env: Env): string {
   return `{ viewer { accounts(filter: {accountTag: "${acctTag(env)}"}) { ${field} } } }`;
 }
 
+// Merge-safe: only assigns datasets present in `acct`, so it works both for the
+// single batched response and for per-dataset fallback responses (no clobbering).
 function parseCore(acct: any, usage: AllUsage): void {
-  usage.doUsage = (acct?.durableObjectsInvocationsAdaptiveGroups ?? []).map((g: any) => ({
-    scriptName: g.dimensions.scriptName,
-    requests: g.sum.requests,
-    wallTimeHours: g.sum.wallTime / 1e6 / 3600, // microseconds → hours
-  }));
-  usage.workerUsage = (acct?.workersInvocationsAdaptive ?? []).map((g: any) => ({
-    scriptName: g.dimensions.scriptName,
-    requests: g.sum.requests,
-    errors: g.sum.errors,
-    cpuTimeMs: g.sum.wallTime / 1000,
-  }));
-  usage.r2Usage = (acct?.r2StorageAdaptiveGroups ?? []).map((g: any) => ({
-    bucketName: g.dimensions.bucketName,
-    ops: (g.sum.uploadCount || 0) + (g.sum.downloadCount || 0),
-    storageGB: (g.sum.payloadSize || 0) / (1024 * 1024 * 1024),
-  }));
-  usage.d1Usage = (acct?.d1AnalyticsAdaptiveGroups ?? []).map((g: any) => ({
-    dbName: g.dimensions.databaseId,
-    rowsRead: g.sum.rowsRead || 0,
-    rowsWritten: g.sum.rowsWritten || 0,
-  }));
+  if (acct?.durableObjectsInvocationsAdaptiveGroups) {
+    usage.doUsage = acct.durableObjectsInvocationsAdaptiveGroups.map((g: any) => ({
+      scriptName: g.dimensions.scriptName,
+      requests: g.sum.requests,
+      wallTimeHours: g.sum.wallTime / 1e6 / 3600, // microseconds → hours
+    }));
+  }
+  if (acct?.workersInvocationsAdaptive) {
+    usage.workerUsage = acct.workersInvocationsAdaptive.map((g: any) => ({
+      scriptName: g.dimensions.scriptName,
+      requests: g.sum.requests,
+      errors: g.sum.errors,
+      cpuTimeMs: g.sum.wallTime / 1000,
+    }));
+  }
+  if (acct?.r2StorageAdaptiveGroups) {
+    usage.r2Usage = acct.r2StorageAdaptiveGroups.map((g: any) => ({
+      bucketName: g.dimensions.bucketName,
+      ops: (g.sum.uploadCount || 0) + (g.sum.downloadCount || 0),
+      storageGB: (g.sum.payloadSize || 0) / (1024 * 1024 * 1024),
+    }));
+  }
+  if (acct?.d1AnalyticsAdaptiveGroups) {
+    usage.d1Usage = acct.d1AnalyticsAdaptiveGroups.map((g: any) => ({
+      dbName: g.dimensions.databaseId,
+      rowsRead: g.sum.rowsRead || 0,
+      rowsWritten: g.sum.rowsWritten || 0,
+    }));
+  }
 }
 
 function parseExtended(acct: any, usage: AllUsage): void {
@@ -293,15 +314,45 @@ async function queryAllUsage(env: Env): Promise<AllUsage> {
   const core = await cfGraphQL(env, coreQuery(env));
   if (core.ok) {
     parseCore(core.data?.data?.viewer?.accounts?.[0] ?? {}, usage);
-  } else {
+  } else if (core.kind === "auth") {
+    // Auth failure means the token is broken — every dataset is blind. Surface
+    // it loudly and skip extended (same token).
     usage.analyticsAuth = "FAILING";
     usage.analyticsError = `[${core.kind}] ${core.message}`;
-    console.error(`[kill-switch] CORE ANALYTICS FAILING (${core.kind}): ${core.message}`);
-    // Don't attempt extended if core auth is broken — same token.
-    if (core.kind === "auth") {
-      usage.extendedAnalytics = "DEGRADED";
-      usage.extendedError = "skipped (core auth failing)";
-      return usage;
+    usage.extendedAnalytics = "DEGRADED";
+    usage.extendedError = "skipped (core auth failing)";
+    console.error(`[kill-switch] CORE ANALYTICS FAILING (auth): ${core.message}`);
+    return usage;
+  } else {
+    // Non-auth failure (schema quirk, rate-limit) — fall back to per-dataset so
+    // one bad dataset can't blind the other three.
+    console.error(`[kill-switch] core batch failed (${core.kind}): ${core.message} — falling back to per-dataset`);
+    const today = todayUTC();
+    const coreFields: [string, string][] = [
+      ["do", doField(today)],
+      ["worker", workerField(today)],
+      ["r2", r2Field(today)],
+      ["d1", d1Field(today)],
+    ];
+    let authFailed = false;
+    let anyFail = false;
+    for (const [name, field] of coreFields) {
+      const r = await cfGraphQL(env, wrapAccount(field, env));
+      if (r.ok) {
+        parseCore(r.data?.data?.viewer?.accounts?.[0] ?? {}, usage);
+      } else {
+        anyFail = true;
+        if (r.kind === "auth") authFailed = true;
+        console.error(`[kill-switch] core dataset ${name} unavailable (${r.kind}): ${r.message}`);
+      }
+    }
+    // Only declare BLIND if a dataset actually failed on auth, or every dataset
+    // failed. A single quirky dataset shouldn't flip analyticsAuth to FAILING.
+    if (authFailed) {
+      usage.analyticsAuth = "FAILING";
+      usage.analyticsError = `[${core.kind}] ${core.message}`;
+    } else if (anyFail) {
+      console.error(`[kill-switch] core partially degraded: ${core.message}`);
     }
   }
 
