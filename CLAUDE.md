@@ -120,11 +120,12 @@ The token must be an **API Token** (not Global API Key), created at:
 https://dash.cloudflare.com/profile/api-tokens
 
 Required permissions:
-- Account > Account Analytics > Read
+- Account > Account Analytics > Read  (without this the CF half reads empty — the checker now surfaces this as an auth failure instead of a false all-clear)
 - Account > Workers Scripts > Edit
 - Account > Workers R2 Storage > Read
 - Account > D1 > Read
-- Zone > Zone > Read
+- Zone > Zone > Read  (also required to enumerate zones for Workers Routes removal on auto-disconnect)
+- Zone > Workers Routes > Edit  (auto-disconnect removes zone [[routes]], not just workers.dev + custom domains)
 
 Or use the "Edit Cloudflare Workers" template.
 
@@ -136,7 +137,7 @@ Required permissions:
 - Write access for auto-kill actions (stop/terminate pods, scale endpoints)
 
 ## Supported Cloud Providers
-- **Cloudflare** — Workers, Durable Objects, R2, D1, Queues, Stream, Zones
+- **Cloudflare** — Workers, Durable Objects, R2, D1, Queues, Stream, Zones, Workers AI (Neurons), AI Gateway (upstream LLM $), Vectorize
 - **GCP** — Cloud Run, Compute Engine, GKE, BigQuery, Cloud Functions, Cloud Storage
 - **AWS** — EC2, Lambda, RDS, ECS, EKS, S3, SageMaker, Cost Explorer
 - **RunPod** — GPU Pods (on-demand & spot), Serverless Endpoints, Network Volumes
