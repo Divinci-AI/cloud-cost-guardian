@@ -111,9 +111,9 @@ PROTECTED_RESOURCES = ""
 # Create it once:  wrangler kv namespace create ALERT_STATE
 # then paste the returned id below. Optional but RECOMMENDED — without it,
 # webhook alerts cannot be deduped and will re-fire every cron tick.
-# [[kv_namespaces]]
-# binding = "ALERT_STATE"
-# id = "<paste-id-from-wrangler-kv-namespace-create>"
+[[kv_namespaces]]
+binding = "ALERT_STATE"
+id = "70af5e6edb8b414ab96f6bbb0618b4be"
 
 # ── Secrets ──────────────────────────────────────────────────────────────────
 # REQUIRED (set via `wrangler secret put <NAME>`):
