@@ -168,6 +168,8 @@ export interface ThresholdConfig {
   streamMinutesPerDay?: number;      // Stream minutes stored/delivered
   argoGBPerDay?: number;             // Argo Smart Routing GB routed
   pagesRequestsPerDay?: number;      // Pages Functions requests
+  aiNeuronsPerDay?: number;          // Workers AI Neurons/day (alert-only; no CF throttle API)
+  aiGatewayCostUSD?: number;         // AI Gateway upstream provider $/day (alert-only)
 
   // ─── GCP Cost Thresholds ────────────────────────────────────────────────────
   gcpBudgetPercent?: number;
