@@ -274,8 +274,7 @@ async function queryR2Usage(token: string, accountId: string): Promise<ServiceUs
       accounts(filter: {accountTag: "${accountId.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
         r2StorageAdaptiveGroups(
           limit: 50,
-          filter: {date_geq: "${today}"},
-          orderBy: [sum_objectCount_DESC]
+          filter: {date_geq: "${today}"}
         ) {
           dimensions { bucketName }
           sum { objectCount payloadSize uploadCount downloadCount }
