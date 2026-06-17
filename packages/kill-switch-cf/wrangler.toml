@@ -56,12 +56,41 @@ QUEUE_OPS_THRESHOLD = "1000000"
 # Context: Stream costs $5.00/1000 min stored, $1.00/1000 min delivered
 STREAM_MINUTES_THRESHOLD = "10000"
 
+# ── LLM / AI cost coverage (detect-and-alert only) ────────────────────────────
+# These are the scariest 2026 runaways and are invisible to the CF Workers bill.
+
+# Workers AI Neurons per day (default: 500,000 ≈ $5.50/day @ $0.011/1k Neurons).
+# No CF API throttles Workers AI per-model — mitigation is in-app (drop the
+# model from the caller's fallback chain).
+AI_NEURONS_THRESHOLD = "500000"
+
+# AI Gateway UPSTREAM provider $ per day (OpenAI/Anthropic/Gemini/Vertex routed
+# through AI Gateway). Default $10/day. (The workers-ai provider's cost is $0
+# here — it bills via Neurons above, so it's skipped to avoid double-counting.)
+AI_GATEWAY_COST_THRESHOLD = "10"
+
+# Vectorize queried dimensions per day (default: 100M ≈ $1/day @ $0.01/1M dims).
+VECTORIZE_DIMENSIONS_THRESHOLD = "100000000"
+
 # ── Kill Switch Behavior ─────────────────────────────────────────────────────
 
 # Auto-disconnect routes when thresholds exceeded (RECOMMENDED)
-# Removes custom domains and disables workers.dev subdomain.
+# Removes zone routes + custom domains and disables the workers.dev subdomain.
 # Reversible — worker code stays intact, just stops receiving traffic.
 AUTO_DISCONNECT = "true"
+
+# Separate the ALERT threshold from the KILL threshold. Alerts fire at 1× the
+# thresholds above; auto-disconnect/delete only fire above N× (default 10×).
+# Prevents a cheap-but-busy service (e.g. a 1.5M-req/day voice-agent DO costing
+# ~$0.23/day) from being auto-killed off a low alert floor. Set to "1" to
+# restore the old behavior where alert == kill.
+DISCONNECT_THRESHOLD_MULTIPLIER = "10"
+
+# De-dup window for webhook alerts (Discord/Slack/custom), in seconds.
+# Daily-cumulative thresholds stay crossed once breached, so without this the
+# same alert re-fires every cron tick (~288×/day on a 5-min cron). PagerDuty is
+# exempt (it self-dedups). Requires the ALERT_STATE KV binding below. Default 6h.
+ALERT_COOLDOWN_SECONDS = "21600"
 
 # Auto-delete workers when thresholds exceeded (NUCLEAR — use with caution)
 # Permanently deletes the worker script and all associated Durable Objects.
@@ -77,13 +106,27 @@ PROTECTED_WORKERS = "cloudflare-billing-kill-switch,divinci-agent-stage,divinci-
 # Comma-separated list of resource names.
 PROTECTED_RESOURCES = ""
 
+# ── Alert de-dup / kill-snapshot state ────────────────────────────────────────
+# KV namespace for alert cooldown (de-dup) and forensic kill snapshots.
+# Create it once:  wrangler kv namespace create ALERT_STATE
+# then paste the returned id below. Optional but RECOMMENDED — without it,
+# webhook alerts cannot be deduped and will re-fire every cron tick.
+# [[kv_namespaces]]
+# binding = "ALERT_STATE"
+# id = "<paste-id-from-wrangler-kv-namespace-create>"
+
 # ── Secrets ──────────────────────────────────────────────────────────────────
 # REQUIRED (set via `wrangler secret put <NAME>`):
 #   CLOUDFLARE_API_TOKEN    — API token with permissions:
-#                             - Account Analytics: Read
-#                             - Account Workers Scripts: Edit (for auto-disconnect)
-#                             - Account Workers Routes: Edit (for route removal)
+#                             - Account > Account Analytics: Read   (monitoring; without this the CF half reads EMPTY and you're silently blind)
+#                             - Account > Workers Scripts: Edit      (auto-disconnect: subdomain + custom domains; auto-delete)
+#                             - Zone > Workers Routes: Edit          (auto-disconnect: zone [[routes]] removal)
+#                             - Zone > Zone: Read                    (enumerate zones to find routes to remove)
 #   CLOUDFLARE_ACCOUNT_ID   — Your Cloudflare account ID
+#
+#   ADMIN_SECRET            — Bearer token gating /check, /usage, /test-alert.
+#                             Endpoints FAIL CLOSED (refuse) if this is unset.
+#                             Set via: wrangler secret put ADMIN_SECRET
 #
 # ALERTING (at least one recommended):
 #   PAGERDUTY_ROUTING_KEY   — PagerDuty Events API v2 integration key
