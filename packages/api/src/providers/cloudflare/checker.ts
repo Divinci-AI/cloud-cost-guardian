@@ -31,6 +31,12 @@ const CLOUDFLARE_METRIC_CATEGORIES: Record<string, MetricCategory> = {
   streamMinutesPerDay: "load",
   argoGBPerDay: "load",
   r2StorageGB: "storage",
+  // LLM/AI spend. Categorized "load" (not "cost") on purpose: it's genuinely a
+  // cost runaway, but there's NO Cloudflare API to throttle Workers AI per-model
+  // or to cap AI Gateway's upstream provider spend — so these are alert-only and
+  // must not be in the default auto-kill set. Mitigation is in-app.
+  aiNeuronsPerDay: "load",
+  aiGatewayCostUSD: "load",
 };
 const CF_GRAPHQL = `${CF_API}/graphql`;
 
@@ -43,6 +49,20 @@ async function cfFetch(path: string, token: string, options: RequestInit = {}): 
       ...options.headers,
     },
   });
+}
+
+/**
+ * Classified Cloudflare GraphQL error. `kind === "auth"` is the dangerous one:
+ * a token missing `Account Analytics: Read` returns a 10000 "Authentication
+ * error", and if that were swallowed the whole CF half would read EMPTY while
+ * the operator believes they're protected (the silent-blindness bug, #9). Auth
+ * errors must propagate so the account is flagged, never masked as "all clear".
+ */
+export class CfGraphQLError extends Error {
+  constructor(message: string, public kind: "auth" | "rate-limit" | "graphql" | "parse" | "http") {
+    super(message);
+    this.name = "CfGraphQLError";
+  }
 }
 
 async function cfGraphQL(token: string, accountId: string, query: string): Promise<any> {
@@ -60,11 +80,25 @@ async function cfGraphQL(token: string, accountId: string, query: string): Promi
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`CF GraphQL parse error: ${text.substring(0, 200)}`);
+    throw new CfGraphQLError(`CF GraphQL parse error: ${text.substring(0, 200)}`, "parse");
   }
 
-  if (data.errors) {
-    throw new Error(`CF GraphQL error: ${JSON.stringify(data.errors)}`);
+  if (data.errors && data.errors.length) {
+    const blob = JSON.stringify(data.errors);
+    if (/\b10000\b|9106|9109|authentication error|not authorized|account analytics/i.test(blob)) {
+      throw new CfGraphQLError(
+        `Cloudflare analytics auth FAILING — the API token is missing 'Account Analytics: Read'. Monitoring is BLIND until fixed. ${blob.substring(0, 200)}`,
+        "auth",
+      );
+    }
+    if (/\b10429\b|rate.?limit|too many request/i.test(blob)) {
+      throw new CfGraphQLError(`Cloudflare GraphQL rate-limited (10429): ${blob.substring(0, 200)}`, "rate-limit");
+    }
+    throw new CfGraphQLError(`CF GraphQL error: ${blob.substring(0, 300)}`, "graphql");
+  }
+
+  if (!res.ok) {
+    throw new CfGraphQLError(`CF GraphQL HTTP ${res.status}: ${text.substring(0, 150)}`, "http");
   }
   return data;
 }
@@ -140,6 +174,89 @@ async function queryWorkerUsage(token: string, accountId: string): Promise<Servi
   });
 }
 
+// ─── LLM / AI Usage Queries (#1 Workers AI, #2 AI Gateway) ──────────────────
+// Today's scariest cost runaways — invisible to the CF Workers bill, and the
+// biggest coverage gap in the product. Detect-and-alert only (no CF throttle API).
+
+async function queryAIUsage(token: string, accountId: string): Promise<ServiceUsage[]> {
+  const today = new Date().toISOString().split("T")[0];
+  const query = `{
+    viewer {
+      accounts(filter: {accountTag: "${accountId.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
+        aiInferenceAdaptiveGroups(
+          limit: 100,
+          filter: {date_geq: "${today}"},
+          orderBy: [sum_totalNeurons_DESC]
+        ) {
+          count
+          dimensions { modelId }
+          sum { totalNeurons totalInputTokens totalOutputTokens }
+        }
+      }
+    }
+  }`;
+
+  try {
+    const data = await cfGraphQL(token, accountId, query);
+    const groups = data?.data?.viewer?.accounts?.[0]?.aiInferenceAdaptiveGroups ?? [];
+    return groups.map((g: any) => {
+      const neurons = g.sum.totalNeurons || 0;
+      // Workers AI pricing: $0.011 per 1,000 Neurons
+      const cost = (neurons / 1000) * 0.011;
+      return {
+        serviceName: `ai:${g.dimensions.modelId}`,
+        metrics: [
+          { name: "Workers AI Neurons", value: neurons, unit: "neurons", thresholdKey: "aiNeuronsPerDay" },
+        ],
+        estimatedDailyCostUSD: cost,
+      };
+    });
+  } catch (e) {
+    if (e instanceof CfGraphQLError && e.kind === "auth") throw e;
+    return [];
+  }
+}
+
+async function queryAIGatewayUsage(token: string, accountId: string): Promise<ServiceUsage[]> {
+  const today = new Date().toISOString().split("T")[0];
+  const query = `{
+    viewer {
+      accounts(filter: {accountTag: "${accountId.replace(/[^a-zA-Z0-9-]/g, "")}"}) {
+        aiGatewayRequestsAdaptiveGroups(
+          limit: 100,
+          filter: {date_geq: "${today}"},
+          orderBy: [sum_cost_DESC]
+        ) {
+          dimensions { gateway provider model }
+          sum { cost erroredRequests cachedRequests }
+        }
+      }
+    }
+  }`;
+
+  try {
+    const data = await cfGraphQL(token, accountId, query);
+    const groups = data?.data?.viewer?.accounts?.[0]?.aiGatewayRequestsAdaptiveGroups ?? [];
+    return groups
+      // sum.cost is $0 for the workers-ai provider (Neurons bill that separately,
+      // counted in queryAIUsage) — skip to avoid double-counting / false zeros.
+      .filter((g: any) => g.dimensions.provider !== "workers-ai")
+      .map((g: any) => {
+        const cost = g.sum.cost || 0;
+        return {
+          serviceName: `aigw:${g.dimensions.gateway}/${g.dimensions.provider}/${g.dimensions.model}`,
+          metrics: [
+            { name: "AI Gateway Upstream Cost", value: cost, unit: "USD", thresholdKey: "aiGatewayCostUSD" },
+          ],
+          estimatedDailyCostUSD: cost,
+        };
+      });
+  } catch (e) {
+    if (e instanceof CfGraphQLError && e.kind === "auth") throw e;
+    return [];
+  }
+}
+
 // ─── R2, D1, Queues, Stream Usage Queries ───────────────────────────────────
 
 async function queryR2Usage(token: string, accountId: string): Promise<ServiceUsage[]> {
@@ -188,7 +305,9 @@ async function queryR2Usage(token: string, accountId: string): Promise<ServiceUs
       };
     });
   } catch (e) {
-    // Fallback: return bucket list without detailed metrics
+    // Never mask analytics auth failure — that's the silent-blindness bug (#9).
+    if (e instanceof CfGraphQLError && e.kind === "auth") throw e;
+    // Otherwise degrade: return bucket list without detailed metrics
     return buckets.map((b: any) => ({
       serviceName: `r2:${b.name}`,
       metrics: [],
@@ -243,7 +362,8 @@ async function queryD1Usage(token: string, accountId: string): Promise<ServiceUs
         estimatedDailyCostUSD: cost,
       };
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof CfGraphQLError && e.kind === "auth") throw e;
     return [];
   }
 }
@@ -448,18 +568,20 @@ export const cloudflareProvider: CloudProvider = {
       throw new Error("Missing Cloudflare API token or account ID");
     }
 
-    const [doServices, workerServices, r2Services, d1Services, queueServices, streamServices] = await Promise.all([
+    const [doServices, workerServices, r2Services, d1Services, queueServices, streamServices, aiServices, aiGatewayServices] = await Promise.all([
       queryDOUsage(apiToken, accountId),
       queryWorkerUsage(apiToken, accountId),
       queryR2Usage(apiToken, accountId),
       queryD1Usage(apiToken, accountId),
       queryQueuesUsage(apiToken, accountId),
       queryStreamUsage(apiToken, accountId),
+      queryAIUsage(apiToken, accountId),
+      queryAIGatewayUsage(apiToken, accountId),
     ]);
 
     // Merge — a worker can appear in both DO and Worker metrics
     const serviceMap = new Map<string, ServiceUsage>();
-    for (const s of [...doServices, ...workerServices, ...r2Services, ...d1Services, ...queueServices, ...streamServices]) {
+    for (const s of [...doServices, ...workerServices, ...r2Services, ...d1Services, ...queueServices, ...streamServices, ...aiServices, ...aiGatewayServices]) {
       const existing = serviceMap.get(s.serviceName);
       if (existing) {
         existing.metrics.push(...s.metrics);
@@ -513,6 +635,18 @@ export const cloudflareProvider: CloudProvider = {
     // Zone-level actions
     if (action === "pause-zone") {
       return pauseZone(apiToken, serviceId || serviceName);
+    }
+
+    // Workers AI / AI Gateway are alert-only: there's no Cloudflare API to
+    // throttle per-model inference or cap upstream provider spend. Return a
+    // non-success result rather than attempting a bogus worker disconnect.
+    if (serviceType === "ai" || serviceType === "aigw") {
+      return {
+        success: false,
+        action,
+        serviceName,
+        details: "Workers AI / AI Gateway spend cannot be throttled via the Cloudflare API — alert-only. Mitigate in-app (drop the model from the fallback chain) or set an account spend limit.",
+      };
     }
 
     // Service-specific kill actions
@@ -591,6 +725,8 @@ export const cloudflareProvider: CloudProvider = {
       queueOpsPerDay: 1_000_000,
       streamMinutesPerDay: 10_000,
       argoGBPerDay: 100,
+      aiNeuronsPerDay: 500_000,   // ~$5.50/day @ $0.011/1k Neurons
+      aiGatewayCostUSD: 10,       // upstream LLM $/day routed through AI Gateway
     };
   },
 };

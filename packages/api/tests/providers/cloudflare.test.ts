@@ -788,5 +788,93 @@ describe("Cloudflare Provider", () => {
         expect.objectContaining({ method: "DELETE" })
       );
     });
+
+    it("treats Workers AI / AI Gateway as alert-only (no CF kill API)", async () => {
+      const ai = await cloudflareProvider.executeKillSwitch(credential, "ai:@cf/meta/llama-3", "disconnect");
+      expect(ai.success).toBe(false);
+      expect(ai.details).toMatch(/alert-only/i);
+
+      const gw = await cloudflareProvider.executeKillSwitch(credential, "aigw:my-gw/openai/gpt-4o", "disconnect");
+      expect(gw.success).toBe(false);
+      expect(gw.details).toMatch(/alert-only/i);
+      // No destructive call should have been attempted
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── LLM / AI coverage (#1 Workers AI, #2 AI Gateway) ──────────────────────
+
+  function mockAllDatasets(overrides: Record<string, any[]> = {}) {
+    const ds = (key: string) => overrides[key] ?? [];
+    mockFetch.mockImplementation(async (url: string, options: any) => {
+      const query = JSON.parse(options?.body || "{}").query || "";
+      const urlStr = typeof url === "string" ? url : "";
+      const wrap = (field: string, rows: any[]) => ({
+        ok: true,
+        text: async () => JSON.stringify({ data: { viewer: { accounts: [{ [field]: rows }] } } }),
+      });
+      if (query.includes("durableObjects")) return wrap("durableObjectsInvocationsAdaptiveGroups", ds("do"));
+      if (query.includes("workersInvocations")) return wrap("workersInvocationsAdaptive", ds("worker"));
+      if (query.includes("r2Storage")) return wrap("r2StorageAdaptiveGroups", ds("r2"));
+      if (query.includes("d1Analytics")) return wrap("d1AnalyticsAdaptiveGroups", ds("d1"));
+      if (query.includes("aiInference")) return wrap("aiInferenceAdaptiveGroups", ds("ai"));
+      if (query.includes("aiGatewayRequests")) return wrap("aiGatewayRequestsAdaptiveGroups", ds("aigw"));
+      if (urlStr.includes("/r2/buckets") || urlStr.includes("/d1/database") ||
+          urlStr.includes("/queues") || urlStr.includes("/stream")) {
+        return { ok: true, text: async () => JSON.stringify({ result: [] }) };
+      }
+      return { ok: true, text: async () => "{}" };
+    });
+  }
+
+  describe("Workers AI (#1)", () => {
+    it("flags a Neuron spike as an alert-only (load) violation with $ estimate", async () => {
+      mockAllDatasets({
+        ai: [{ count: 1200, dimensions: { modelId: "@cf/meta/llama-3" }, sum: { totalNeurons: 3_670_000, totalInputTokens: 1, totalOutputTokens: 2 } }],
+      });
+      const result = await cloudflareProvider.checkUsage(credential, { aiNeuronsPerDay: 500_000 });
+      const svc = result.services.find(s => s.serviceName === "ai:@cf/meta/llama-3");
+      expect(svc).toBeDefined();
+      // $0.011 / 1k Neurons → 3.67M Neurons ≈ $40.37
+      expect(svc!.estimatedDailyCostUSD).toBeCloseTo(40.37, 1);
+      const v = result.violations.find(v => v.serviceName === "ai:@cf/meta/llama-3");
+      expect(v).toBeDefined();
+      expect(v!.category).toBe("load"); // alert-only — not in default auto-kill set
+    });
+  });
+
+  describe("AI Gateway (#2)", () => {
+    it("flags upstream provider cost but skips the workers-ai provider (no double-count)", async () => {
+      mockAllDatasets({
+        aigw: [
+          { dimensions: { gateway: "g", provider: "openai", model: "gpt-4o" }, sum: { cost: 25, erroredRequests: 0, cachedRequests: 0 } },
+          { dimensions: { gateway: "g", provider: "workers-ai", model: "@cf/x" }, sum: { cost: 0, erroredRequests: 0, cachedRequests: 0 } },
+        ],
+      });
+      const result = await cloudflareProvider.checkUsage(credential, { aiGatewayCostUSD: 10 });
+      expect(result.services.some(s => s.serviceName.includes("workers-ai"))).toBe(false);
+      const v = result.violations.find(v => v.serviceName === "aigw:g/openai/gpt-4o");
+      expect(v).toBeDefined();
+      expect(v!.currentValue).toBe(25);
+      expect(v!.category).toBe("load");
+    });
+  });
+
+  describe("analytics auth blindness (#9)", () => {
+    it("throws (does NOT silently report all-clear) when the token lacks Account Analytics:Read", async () => {
+      mockFetch.mockImplementation(async (url: string, options: any) => {
+        const query = JSON.parse(options?.body || "{}").query || "";
+        const urlStr = typeof url === "string" ? url : "";
+        if (query) {
+          return { ok: true, text: async () => JSON.stringify({ errors: [{ message: "Authentication error", code: 10000 }] }) };
+        }
+        if (urlStr.includes("/r2/buckets") || urlStr.includes("/d1/database") ||
+            urlStr.includes("/queues") || urlStr.includes("/stream")) {
+          return { ok: true, text: async () => JSON.stringify({ result: [] }) };
+        }
+        return { ok: true, text: async () => "{}" };
+      });
+      await expect(cloudflareProvider.checkUsage(credential, defaultThresholds)).rejects.toThrow(/auth|analytics|blind/i);
+    });
   });
 });
