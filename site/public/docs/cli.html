@@ -1002,5 +1002,28 @@ ks check --json | jq '.results[].violations | length'</code></pre>
             <a href="/terms.html">Terms of Service</a>
         </p>
     </footer>
+    <!--
+      "Ask the docs" — Divinci embed chat widget (@divinci-ai/embed-chat-ui).
+      Browser-native ES module from the CDN; no build step. Mounted on the docs
+      pages (not the homepage). Answers from the kill-switch.net docs RAG.
+    -->
+    <script type="module">
+      const DIVINCI_RELEASE_ID = "6a3276c40a6aff20707a4e17"; // "Ask Cloud Kill-Switch" prod release (RAG: kill-switch.net docs)
+      const DIVINCI_API_URL = "https://api.divinci.app";
+      if (DIVINCI_RELEASE_ID) {
+        const { mount } = await import(
+          "https://cdn.jsdelivr.net/npm/@divinci-ai/embed-chat-ui@0.1.1/dist/standalone/divinci-embed.js"
+        );
+        mount(document.body, {
+          releaseId: DIVINCI_RELEASE_ID,
+          apiUrl: DIVINCI_API_URL,
+          title: "Ask Cloud Kill-Switch",
+          launcherLabel: "Ask the docs",
+          greeting:
+            "Hi! Ask me anything about Cloud Kill-Switch — setup, CLI, and integration.",
+          placeholder: "How do I onboard Cloudflare?",
+        });
+      }
+    </script>
 </body>
 </html>
