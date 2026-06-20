@@ -37,9 +37,12 @@ vi.mock("mongoose", () => {
           if (query?.status) return d.status === query.status;
           return true;
         });
-        // Return chainable query object with .lean() support
+        // Return chainable query object with .sort()/.limit()/.select()/.lean() support
         const chainable: any = { lean: vi.fn(async () => results) };
         chainable.then = (resolve: any, reject: any) => Promise.resolve(results).then(resolve, reject);
+        chainable.sort = vi.fn(() => chainable);
+        chainable.limit = vi.fn(() => chainable);
+        chainable.select = vi.fn(() => chainable);
         return chainable;
       }),
       findById: vi.fn(async (id: string) => docs.get(id) || null),
@@ -141,6 +144,8 @@ vi.mock("../../src/providers/index.js", () => ({
 }));
 
 vi.mock("../../src/globals/index.js", () => ({
+  isMongoEnabled: vi.fn(() => false),
+  isMongoConnected: vi.fn(() => true),
   recordUsageSnapshot: vi.fn(),
   recordAlert: vi.fn(),
   getUsageHistory: vi.fn(async () => []),

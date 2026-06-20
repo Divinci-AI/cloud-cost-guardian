@@ -8,29 +8,95 @@
 import mongoose from "mongoose";
 import type { RuleEvent } from "../providers/types.js";
 
-let mongoConnected = false;
+function mongoUri(): string | undefined {
+  return process.env.GUARDIAN_MONGODB_URI || process.env.MONGO_CONNECTION_URL;
+}
 
+/**
+ * Is MongoDB expected to be available? True when a URI is configured.
+ * When false (tests / in-memory mode), callers should not gate on connection state.
+ */
+export function isMongoEnabled(): boolean {
+  return !!mongoUri();
+}
+
+/**
+ * Live connection state. readyState === 1 means connected & usable.
+ * Guarded so a mocked mongoose (tests) never throws here.
+ */
+export function isMongoConnected(): boolean {
+  try {
+    return mongoose.connection?.readyState === 1;
+  } catch {
+    return false;
+  }
+}
+
+let reconnectScheduled = false;
+
+/**
+ * Connect to MongoDB with fast-fail semantics and self-healing.
+ *
+ * Two hardenings (see ks-cluster0 pause outage, 2026-06-20):
+ *  1. `bufferCommands: false` — when the cluster is down, queries reject
+ *     immediately instead of buffering 10s. Combined with the health gate in
+ *     app.ts this turns a 10s hang into a fast 503.
+ *  2. Background reconnect loop — if the very first connect() fails (e.g. the
+ *     cluster is paused at boot), we keep retrying instead of giving up, so the
+ *     API self-heals when the cluster resumes WITHOUT a Cloud Run restart.
+ *
+ * Never throws: startup proceeds and the server serves fast 503s until Mongo
+ * is reachable.
+ */
 export async function connectMongoDB(): Promise<void> {
-  if (mongoConnected) return;
-
-  const uri = process.env.GUARDIAN_MONGODB_URI || process.env.MONGO_CONNECTION_URL;
+  const uri = mongoUri();
   if (!uri) {
     console.warn("[guardian] No MongoDB URI configured — using in-memory models only");
     return;
   }
 
+  // Fail fast instead of buffering for 10s when disconnected.
+  mongoose.set("bufferCommands", false);
+
+  // Surface connection lifecycle and re-arm the reconnect loop on drop.
+  const conn = mongoose.connection;
+  if (conn && !(conn as any).__guardianListeners) {
+    (conn as any).__guardianListeners = true;
+    conn.on("connected", () => console.error("[guardian] Connected to MongoDB"));
+    conn.on("error", (err: any) => console.error("[guardian] MongoDB error:", err?.message));
+    conn.on("disconnected", () => {
+      console.error("[guardian] MongoDB disconnected — scheduling reconnect");
+      scheduleReconnect();
+    });
+  }
+
+  await attemptConnect(uri);
+}
+
+async function attemptConnect(uri: string): Promise<void> {
+  if (isMongoConnected() || mongoose.connection?.readyState === 2) return;
   try {
     await mongoose.connect(uri, {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
-    mongoConnected = true;
-    console.error("[guardian] Connected to MongoDB");
+    // 'connected' event logs the success.
   } catch (error: any) {
-    console.error("[guardian] MongoDB connection failed:", error.message);
-    throw error;
+    console.error("[guardian] MongoDB connection failed:", error?.message);
+    scheduleReconnect();
   }
+}
+
+function scheduleReconnect(): void {
+  const uri = mongoUri();
+  if (!uri || reconnectScheduled || isMongoConnected()) return;
+  reconnectScheduled = true;
+  const RETRY_MS = parseInt(process.env.MONGO_RECONNECT_MS || "10000");
+  setTimeout(() => {
+    reconnectScheduled = false;
+    void attemptConnect(uri);
+  }, RETRY_MS).unref?.();
 }
 
 // PostgreSQL connection for time-series data

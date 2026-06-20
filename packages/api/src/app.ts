@@ -26,9 +26,11 @@ import { logActivity } from "./services/activity-logger.js";
 import { activityRouter } from "./routes/activity/index.js";
 import { orgsRouter } from "./routes/orgs/index.js";
 import { agentGuardRouter } from "./routes/agent-guard/index.js";
+import { budgetsRouter } from "./routes/budgets/index.js";
+import { pushRouter } from "./routes/push/index.js";
 import { runCheckCycle } from "./services/monitoring-engine.js";
 import { openApiSpec } from "./routes/docs/openapi.js";
-import { getUsageHistory, getAlertHistory, getAnalyticsOverview } from "./globals/index.js";
+import { getUsageHistory, getAlertHistory, getAnalyticsOverview, isMongoEnabled, isMongoConnected } from "./globals/index.js";
 
 export function createApp() {
   const app = express();
@@ -93,6 +95,27 @@ export function createApp() {
   app.use((req, res, next) => {
     if (req.path === "/billing/webhook") return next();
     express.json({ limit: "1mb" })(req, res, next);
+  });
+
+  // Fast-fail DB gate. When MongoDB is configured but currently unreachable
+  // (e.g. the cluster is paused), reject DB-dependent requests immediately with
+  // a 503 instead of letting them hang ~10s on a Mongoose buffering timeout.
+  // The connection layer (globals/index.ts) auto-reconnects in the background,
+  // so this self-clears the moment Mongo is back. DB-free public routes
+  // (health, providers, rule presets, docs) are exempt so liveness/readiness
+  // probes and the marketing surface keep working during a DB outage.
+  const DB_FREE_PATHS = (p: string) =>
+    p === "/" ||
+    p.startsWith("/providers") ||
+    p === "/rules/presets" ||
+    p.startsWith("/docs");
+  app.use((req, res, next) => {
+    if (!isMongoEnabled() || isMongoConnected() || DB_FREE_PATHS(req.path)) return next();
+    res.setHeader("Retry-After", "10");
+    return res.status(503).json({
+      error: "Service temporarily unavailable",
+      reason: "database unavailable",
+    });
   });
 
   // Rate limiting
@@ -200,6 +223,7 @@ export function createApp() {
   app.use("/auth", ...authStack);
   app.use("/activity", ...authStack);
   app.use("/agent-guard", ...authStack);
+  app.use("/budgets", ...authStack);
   app.use("/orgs", requireAuth, resolveOrg);
 
   // Authenticated routes
@@ -212,6 +236,8 @@ export function createApp() {
   app.use("/auth", authRouter);
   app.use("/activity", activityRouter);
   app.use("/agent-guard", agentGuardRouter);
+  app.use("/budgets", budgetsRouter);
+  app.use("/push", pushRouter);
   app.use("/orgs", orgsRouter);
 
   // Manual check (requires auth — runs only the authenticated user's accounts)

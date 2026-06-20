@@ -231,6 +231,8 @@ vi.mock("../../src/providers/index.js", () => ({
 }));
 
 vi.mock("../../src/globals/index.js", () => ({
+  isMongoEnabled: vi.fn(() => false),
+  isMongoConnected: vi.fn(() => true),
   recordUsageSnapshot: vi.fn(),
   recordAlert: vi.fn(),
   getUsageHistory: vi.fn(async () => []),
@@ -285,6 +287,7 @@ beforeEach(() => {
   store.set("billing-acct", {
     _id: "billing-acct",
     ownerUserId: "billing-user",
+    type: "personal", // mongoose hydration applies this schema default in production
     tier: "free",
     stripeCustomerId: null,
     stripeSubscriptionId: null,
@@ -445,6 +448,71 @@ describe("Billing: Status self-heal (stale paid tier w/o live subscription)", ()
     expect(res.status).toBe(200);
     expect(res.body.tier).toBe("enterprise");
     expect(store.get("billing-acct")!.tier).toBe("enterprise");
+  });
+});
+
+describe("Billing: Status self-heal for organizations (owner-backed tier)", () => {
+  // Orgs carry no subscription of their own — their tier is backed by the
+  // OWNER's personal subscription (commit 2e1bb29).
+  const seedOrg = (opts: { orgTier: string; ownerSubId: string | null; ownerTier?: string }) => {
+    const store = mockGetStore("GuardianAccount");
+    const org = store.get("billing-acct")!;
+    org.type = "organization";
+    org.tier = opts.orgTier;
+    org.stripeSubscriptionId = null;
+    store.set("owner-personal-acct", {
+      _id: "owner-personal-acct",
+      ownerUserId: "billing-user",
+      type: "personal",
+      tier: opts.ownerTier ?? "team",
+      stripeCustomerId: "cus_owner_1",
+      stripeSubscriptionId: opts.ownerSubId,
+      settings: { checkIntervalMinutes: 5 },
+      save: vi.fn(async function (this: any) { store.set(this._id, this); return this; }),
+    });
+    return store;
+  };
+
+  it("keeps an org's paid tier while the owner has a live covering subscription", async () => {
+    const store = seedOrg({ orgTier: "team", ownerSubId: "sub_owner_live", ownerTier: "team" });
+
+    const res = await request(app).get("/billing/status").set(AUTH_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe("team");
+    expect(store.get("billing-acct")!.tier).toBe("team");
+  });
+
+  it("heals an org's paid tier to free when the owner has no subscription", async () => {
+    const store = seedOrg({ orgTier: "team", ownerSubId: null });
+
+    const res = await request(app).get("/billing/status").set(AUTH_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe("free");
+    expect(store.get("billing-acct")!.tier).toBe("free");
+  });
+
+  it("heals an org's paid tier when the owner's subscription is canceled", async () => {
+    const store = seedOrg({ orgTier: "pro", ownerSubId: "sub_owner_dead" });
+    mockStripeInstance.subscriptions.retrieve.mockResolvedValueOnce({
+      id: "sub_owner_dead",
+      status: "canceled",
+      cancel_at_period_end: false,
+    } as any);
+
+    const res = await request(app).get("/billing/status").set(AUTH_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe("free");
+    expect(store.get("billing-acct")!.tier).toBe("free");
+  });
+
+  it("does NOT strip an org on a transient error fetching the owner's subscription", async () => {
+    const store = seedOrg({ orgTier: "team", ownerSubId: "sub_owner_flaky" });
+    mockStripeInstance.subscriptions.retrieve.mockRejectedValueOnce(new Error("ETIMEDOUT"));
+
+    const res = await request(app).get("/billing/status").set(AUTH_HEADERS);
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe("team");
+    expect(store.get("billing-acct")!.tier).toBe("team");
   });
 });
 
