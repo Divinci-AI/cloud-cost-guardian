@@ -334,11 +334,13 @@ describe("MongoDB Provider", () => {
       expect(result.details).toContain("paused");
     });
 
-    it("falls through Atlas kill-connections to pause-cluster", async () => {
-      // Atlas doesn't expose direct connection killing; the checker should
-      // automatically route to pause-cluster instead of returning a no-op error.
-      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-
+    it("does NOT escalate Atlas kill-connections to pause-cluster (no silent pause)", async () => {
+      // Regression guard for the divinci-prod-atlas outage: kill-connections is the
+      // DEFAULT threshold action for mongodb, so silently routing it to pause-cluster
+      // auto-paused a prod Atlas cluster. It must now be a clean no-op (success:false)
+      // — pausing only happens via an explicit pause-cluster action. If pause were
+      // (wrongly) attempted, it would call the Atlas API; assert no such call.
+      const callsBefore = mockFetch.mock.calls.length;
       const result = await mongodbProvider.executeKillSwitch({
         provider: "mongodb",
         mongodbSubType: "atlas",
@@ -348,9 +350,10 @@ describe("MongoDB Provider", () => {
         atlasClusterName: "Cluster0",
       }, "cluster:Cluster0", "kill-connections");
 
-      expect(result.success).toBe(true);
-      expect(result.action).toBe("pause-cluster");
-      expect(result.details).toContain("fell through to pause-cluster");
+      expect(result.success).toBe(false);
+      expect(result.action).toBe("kill-connections");
+      expect(result.details).not.toContain("paused");
+      expect(mockFetch.mock.calls.length).toBe(callsBefore); // no Atlas pause API call
     });
 
     it("returns error for unsupported action", async () => {

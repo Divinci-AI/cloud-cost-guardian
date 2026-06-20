@@ -12,6 +12,8 @@ vi.mock("../../src/models/cloud-account/schema.js", () => ({
   CloudAccountModel: { find: vi.fn() },
 }));
 vi.mock("../../src/globals/index.js", () => ({
+  isMongoEnabled: vi.fn(() => false),
+  isMongoConnected: vi.fn(() => true),
   getAnalyticsOverview: vi.fn(),
   getAlertHistory: vi.fn(),
 }));

@@ -18,6 +18,10 @@ export interface CloudAccount {
   protectedServices: string[];
   autoDisconnect: boolean;
   autoDelete?: boolean;
+  /** Violation categories that fire an auto-kill (default ["cost"]). */
+  autoKillCategories?: string[];
+  /** When true (default), destructive managed-DB actions (pause/delete) are never auto-executed. */
+  productionProtected?: boolean;
   lastCheckAt?: string;
   lastCheckStatus?: string;
   lastViolations?: Violation[];
@@ -35,7 +39,7 @@ export interface Violation {
 export interface CreateAccountInput {
   provider: ProviderId;
   name: string;
-  credential: CloudflareCredential | GcpCredential | AwsCredential | RunPodCredential | RedisCredential | MongoDBCredential;
+  credential: CloudflareCredential | GcpCredential | AwsCredential | RunPodCredential | RedisCredential | MongoDBCredential | Neo4jCredential;
 }
 
 export interface CloudflareCredential {
@@ -82,11 +86,19 @@ export interface MongoDBCredential {
   mongodbDatabaseName?: string;
 }
 
+export interface Neo4jCredential {
+  neo4jClientId: string;
+  neo4jClientSecret: string;
+  neo4jInstanceId?: string;
+}
+
 export interface UpdateAccountInput {
   thresholds?: ThresholdConfig;
   protectedServices?: string[];
   autoDisconnect?: boolean;
   autoDelete?: boolean;
+  autoKillCategories?: string[];
+  productionProtected?: boolean;
   name?: string;
   status?: "active" | "paused";
 }

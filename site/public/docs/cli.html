@@ -143,6 +143,8 @@
                 <div class="nav-group">Protect &amp; Monitor</div>
                 <a href="#shield">Shield</a>
                 <a href="#accounts">Cloud Accounts</a>
+                <a href="#apply">Integration-as-Code</a>
+                <a href="#doctor">Diagnostics</a>
                 <a href="#monitoring">Monitoring</a>
                 <a href="#rules">Rules</a>
                 <a href="#kill">Database Kill Switch</a>
@@ -384,7 +386,7 @@ ks shield gpu-runaway --json</code></pre>
         </div>
         <div class="cmd-group">
             <h4>ks accounts add &lt;provider&gt; --name "My Account"</h4>
-            <p>Connect a cloud provider. Supported: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, and more.</p>
+            <p>Connect a provider. Supported: <code>cloudflare</code>, <code>gcp</code>, <code>aws</code>, <code>runpod</code>, <code>mongodb</code>, <code>redis</code>, <code>neo4j</code>, and more. Named flags mirror each provider's credentials; <code>--cred key=value</code> (repeatable) and <code>--credential-json</code> are generic escape hatches for any field.</p>
         </div>
 
 <pre><code># Connect Cloudflare
@@ -393,12 +395,20 @@ ks accounts add cloudflare \
   --token "your-cf-api-token" \
   --account-id "your-account-id"
 
-# Connect GCP
-ks accounts add gcp \
-  --name "GCP Production" \
-  --project-id "my-project" \
-  --service-account '{"type":"service_account",...}'</code></pre>
+# Connect MongoDB Atlas
+ks accounts add mongodb \
+  --name "Prod Atlas" \
+  --atlas-public-key PUB --atlas-private-key PRIV \
+  --atlas-project-id PROJ --atlas-cluster-name my-cluster
 
+# Redis Cloud / Neo4j Aura
+ks accounts add redis --name "Redis Cloud" --redis-cloud-key K --redis-cloud-secret S --redis-subscription-id ID
+ks accounts add neo4j --name "Aura" --neo4j-client-id ID --neo4j-client-secret SECRET</code></pre>
+
+        <div class="cmd-group">
+            <h4>ks accounts update &lt;id&gt;</h4>
+            <p>Change thresholds and auto-actions after connecting: <code>--threshold key=value</code> (repeatable), <code>--auto-disconnect</code>, <code>--auto-delete</code>, <code>--autokill-categories</code>, <code>--status</code>, and <code>--production-protected</code>. Managed databases are <strong>production-protected by default</strong> &mdash; destructive actions (<code>pause-cluster</code>, <code>delete</code>) are never auto-executed; a breach is downgraded to a forensic snapshot + alert. Set <code>--production-protected false</code> to opt in to auto-pause/delete.</p>
+        </div>
         <div class="cmd-group">
             <h4>ks accounts check &lt;id&gt;</h4>
             <p>Run a manual monitoring check on a specific account.</p>
@@ -406,6 +416,41 @@ ks accounts add gcp \
         <div class="cmd-group">
             <h4>ks accounts delete &lt;id&gt;</h4>
             <p>Disconnect and delete a cloud account and its stored credentials.</p>
+        </div>
+        </section>
+
+        <section class="doc-section" id="apply">
+        <h2>Integration-as-Code (<code>ks apply</code>)</h2>
+        <p>Declare an integration in a version-controlled YAML or JSON file and reconcile it idempotently &mdash; no hand-rolled scripts. Secrets stay in the environment via <code>${ENV}</code> interpolation. Re-running converges and reports each change as <code>+ create</code> / <code>~ update</code> / <code>= unchanged</code>.</p>
+
+        <div class="cmd-group">
+            <h4>ks apply -f &lt;file&gt; [--dry-run]</h4>
+            <p>Find-or-create the account, apply thresholds/flags, apply shields, and ensure alert channels. <code>--dry-run</code> previews the plan without writing.</p>
+        </div>
+
+<pre><code># ks.yaml — apply with: ks apply -f ks.yaml
+account:
+  provider: mongodb
+  name: Production Atlas
+  credential:                       # only needed to create; ${ENV} interpolated
+    mongodbSubType: atlas
+    atlasPublicKey: ${ATLAS_PUBLIC_KEY}
+    atlasPrivateKey: ${ATLAS_PRIVATE_KEY}
+    atlasProjectId: ${ATLAS_PROJECT_ID}
+    atlasClusterName: prod-cluster0
+  thresholds: { mongodbDailyCostUSD: 40, monthlySpendLimitUSD: 1200 }
+  protectedServices: [prod-cluster0]
+  productionProtected: true
+shields: [cost-runaway]
+alerts:
+  - { type: pagerduty, routingKey: ${PD_ROUTING_KEY}, name: On-Call }</code></pre>
+        </section>
+
+        <section class="doc-section" id="doctor">
+        <h2>Diagnostics (<code>ks doctor</code>)</h2>
+        <div class="cmd-group">
+            <h4>ks doctor</h4>
+            <p>One-stop health check: API URL, API key, authentication, <strong>active org</strong> (name, role, count), connectivity, accounts, and alert channels &mdash; each reported <code>&#10003;</code>/<code>&#9888;</code>/<code>&#10007;</code> with a remediation hint. Exits non-zero on hard failures (CI-friendly). Because accounts/rules/alerts are scoped to your active org, <code>ks doctor</code> (and the org banner in <code>ks status</code> / <code>ks accounts list</code>) makes it obvious when something you expect is simply in another org &mdash; switch with <code>ks orgs switch &lt;id&gt;</code>.</p>
         </div>
         </section>
 

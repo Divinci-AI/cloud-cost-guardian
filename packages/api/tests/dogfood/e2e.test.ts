@@ -166,6 +166,8 @@ vi.mock("../../src/providers/index.js", () => ({
 }));
 
 vi.mock("../../src/globals/index.js", () => ({
+  isMongoEnabled: vi.fn(() => false),
+  isMongoConnected: vi.fn(() => true),
   recordUsageSnapshot: vi.fn(),
   recordAlert: vi.fn(),
   getUsageHistory: vi.fn(async () => []),

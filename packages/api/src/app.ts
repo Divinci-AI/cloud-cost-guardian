@@ -26,9 +26,11 @@ import { logActivity } from "./services/activity-logger.js";
 import { activityRouter } from "./routes/activity/index.js";
 import { orgsRouter } from "./routes/orgs/index.js";
 import { agentGuardRouter } from "./routes/agent-guard/index.js";
+import { budgetsRouter } from "./routes/budgets/index.js";
+import { pushRouter } from "./routes/push/index.js";
 import { runCheckCycle } from "./services/monitoring-engine.js";
 import { openApiSpec } from "./routes/docs/openapi.js";
-import { getUsageHistory, getAlertHistory, getAnalyticsOverview } from "./globals/index.js";
+import { getUsageHistory, getAlertHistory, getAnalyticsOverview, isMongoEnabled, isMongoConnected } from "./globals/index.js";
 
 export function createApp() {
   const app = express();
@@ -79,6 +81,9 @@ export function createApp() {
     const cfSecretBuf = Buffer.from(cfSecret);
     app.use((req, res, next) => {
       if (req.path === "/" && req.method === "GET") return next();
+      // /health is an unauthenticated health endpoint for external uptime
+      // monitors (e.g. the kill-switch-cf self-check) — always reachable.
+      if (req.path === "/health" && req.method === "GET") return next();
       const provided = (req.headers["x-origin-secret"] as string) || "";
       if (provided.length !== cfSecret.length ||
           !timingSafeEqual(Buffer.from(provided), cfSecretBuf)) {
@@ -93,6 +98,28 @@ export function createApp() {
   app.use((req, res, next) => {
     if (req.path === "/billing/webhook") return next();
     express.json({ limit: "1mb" })(req, res, next);
+  });
+
+  // Fast-fail DB gate. When MongoDB is configured but currently unreachable
+  // (e.g. the cluster is paused), reject DB-dependent requests immediately with
+  // a 503 instead of letting them hang ~10s on a Mongoose buffering timeout.
+  // The connection layer (globals/index.ts) auto-reconnects in the background,
+  // so this self-clears the moment Mongo is back. DB-free public routes
+  // (health, providers, rule presets, docs) are exempt so liveness/readiness
+  // probes and the marketing surface keep working during a DB outage.
+  const DB_FREE_PATHS = (p: string) =>
+    p === "/" ||
+    p === "/health" ||
+    p.startsWith("/providers") ||
+    p === "/rules/presets" ||
+    p.startsWith("/docs");
+  app.use((req, res, next) => {
+    if (!isMongoEnabled() || isMongoConnected() || DB_FREE_PATHS(req.path)) return next();
+    res.setHeader("Retry-After", "10");
+    return res.status(503).json({
+      error: "Service temporarily unavailable",
+      reason: "database unavailable",
+    });
   });
 
   // Rate limiting
@@ -144,6 +171,17 @@ export function createApp() {
       version: "0.1.0",
       providers: getAllProviders().map(p => ({ id: p.id, name: p.name })),
     });
+  });
+
+  // DB-aware health for external uptime monitors (kill-switch-cf self-check) and
+  // readiness probes: 200 when Mongo is reachable (or not configured), 503 when
+  // configured-but-disconnected. Unauthenticated and exempt from the gate so it
+  // always reports its own status — this is the signal that pages us if
+  // ks-cluster0 is paused/down.
+  app.get("/health", (_req, res) => {
+    const mongo = !isMongoEnabled() ? "not-configured" : (isMongoConnected() ? "connected" : "disconnected");
+    const ok = mongo !== "disconnected";
+    res.status(ok ? 200 : 503).json({ service: "kill-switch", status: ok ? "ok" : "degraded", mongo });
   });
 
   // Public endpoints
@@ -200,6 +238,11 @@ export function createApp() {
   app.use("/auth", ...authStack);
   app.use("/activity", ...authStack);
   app.use("/agent-guard", ...authStack);
+  app.use("/budgets", ...authStack);
+  // NOTE: /push is intentionally NOT in the app-level authStack — it exposes a
+  // public GET /push/vapid-public-key (a VAPID *public* key is meant to be
+  // shared). Its authenticated routes (/subscribe) apply requireAuth+resolveOrg
+  // at the route level, and /subscribe has SSRF guards on the endpoint URL.
   app.use("/orgs", requireAuth, resolveOrg);
 
   // Authenticated routes
@@ -212,6 +255,8 @@ export function createApp() {
   app.use("/auth", authRouter);
   app.use("/activity", activityRouter);
   app.use("/agent-guard", agentGuardRouter);
+  app.use("/budgets", budgetsRouter);
+  app.use("/push", pushRouter);
   app.use("/orgs", orgsRouter);
 
   // Manual check (requires auth — runs only the authenticated user's accounts)

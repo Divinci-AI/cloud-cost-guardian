@@ -28,6 +28,8 @@ vi.mock("../../src/services/alerting.js", () => ({
 }));
 
 vi.mock("../../src/globals/index.js", () => ({
+  isMongoEnabled: vi.fn(() => false),
+  isMongoConnected: vi.fn(() => true),
   recordUsageSnapshot: vi.fn(),
   recordAlert: vi.fn(),
   recordRuleEvent: vi.fn(),

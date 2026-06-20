@@ -66,8 +66,9 @@ afterEach(() => vi.restoreAllMocks());
 
 // ── accounts ──────────────────────────────────────────────────────────────
 describe("ks accounts", () => {
-  const list = vi.fn(), get = vi.fn(), create = vi.fn(), del = vi.fn(), check = vi.fn();
-  const client: any = { accounts: { list, get, create, delete: del, check } };
+  const list = vi.fn(), get = vi.fn(), create = vi.fn(), del = vi.fn(), check = vi.fn(), update = vi.fn();
+  // orgs.list lets `accounts list` fetch its org banner without throwing.
+  const client: any = { accounts: { list, get, create, delete: del, check, update }, orgs: { list: vi.fn().mockResolvedValue({ orgs: [], activeOrgId: null }) } };
   const createClient: ClientFactory = () => client;
 
   it("list --json returns the accounts", async () => {
@@ -112,6 +113,58 @@ describe("ks accounts", () => {
       name: "Prod",
       credential: { apiToken: "tok", accountId: "acc" },
     });
+  });
+
+  it("add mongodb (atlas) infers subtype and builds the credential", async () => {
+    create.mockResolvedValue({ id: "m1", name: "Atlas" });
+    const p = makeProgram(); registerAccountCommands(p, createClient);
+    captureConsole();
+    await p.parseAsync([
+      "node", "ks", "--json", "accounts", "add", "mongodb", "--name", "Atlas",
+      "--atlas-public-key", "pub", "--atlas-private-key", "priv", "--atlas-project-id", "proj",
+    ]);
+    expect(create).toHaveBeenCalledWith({
+      provider: "mongodb",
+      name: "Atlas",
+      credential: { mongodbSubType: "atlas", atlasPublicKey: "pub", atlasPrivateKey: "priv", atlasProjectId: "proj" },
+    });
+  });
+
+  it("add errors when no credentials are provided", async () => {
+    const p = makeProgram(); registerAccountCommands(p, createClient);
+    captureConsole();
+    const exit = vi.spyOn(process, "exit").mockImplementation(((c: number) => { throw new Error("exit:" + c); }) as never);
+    await expect(
+      p.parseAsync(["node", "ks", "--json", "accounts", "add", "redis", "--name", "R"]),
+    ).rejects.toThrow("exit:1");
+    expect(create).not.toHaveBeenCalled();
+    exit.mockRestore();
+  });
+
+  it("update <id> maps flags to UpdateAccountInput (incl. productionProtected)", async () => {
+    update.mockResolvedValue({ id: "a1", name: "Prod Atlas" });
+    const p = makeProgram(); registerAccountCommands(p, createClient);
+    captureConsole();
+    await p.parseAsync([
+      "node", "ks", "--json", "accounts", "update", "a1",
+      "--production-protected", "false", "--threshold", "mongodbDailyCostUSD=75", "--status", "paused",
+    ]);
+    expect(update).toHaveBeenCalledWith("a1", {
+      productionProtected: false,
+      thresholds: { mongodbDailyCostUSD: 75 },
+      status: "paused",
+    });
+  });
+
+  it("update with no fields errors instead of calling the API", async () => {
+    const p = makeProgram(); registerAccountCommands(p, createClient);
+    captureConsole();
+    const exit = vi.spyOn(process, "exit").mockImplementation(((c: number) => { throw new Error("exit:" + c); }) as never);
+    await expect(
+      p.parseAsync(["node", "ks", "--json", "accounts", "update", "a1"]),
+    ).rejects.toThrow("exit:1");
+    expect(update).not.toHaveBeenCalled();
+    exit.mockRestore();
   });
 
   it("delete <id> proceeds in --json (confirm auto-true) and reports deleted", async () => {

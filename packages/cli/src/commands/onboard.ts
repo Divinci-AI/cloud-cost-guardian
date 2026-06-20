@@ -8,6 +8,7 @@
 import { Command } from "commander";
 import { outputJson, outputError, handleError, spinner, success, fail } from "../output.js";
 import { ask } from "../prompts.js";
+import { BIN } from "../program-name.js";
 import type { ClientFactory } from "../types.js";
 
 const PROVIDER_HELP: Record<string, { name: string; fields: string; howToGet: string }> = {
@@ -226,10 +227,10 @@ export function registerOnboardCommands(program: Command, createClient: ClientFa
 Examples:
 
   # Interactive onboarding
-  kill-switch onboard
+  ${BIN} onboard
 
   # AI agent / non-interactive: connect Cloudflare with PagerDuty
-  kill-switch onboard \\
+  ${BIN} onboard \\
     --provider cloudflare \\
     --account-id 14a6fa23390363382f378b5bd4a0f849 \\
     --token cf-api-token-here \\
@@ -238,10 +239,10 @@ Examples:
     --alert-pagerduty YOUR_ROUTING_KEY
 
   # Show how to get Cloudflare credentials
-  kill-switch onboard --help-provider cloudflare
+  ${BIN} onboard --help-provider cloudflare
 
   # Connect AWS with shields
-  kill-switch onboard \\
+  ${BIN} onboard \\
     --provider aws \\
     --access-key AKIA... \\
     --secret-key wJalr... \\
@@ -553,11 +554,11 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
         } else {
           console.log(`\nSetup complete! Kill Switch is monitoring your ${PROVIDER_HELP[provider].name} account.`);
           console.log("\nNext steps:");
-          console.log("  kill-switch check                                         — run a monitoring check");
-          console.log("  kill-switch alerts add --type pagerduty --routing-key KEY — set up on-call alerts");
-          console.log("  kill-switch alerts test                                   — verify alerts work");
-          console.log("  kill-switch accounts list                                 — view connected accounts");
-          console.log("  kill-switch onboard --provider <p>                        — add another provider\n");
+          console.log(`  ${BIN} check                                         — run a monitoring check`);
+          console.log(`  ${BIN} alerts add --type pagerduty --routing-key KEY — set up on-call alerts`);
+          console.log(`  ${BIN} alerts test                                   — verify alerts work`);
+          console.log(`  ${BIN} accounts list                                 — view connected accounts`);
+          console.log(`  ${BIN} onboard --provider <p>                        — add another provider\n`);
         }
       } catch (err) {
         handleError(err, json);

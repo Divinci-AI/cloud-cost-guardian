@@ -22,6 +22,17 @@ export interface CloudAccountProps {
    * cost-only behavior on the next check cycle.
    */
   autoKillCategories: MetricCategory[];
+  /**
+   * Production-protected mode. When true (the default — safe-by-default),
+   * irreversible/outage-causing actions on managed databases (pause-cluster,
+   * delete, nuke) are NEVER auto-executed — not by a threshold kill, and not by
+   * an explicit rule. The breach is downgraded to a forensic snapshot + alert so
+   * a human decides. Born from the Divinci prod-Atlas incident: a placeholder
+   * storage threshold fired `pause-cluster` and took prod down — pausing a
+   * fixed-tier DB to "save cost" causes a worse outage than the spend. Set to
+   * false only to allow the kill switch to auto-pause/delete a database.
+   */
+  productionProtected: boolean;
   lastCheckAt?: number;
   lastCheckStatus?: "ok" | "violation" | "error";
   lastCheckError?: string;
@@ -52,6 +63,7 @@ const cloudAccountSchema = new Schema<CloudAccountDocument>({
     enum: ["cost", "load", "storage", "count", "security"],
     default: ["cost"],
   },
+  productionProtected: { type: Boolean, default: true },
   lastCheckAt: { type: Number },
   lastCheckStatus: { type: String, enum: ["ok", "violation", "error"] },
   lastCheckError: { type: String },

@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { loadConfig, saveConfig, CONFIG_FILE, DEFAULT_API_URL } from "../config.js";
 import { outputJson, outputError } from "../output.js";
+import { BIN } from "../program-name.js";
 
 /** Mask a secret so it never lands in logs / CI output in full. */
 function maskKey(v: unknown): string {
@@ -75,7 +76,7 @@ export function registerConfigCommands(program: Command) {
       } else {
         const entries = Object.entries(cfg);
         if (entries.length === 0) {
-          console.log("No config set. Run: kill-switch config init");
+          console.log(`No config set. Run: ${BIN} config init`);
         } else {
           for (const [k, v] of entries) {
             const display = k === "apiKey" && !opts?.reveal ? maskKey(v) : String(v);

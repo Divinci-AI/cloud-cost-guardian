@@ -6,6 +6,7 @@ import { ask } from "../prompts.js";
 import { execFile } from "child_process";
 import { CLI_VERSION } from "../version.js";
 import { runDeviceFlow, defaultDeviceFlowDeps } from "../device-flow.js";
+import { BIN } from "../program-name.js";
 import type { ClientFactory } from "../types.js";
 
 function openBrowser(url: string): void {
@@ -175,7 +176,7 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
         if (json) {
           outputJson({ authenticated: false });
         } else {
-          console.log("Not authenticated. Run: kill-switch auth login --api-key YOUR_KEY");
+          console.log(`Not authenticated. Run: ${BIN} auth login --api-key YOUR_KEY`);
         }
         return;
       }
@@ -197,7 +198,7 @@ export function registerAuthCommands(program: Command, createClient: ClientFacto
         if (json) {
           outputJson({ authenticated: false, keyPresent: true, error: "Key is invalid or expired" });
         } else {
-          console.log("API key present but invalid. Run: kill-switch auth login --api-key NEW_KEY");
+          console.log(`API key present but invalid. Run: ${BIN} auth login --api-key NEW_KEY`);
         }
       }
     });

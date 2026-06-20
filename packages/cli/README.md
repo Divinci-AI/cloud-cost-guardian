@@ -185,10 +185,13 @@ Full docs: [kill-switch.net/docs/cli.html#guard](https://kill-switch.net/docs/cl
 | `ks auth setup` | Authenticate via browser (device flow) |
 | `ks auth login` | Authenticate with API key |
 | `ks auth status` | Show auth status |
-| `ks status` | Dashboard: accounts, alerts, 30-day spend summary |
-| `ks accounts list` | List connected cloud accounts |
-| `ks accounts add` | Connect a cloud provider |
+| `ks doctor` | Diagnose setup: config, auth, **active org**, connectivity, accounts, alerts |
+| `ks status` | Dashboard: **active org**, accounts, alerts, 30-day spend summary |
+| `ks accounts list` | List connected cloud accounts (shows the active org they belong to) |
+| `ks accounts add <provider>` | Connect a provider — cloudflare, gcp, aws, runpod, **mongodb, redis, neo4j**, … |
+| `ks accounts update <id>` | Update thresholds / auto-actions / `productionProtected` |
 | `ks accounts check <id>` | Run manual check on an account |
+| `ks apply -f <file>` | Apply a declarative integration config (account + thresholds + shields + alerts) |
 | `ks check` | Check all accounts (shows violations with multiplier column e.g. 60x) |
 | `ks shield <preset>` | Apply a protection preset |
 | `ks rules list` | List active rules |
@@ -201,6 +204,63 @@ Full docs: [kill-switch.net/docs/cli.html#guard](https://kill-switch.net/docs/cl
 | `ks providers` | Provider info and credential validation |
 | `ks guard` | Cap coding-agent LLM spend (hook + proxy) |
 | `ks config list` | Show configuration |
+
+## Databases & production protection
+
+Connect managed databases (and any other provider) with `ks accounts add`:
+
+```sh
+# MongoDB Atlas
+ks accounts add mongodb --name "Prod Atlas" \
+  --atlas-public-key PUB --atlas-private-key PRIV --atlas-project-id PROJ \
+  --atlas-cluster-name my-cluster
+
+# MongoDB self-hosted / Redis / Neo4j
+ks accounts add mongodb --name "Self-hosted" --mongodb-uri "mongodb+srv://…"
+ks accounts add redis   --name "Redis Cloud"  --redis-cloud-key K --redis-cloud-secret S --redis-subscription-id ID
+ks accounts add neo4j   --name "Aura"         --neo4j-client-id ID --neo4j-client-secret SECRET
+
+# Any provider/field without a dedicated flag:
+ks accounts add <provider> --name X --cred key=value --cred other=value
+```
+
+**Production protection (on by default).** Managed-database accounts are created with
+`productionProtected: true`, which means destructive actions (`pause-cluster`, `delete`) are
+**never auto-executed** — a breach is downgraded to a forensic snapshot + alert so a human
+decides. Tune an account after connecting:
+
+```sh
+ks accounts update <id> --threshold mongodbDailyCostUSD=50 --threshold monthlySpendLimitUSD=1200
+ks accounts update <id> --production-protected false   # opt in to auto-pause/delete (not recommended for prod)
+ks accounts update <id> --autokill-categories cost     # which violation categories may auto-kill
+```
+
+## Integration-as-code (`ks apply`)
+
+Declare an integration in a version-controlled YAML/JSON file and reconcile it idempotently —
+no hand-rolled scripts. Secrets stay in the environment via `${ENV}` interpolation.
+
+```yaml
+# ks.yaml — apply with: ks apply -f ks.yaml   (preview with --dry-run)
+account:
+  provider: mongodb
+  name: Production Atlas
+  credential:                       # only needed to create; ${ENV} interpolated
+    mongodbSubType: atlas
+    atlasPublicKey: ${ATLAS_PUBLIC_KEY}
+    atlasPrivateKey: ${ATLAS_PRIVATE_KEY}
+    atlasProjectId: ${ATLAS_PROJECT_ID}
+    atlasClusterName: prod-cluster0
+  thresholds: { mongodbDailyCostUSD: 40, monthlySpendLimitUSD: 1200 }
+  protectedServices: [prod-cluster0]
+  productionProtected: true
+shields: [cost-runaway]
+alerts:
+  - { type: pagerduty, routingKey: ${PD_ROUTING_KEY}, name: On-Call }
+```
+
+Re-running converges (find-or-create account → apply thresholds/flags → apply shields →
+ensure alert channels); each change is reported as `+ create` / `~ update` / `= unchanged`.
 
 ## AI Agent Usage
 

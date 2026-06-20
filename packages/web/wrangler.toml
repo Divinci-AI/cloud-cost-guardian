@@ -7,6 +7,10 @@ main = "src/worker.ts"
 binding = "ASSETS"
 directory = "./dist"
 not_found_handling = "single-page-application"
+# Run the Worker on EVERY request (not just SPA-fallback routes). Without this,
+# Cloudflare serves matched assets (/, /index.html, JS/CSS) directly and bypasses
+# the Worker — so its security headers + CSP never reached the actual app entry.
+run_worker_first = true
 
 # Custom domain
 [[routes]]

@@ -1,119 +1,69 @@
-// Cloudflare Access gate for the kill-switch SPA.
-// CF Access doesn't inject headers for Workers serving static assets,
-// so we validate the CF_Authorization cookie that Access sets post-login.
-
-const TEAM_DOMAIN = 'https://divinci-ai.cloudflareaccess.com';
-const ACCESS_AUD = 'acd99393ecd60f20eb4ab76fd9ed4655f6381876b69da2cd8522f92d1dad23fc';
-const APP_DOMAIN = 'app.kill-switch.net';
+// Static asset server for the kill-switch SPA.
+//
+// app.kill-switch.net is a public product surface: authentication is handled
+// inside the app by Clerk (and by the API via Clerk JWT / ks_ API keys), so the
+// Worker does NOT gate requests. (It previously redirected every request to a
+// Cloudflare Access app in the divinci-ai Zero Trust org; that app was removed,
+// which hard-locked the entire dashboard — including the CLI /cli-auth page.)
 
 interface Env {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
 }
 
-function getCookie(request: Request, name: string): string | null {
-  const header = request.headers.get('Cookie') ?? '';
-  for (const pair of header.split(';')) {
-    const [k, ...rest] = pair.trim().split('=');
-    if (k.trim() === name) return rest.join('=').trim();
+// Defense-in-depth headers on every asset response.
+//
+// ENFORCED per-host CSP. Replaces the old `default-src 'self' https:` wildcard
+// (which let ANY https origin inject scripts) with an allowlist of exactly what
+// the app loads. Verified 2026-06-20 via browser automation across the welcome,
+// settings, dashboard, and billing views: the only origins loaded are self,
+// api/clerk.kill-switch.net, img.clerk.com, and static.cloudflareinsights.com —
+// all covered below, with zero securitypolicyviolation events. clerk.accounts.dev
+// / Turnstile / Stripe are included defensively for the logged-out sign-in +
+// checkout flows. `unsafe-inline`/`unsafe-eval` are kept — Clerk + the bundler
+// need them; removing those is a separate, report-only-first step.
+// Rollback: restore the previous `default-src 'self' https: data: blob:
+// 'unsafe-inline' 'unsafe-eval'` line and redeploy.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.kill-switch.net https://*.clerk.accounts.dev https://challenges.cloudflare.com https://js.stripe.com https://static.cloudflareinsights.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.accounts.dev https://*.kill-switch.net",
+  "connect-src 'self' https://clerk.kill-switch.net https://*.clerk.accounts.dev https://api.kill-switch.net https://*.kill-switch.net https://*.stripe.com https://static.cloudflareinsights.com",
+  "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://*.clerk.accounts.dev",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': CSP,
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+};
+
+function withSecurityHeaders(response: Response): Response {
+  const wrapped = new Response(response.body, response);
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+    wrapped.headers.set(name, value);
   }
-  return null;
-}
-
-function b64UrlDecode(str: string): Uint8Array {
-  str = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (str.length % 4) str += '=';
-  return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
-}
-
-// Isolate-scoped key cache (survives across requests in the same V8 isolate)
-let keyCache: Map<string, CryptoKey> | null = null;
-let keyCacheExpiry = 0;
-
-async function getPublicKeys(): Promise<Map<string, CryptoKey>> {
-  const now = Date.now();
-  if (keyCache && now < keyCacheExpiry) return keyCache;
-
-  const resp = await fetch(`${TEAM_DOMAIN}/cdn-cgi/access/certs`);
-  const { keys } = (await resp.json()) as { keys: (JsonWebKey & { kid: string })[] };
-
-  const map = new Map<string, CryptoKey>();
-  for (const jwk of keys) {
-    const key = await crypto.subtle.importKey(
-      'jwk',
-      jwk,
-      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-      false,
-      ['verify'],
-    );
-    map.set(jwk.kid, key);
-  }
-
-  keyCache = map;
-  keyCacheExpiry = now + 60 * 60 * 1000; // 1-hour TTL
-  return map;
-}
-
-async function isValidJwt(token: string): Promise<boolean> {
-  const parts = token.split('.');
-  if (parts.length !== 3) return false;
-
-  try {
-    const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/'))) as {
-      kid: string;
-    };
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))) as {
-      aud: string | string[];
-      exp: number;
-    };
-
-    if (payload.exp < Math.floor(Date.now() / 1000)) return false;
-
-    const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-    if (!aud.includes(ACCESS_AUD)) return false;
-
-    const keys = await getPublicKeys();
-    const key = keys.get(header.kid);
-    if (!key) return false;
-
-    const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
-    const sig = b64UrlDecode(parts[2]).buffer as ArrayBuffer;
-    return await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, sig, data);
-  } catch {
-    return false;
-  }
+  return wrapped;
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-
-    // Let CF Access callback flow through unblocked
-    if (url.pathname.startsWith('/cdn-cgi/')) {
-      return env.ASSETS.fetch(request);
+    const res = withSecurityHeaders(await env.ASSETS.fetch(request));
+    // The SPA's HTML entry must not be edge/browser-cached, or a stale cache
+    // masks deploys — including security-header changes like CSP (which is
+    // exactly what happened promoting the tightened policy). Content-hashed
+    // JS/CSS assets keep their own immutable caching.
+    if ((res.headers.get('content-type') || '').includes('text/html')) {
+      res.headers.set('Cache-Control', 'no-cache, must-revalidate');
     }
-
-    // CF Access injects this header when enforcing at edge level
-    const jwt =
-      request.headers.get('CF-Access-Jwt-Assertion') ??
-      getCookie(request, 'CF_Authorization');
-
-    if (!jwt) {
-      const loginUrl = `${TEAM_DOMAIN}/cdn-cgi/access/login/${APP_DOMAIN}?redirect_url=${encodeURIComponent(request.url)}`;
-      return Response.redirect(loginUrl, 302);
-    }
-
-    if (!(await isValidJwt(jwt))) {
-      // Clear stale cookie and redirect to re-auth
-      const loginUrl = `${TEAM_DOMAIN}/cdn-cgi/access/login/${APP_DOMAIN}?redirect_url=${encodeURIComponent(request.url)}`;
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: loginUrl,
-          'Set-Cookie': `CF_Authorization=; Path=/; Max-Age=0`,
-        },
-      });
-    }
-
-    return env.ASSETS.fetch(request);
+    return res;
   },
 };

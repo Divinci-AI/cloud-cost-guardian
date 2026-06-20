@@ -51,6 +51,8 @@ vi.mock("../../src/providers/index.js", () => ({
 
 const mockPgQuery = vi.fn();
 vi.mock("../../src/globals/index.js", () => ({
+  isMongoEnabled: vi.fn(() => false),
+  isMongoConnected: vi.fn(() => true),
   recordUsageSnapshot: vi.fn(), recordAlert: vi.fn(), getUsageHistory: vi.fn(async () => []),
   getAlertHistory: vi.fn(async () => []),
   getAnalyticsOverview: vi.fn(async () => ({ dailyCosts: [], totalSpendPeriod: 0, avgDailyCost: 0, projectedMonthlyCost: 0, savingsEstimate: 0, killSwitchActions: 0, accountBreakdown: [] })),
