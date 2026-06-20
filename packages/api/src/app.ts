@@ -224,6 +224,10 @@ export function createApp() {
   app.use("/activity", ...authStack);
   app.use("/agent-guard", ...authStack);
   app.use("/budgets", ...authStack);
+  // NOTE: /push is intentionally NOT in the app-level authStack — it exposes a
+  // public GET /push/vapid-public-key (a VAPID *public* key is meant to be
+  // shared). Its authenticated routes (/subscribe) apply requireAuth+resolveOrg
+  // at the route level, and /subscribe has SSRF guards on the endpoint URL.
   app.use("/orgs", requireAuth, resolveOrg);
 
   // Authenticated routes
