@@ -101,6 +101,9 @@ cloudAccountRouter.get("/", requirePermission("cloud_accounts:read"), async (req
         protectedServices: a.protectedServices,
         autoDisconnect: a.autoDisconnect,
         autoKillCategories: a.autoKillCategories,
+        // Default-on, and `.lean()` drops the schema default for legacy docs —
+        // surface the effective value so clients see protection is on.
+        productionProtected: a.productionProtected !== false,
         lastCheckAt: a.lastCheckAt,
         lastCheckStatus: a.lastCheckStatus,
         lastCheckError: a.lastCheckError,
@@ -133,13 +136,14 @@ cloudAccountRouter.get("/:id", requirePermission("cloud_accounts:read"), async (
  */
 cloudAccountRouter.put("/:id", requirePermission("cloud_accounts:write"), async (req, res, next) => {
   try {
-    const { thresholds, protectedServices, autoDisconnect, autoDelete, autoKillCategories, name, status } = req.body;
+    const { thresholds, protectedServices, autoDisconnect, autoDelete, autoKillCategories, productionProtected, name, status } = req.body;
     const update: any = {};
 
     if (thresholds) update.thresholds = thresholds;
     if (protectedServices) update.protectedServices = protectedServices;
     if (autoDisconnect !== undefined) update.autoDisconnect = autoDisconnect;
     if (autoDelete !== undefined) update.autoDelete = autoDelete;
+    if (productionProtected !== undefined) update.productionProtected = !!productionProtected;
     if (Array.isArray(autoKillCategories)) {
       // Validate every entry is a known MetricCategory; reject otherwise so a
       // typo doesn't silently disable kills.

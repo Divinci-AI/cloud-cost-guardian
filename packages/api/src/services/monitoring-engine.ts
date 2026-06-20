@@ -18,6 +18,7 @@ import { recordUsageSnapshot, recordAlert, recordRuleEvent } from "../globals/in
 import { captureSnapshot } from "./forensics.js";
 import { evaluateRules } from "./rule-engine.js";
 import { withSentinel } from "../providers/shared.js";
+import { checkBudgets } from "./budget-checker.js";
 import { createHash } from "node:crypto";
 import type { UsageResult, Violation, KillAction, ProviderId, KillContext } from "../providers/types.js";
 
@@ -58,6 +59,33 @@ function getDefaultKillAction(provider: ProviderId): KillAction {
     case "neon":       return "scale-down";
     default:           return "disconnect";
   }
+}
+
+/**
+ * Managed databases whose "kill" actions can cause a hard outage or data loss.
+ * For these, production-protected mode blocks the destructive actions below.
+ */
+const MANAGED_DB_PROVIDERS = new Set<ProviderId>(["mongodb", "redis", "neo4j", "neon"]);
+
+/**
+ * Irreversible / outage-causing DB actions executable at the provider level.
+ * Note scale-down (tier change) is intentionally NOT here — the dogfood feedback
+ * calls tier-change a *valid* cost guard; pausing/deleting a prod DB is what
+ * causes the worse-than-the-bill outage. (The sequenced `nuke` lives in the
+ * separate database-kill-switch flow, which already requires a verified
+ * snapshot + human confirmation, so it isn't part of this auto-action path.)
+ */
+const DESTRUCTIVE_DB_ACTIONS = new Set<KillAction>(["pause-cluster", "delete"]);
+
+/**
+ * Production-protected guard: on a managed DB with productionProtected !== false
+ * (default-on, and `.lean()`-safe for legacy docs missing the field), never
+ * auto-execute a destructive action — regardless of whether it came from a
+ * threshold kill or an explicit rule. Humans decide DB pauses/deletes.
+ */
+function isProtectedDestructive(account: any, provider: ProviderId, action: KillAction): boolean {
+  if (account?.productionProtected === false) return false;
+  return MANAGED_DB_PROVIDERS.has(provider) && DESTRUCTIVE_DB_ACTIONS.has(action);
 }
 
 export interface CheckResult {
@@ -134,6 +162,12 @@ export async function runCheckCycle(guardianAccountId?: string): Promise<CheckRe
   const errors = results.filter(r => r.status === "error");
 
   console.error(`[guardian] Check cycle complete: ${results.length} accounts, ${violations.length} violations, ${errors.length} errors`);
+
+  // After each monitoring cycle, check usage budgets for every org that had accounts checked.
+  const checkedOrgIds = [...new Set(dueAccounts.map(a => a.guardianAccountId))];
+  for (const orgId of checkedOrgIds) {
+    checkBudgets(orgId).catch((e: Error) => console.warn("[guardian:budget] Check failed:", e.message));
+  }
 
   return results;
 }
@@ -285,6 +319,28 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
               });
               continue;
             }
+            // Production-protected: an explicit rule cannot auto-pause/delete a
+            // managed DB. This is the path the Divinci prod-Atlas incident hit —
+            // a `pause-cluster` rule fired and took prod down. Downgrade to a
+            // forensic snapshot + alert; a human decides.
+            if (isProtectedDestructive(cloudAccount, cloudAccount.provider as ProviderId, action.type as KillAction)) {
+              result.ruleActionsTaken.push(`RULE[${ruleResult.ruleName}]: ${action.type} on ${action.target} blocked — production-protected (snapshot+alert only)`);
+              await recordRuleEvent({
+                kind: "action_skipped",
+                guardianAccountId: cloudAccount.guardianAccountId,
+                cloudAccountId: cloudAccount._id.toString(),
+                ruleId: ruleResult.ruleId,
+                ruleName: ruleResult.ruleName,
+                actionType: action.type,
+                target: action.target,
+                reason: "production-protected",
+                details: `${action.type} is destructive on a managed database; productionProtected is on — humans decide pauses/deletes`,
+              });
+              captureSnapshot(credential, action.target, `protected-block:rule:${ruleResult.ruleId}`, cloudAccount._id.toString())
+                .then(snap => result.forensicSnapshotIds.push(snap.id))
+                .catch(err => console.warn(`[guardian] Protected-block snapshot failed:`, err.message));
+              continue;
+            }
             try {
               const killContext: KillContext = {
                 ruleId: ruleResult.ruleId,
@@ -377,6 +433,24 @@ export async function checkSingleAccount(cloudAccount: any): Promise<CheckResult
         // Helper so success/failure event emission stays identical between
         // the autoDelete and autoDisconnect branches.
         const fireThresholdKill = async (killAction: KillAction): Promise<void> => {
+          // Production-protected: never auto-pause/delete a managed DB. Downgrade
+          // to a forensic snapshot + alert (the alert pipeline below still runs).
+          if (isProtectedDestructive(cloudAccount, cloudAccount.provider as ProviderId, killAction)) {
+            result.actionsTaken.push(`PROTECTED(prod): ${killAction} on ${violation.serviceName} blocked — snapshot+alert only`);
+            await recordRuleEvent({
+              kind: "action_skipped",
+              guardianAccountId: cloudAccount.guardianAccountId,
+              cloudAccountId: cloudAccount._id.toString(),
+              actionType: `threshold-kill:${killAction}`,
+              target: violation.serviceName,
+              reason: "production-protected",
+              details: `${killAction} is destructive on a managed database; productionProtected is on — humans decide pauses/deletes`,
+            });
+            captureSnapshot(credential, violation.serviceName, `protected-block:${killAction}:${violation.metricName}`, cloudAccount._id.toString())
+              .then(snap => result.forensicSnapshotIds.push(snap.id))
+              .catch(err => console.warn(`[guardian] Protected-block snapshot failed for ${violation.serviceName}:`, err.message));
+            return;
+          }
           const ctx = buildThresholdContext(killAction);
           try {
             const raw = await provider.executeKillSwitch(credential, violation.serviceName, killAction, ctx);
