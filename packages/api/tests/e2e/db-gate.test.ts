@@ -70,4 +70,17 @@ describe("DB fast-fail gate", () => {
     const res = await request(app).post("/auth/cli/start").send({ hostname: "t", cliVersion: "0" });
     expect(res.status).not.toBe(503);
   });
+
+  it("recovers live: a DB route goes 503 -> not-503 on the same server once the connection returns", async () => {
+    // Mirrors the production self-heal: the background reconnect loop flips
+    // isMongoConnected back to true, and the SAME running process starts
+    // serving requests again — no redeploy/restart.
+    state.connected = false;
+    const down = await request(app).post("/auth/cli/start").send({ hostname: "t", cliVersion: "0" });
+    expect(down.status).toBe(503);
+
+    state.connected = true; // cluster resumed; reconnect loop reconnected
+    const up = await request(app).post("/auth/cli/start").send({ hostname: "t", cliVersion: "0" });
+    expect(up.status).not.toBe(503);
+  });
 });
