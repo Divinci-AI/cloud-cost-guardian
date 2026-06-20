@@ -3,9 +3,18 @@ import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
 import { ViolationChart } from "../../components/ViolationChart";
+import { ErrorState } from "../../components/ErrorState";
+import { useCan } from "../../hooks/useCan";
 
 const statusColor = (s?: string) =>
   s === "error" ? "#ffa07a" : s === "violation" ? "#ff6b6b" : s === "ok" ? "#5ce2e7" : "#9ca3af";
+
+// Managed databases where destructive auto-actions (pause-cluster / delete /
+// flush-redis) are blocked by the account's productionProtected flag (default on).
+const MANAGED_DB_PROVIDERS = new Set(["mongodb", "redis", "neo4j", "neon"]);
+const isManagedDb = (provider?: string) => MANAGED_DB_PROVIDERS.has(provider || "");
+// Default-on, and the API list returns the effective value (!== false).
+const isProtected = (a: any) => a.productionProtected !== false;
 
 const CREDENTIAL_HINTS: Record<string, Record<string, string>> = {
   cloudflare: {
@@ -161,15 +170,21 @@ function UpdateCredentialsForm({ account, onSuccess, onCancel }: {
 
 export function CloudAccountsList() {
   const { orgVersion } = useOrg();
+  const can = useCan();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const reload = () => {
     setLoading(true);
+    setLoadError(null);
     api.listCloudAccounts()
       .then(data => setAccounts(data.accounts || []))
-      .catch(console.error)
+      .catch(err => {
+        console.error(err);
+        setLoadError(err?.message || "Failed to load cloud accounts.");
+      })
       .finally(() => setLoading(false));
   };
 
@@ -181,6 +196,19 @@ export function CloudAccountsList() {
     setAccounts(prev => prev.filter(a => a.id !== id));
   };
 
+  // Toggle production protection. Turning it OFF is the dangerous direction
+  // (allows auto pause/delete/flush on a managed DB) — confirm first.
+  const toggleProtection = async (a: any) => {
+    const next = !isProtected(a);
+    if (!next && !confirm(
+      `Disable production protection for "${a.name}"?\n\n` +
+      `This ALLOWS the kill switch to auto-pause, delete, or flush this managed ` +
+      `database when a threshold/rule fires. Only do this for non-production databases.`
+    )) return;
+    await api.updateCloudAccount(a.id, { productionProtected: next });
+    setAccounts(prev => prev.map(x => x.id === a.id ? { ...x, productionProtected: next } : x));
+  };
+
   if (loading) return <p style={{ color: "#9ca3af", padding: "40px" }}>Loading...</p>;
 
   return (
@@ -189,12 +217,14 @@ export function CloudAccountsList() {
         <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", margin: 0 }}>
           Cloud Accounts
         </h1>
-        <Link to="/accounts/connect" style={{
-          background: "#c25800", color: "#fff", padding: "8px 20px",
-          borderRadius: "8px", textDecoration: "none", fontSize: "14px", fontWeight: "600",
-        }}>
-          + Connect
-        </Link>
+        {can("cloud_accounts:write") && (
+          <Link to="/accounts/connect" style={{
+            background: "#c25800", color: "#fff", padding: "8px 20px",
+            borderRadius: "8px", textDecoration: "none", fontSize: "14px", fontWeight: "600",
+          }}>
+            + Connect
+          </Link>
+        )}
       </div>
 
       {accounts.map(a => (
@@ -218,6 +248,19 @@ export function CloudAccountsList() {
                     color: statusColor(a.lastCheckStatus),
                   }}>
                     {a.lastCheckStatus}
+                  </span>
+                )}
+                {isManagedDb(a.provider) && (
+                  <span
+                    title={isProtected(a)
+                      ? "Production-protected: the kill switch will never auto-pause, delete, or flush this database — a breach is downgraded to a snapshot + alert."
+                      : "Protection OFF: destructive auto-actions (pause/delete/flush) are allowed on this database."}
+                    style={{
+                      fontSize: "11px", padding: "2px 7px", borderRadius: "4px", fontWeight: "600",
+                      background: isProtected(a) ? "rgba(92,226,231,0.15)" : "rgba(255,160,122,0.15)",
+                      color: isProtected(a) ? "#5ce2e7" : "#ffa07a",
+                    }}>
+                    {isProtected(a) ? "🔒 prod-protected" : "⚠ auto-kill enabled"}
                   </span>
                 )}
               </div>
@@ -248,16 +291,18 @@ export function CloudAccountsList() {
                   <p style={{ color: "#d4846a", fontSize: "12px", margin: "0 0 8px", lineHeight: "1.5", wordBreak: "break-all" as const }}>
                     {a.lastCheckError}
                   </p>
-                  <button
-                    onClick={() => setEditingId(a.id)}
-                    style={{
-                      background: "rgba(255,160,122,0.15)", color: "#ffa07a",
-                      border: "1px solid rgba(255,160,122,0.3)", padding: "5px 12px",
-                      borderRadius: "5px", cursor: "pointer", fontSize: "12px", fontWeight: "600",
-                    }}
-                  >
-                    Update credentials →
-                  </button>
+                  {can("cloud_accounts:write") && (
+                    <button
+                      onClick={() => setEditingId(a.id)}
+                      style={{
+                        background: "rgba(255,160,122,0.15)", color: "#ffa07a",
+                        border: "1px solid rgba(255,160,122,0.3)", padding: "5px 12px",
+                        borderRadius: "5px", cursor: "pointer", fontSize: "12px", fontWeight: "600",
+                      }}
+                    >
+                      Update credentials →
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -271,7 +316,21 @@ export function CloudAccountsList() {
             </div>
 
             <div style={{ display: "flex", gap: "8px", marginLeft: "16px", flexShrink: 0 }}>
-              {a.lastCheckStatus !== "error" && (
+              {can("cloud_accounts:write") && isManagedDb(a.provider) && (
+                <button
+                  onClick={() => toggleProtection(a)}
+                  title={isProtected(a) ? "Allow destructive auto-actions (not recommended for prod)" : "Re-enable production protection"}
+                  style={{
+                    background: isProtected(a) ? "rgba(255,160,122,0.1)" : "rgba(92,226,231,0.12)",
+                    color: isProtected(a) ? "#ffa07a" : "#5ce2e7",
+                    border: `1px solid ${isProtected(a) ? "rgba(255,160,122,0.25)" : "rgba(92,226,231,0.3)"}`,
+                    padding: "6px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "12px",
+                  }}
+                >
+                  {isProtected(a) ? "Disable protection" : "Enable protection"}
+                </button>
+              )}
+              {can("cloud_accounts:write") && a.lastCheckStatus !== "error" && (
                 <button
                   onClick={() => setEditingId(editingId === a.id ? null : a.id)}
                   style={{
@@ -283,30 +342,36 @@ export function CloudAccountsList() {
                   {editingId === a.id ? "Cancel" : "Update credentials"}
                 </button>
               )}
-              <button
-                onClick={() => handleDelete(a.id)}
-                style={{
-                  background: "rgba(255,107,107,0.1)", color: "#ff6b6b",
-                  border: "1px solid rgba(255,107,107,0.2)", padding: "6px 14px",
-                  borderRadius: "6px", cursor: "pointer", fontSize: "12px",
-                }}
-              >
-                Disconnect
-              </button>
+              {can("cloud_accounts:delete") && (
+                <button
+                  onClick={() => handleDelete(a.id)}
+                  style={{
+                    background: "rgba(255,107,107,0.1)", color: "#ff6b6b",
+                    border: "1px solid rgba(255,107,107,0.2)", padding: "6px 14px",
+                    borderRadius: "6px", cursor: "pointer", fontSize: "12px",
+                  }}
+                >
+                  Disconnect
+                </button>
+              )}
             </div>
           </div>
         </div>
       ))}
 
-      {accounts.length === 0 && (
+      {loadError && (
+        <ErrorState message={`Couldn't load cloud accounts: ${loadError}`} onRetry={reload} />
+      )}
+
+      {!loadError && accounts.length === 0 && (
         <div style={{ textAlign: "center", padding: "48px", color: "#9ca3af" }}>
           <p style={{ marginBottom: "16px" }}>No cloud accounts connected yet.</p>
-          <Link to="/accounts/connect" style={{
+          {can("cloud_accounts:write") && <Link to="/accounts/connect" style={{
             background: "#c25800", color: "#fff", padding: "10px 24px",
             borderRadius: "8px", textDecoration: "none", fontWeight: "600",
           }}>
             Connect your first account
-          </Link>
+          </Link>}
         </div>
       )}
     </div>
