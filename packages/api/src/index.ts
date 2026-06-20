@@ -19,10 +19,16 @@ import { connectMongoDB, initPostgresTables } from "./globals/index.js";
 // outage. Cron/HTTP paths still have their own local error handling; this is
 // only the last-resort backstop.
 process.on("unhandledRejection", (reason: any) => {
+  // Usually a benign Mongo-buffering rejection during a reconnect window — log and
+  // keep the instance alive so the reconnect loop can self-heal.
   console.error("[guardian] Unhandled promise rejection:", reason?.message ?? reason);
 });
 process.on("uncaughtException", (err: any) => {
-  console.error("[guardian] Uncaught exception:", err?.message ?? err);
+  // An uncaught exception leaves the process in an undefined state — log and exit
+  // so Cloud Run starts a clean instance (which re-runs connectMongoDB + the
+  // reconnect loop). min-instances=1 makes the restart fast.
+  console.error("[guardian] Uncaught exception — exiting for a clean restart:", err?.message ?? err);
+  process.exit(1);
 });
 
 const app = createApp();

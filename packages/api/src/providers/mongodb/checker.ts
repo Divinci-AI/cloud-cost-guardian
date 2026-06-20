@@ -521,17 +521,19 @@ export const mongodbProvider: CloudProvider = {
     switch (action) {
       case "kill-connections": {
         if (creds.subType === "self-hosted") return killConnectionsSelfHosted(creds);
-        // Atlas managed clusters expose no direct connection-killing API.
-        // The closest "stop-the-bleeding" semantic that Atlas DOES support is
-        // pause-cluster — it halts all cluster activity (and reduces billing
-        // to the paused rate) without removing IP allowlist entries the way
-        // `isolate` would (which can break unrelated legitimate clients).
-        // The returned ActionResult reports the actual action performed so
-        // the kill audit log reflects what really happened.
-        const paused = await pauseAtlas(creds);
+        // Atlas managed clusters expose no direct connection-killing API. Do NOT
+        // silently escalate to pause-cluster: kill-connections is the *default*
+        // threshold action for mongodb, so escalating it would auto-PAUSE a prod
+        // Atlas cluster (the divinci-prod-atlas outage) — a destructive action the
+        // operator never requested. Report a clean no-op instead, matching how the
+        // redis/neo4j/neon providers handle unsupported managed-cluster actions.
+        // Pausing must be an explicit `pause-cluster` action (and is itself blocked
+        // by productionProtected in the monitoring engine).
         return {
-          ...paused,
-          details: `kill-connections unavailable on Atlas managed clusters — fell through to pause-cluster: ${paused.details}`,
+          success: false,
+          action,
+          serviceName,
+          details: "kill-connections is not available on Atlas managed clusters (no direct API). Use isolate, or an explicit scale-down/pause-cluster — pausing is never auto-escalated.",
         };
       }
       case "isolate": {

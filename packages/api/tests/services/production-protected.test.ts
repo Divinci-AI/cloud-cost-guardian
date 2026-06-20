@@ -148,6 +148,24 @@ describe("Production-protected DB guard", () => {
     );
   });
 
+  it("blocks flush-redis (FLUSHALL — data loss) on a protected Redis DB", async () => {
+    const provider = mongoProvider(); // generic DB provider stand-in; provider is "redis" below
+    vi.mocked(getProvider).mockReturnValue(provider as any);
+    vi.mocked(getCredential).mockResolvedValue({ provider: "redis", redisUrl: "redis://x" } as any);
+    vi.mocked(CloudAccountModel.find).mockResolvedValue([account({ provider: "redis", name: "Prod Redis" })] as any);
+    vi.mocked(evaluateRules).mockReturnValue([
+      { ruleId: "r1", ruleName: "Redis flush", triggered: true, cooldownActive: false, conditionsMatched: [],
+        actionsToExecute: [{ type: "flush-redis", target: "prod-redis", requiresApproval: false }] },
+    ] as any);
+
+    await runCheckCycle();
+
+    expect(provider.executeKillSwitch).not.toHaveBeenCalled();
+    expect(captureSnapshot).toHaveBeenCalledWith(
+      expect.anything(), "prod-redis", expect.stringContaining("protected-block:rule:"), expect.any(String),
+    );
+  });
+
   it("does NOT protect a non-DB provider (cloudflare pause-zone still executes)", async () => {
     const provider = {
       id: "cloudflare", name: "Cloudflare",

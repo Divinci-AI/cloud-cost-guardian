@@ -75,7 +75,7 @@ const MANAGED_DB_PROVIDERS = new Set<ProviderId>(["mongodb", "redis", "neo4j", "
  * separate database-kill-switch flow, which already requires a verified
  * snapshot + human confirmation, so it isn't part of this auto-action path.)
  */
-const DESTRUCTIVE_DB_ACTIONS = new Set<KillAction>(["pause-cluster", "delete"]);
+const DESTRUCTIVE_DB_ACTIONS = new Set<KillAction>(["pause-cluster", "delete", "flush-redis"]);
 
 /**
  * Production-protected guard: on a managed DB with productionProtected !== false
