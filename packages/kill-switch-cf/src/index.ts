@@ -914,7 +914,7 @@ function thresholdsSummary(env: Env) {
 const UPTIME_CRON = "*/5 * * * *";
 
 /**
- * External uptime self-check. Pings the Guardian API's DB-aware /healthz from
+ * External uptime self-check. Pings the Guardian API's DB-aware /health from
  * this CF Worker (independent of GCP + ks-cluster0), and alerts if it's down or
  * degraded — the exact failure (a paused/unreachable Atlas DB) that guardian-api
  * itself can't report, because its config lives in that same DB.
@@ -923,7 +923,7 @@ const UPTIME_CRON = "*/5 * * * *";
  * webhooks are gated by the cooldown so they don't spam ~288×/day.
  */
 async function uptimeCheck(env: Env): Promise<void> {
-  const url = env.GUARDIAN_HEALTH_URL || "https://api.kill-switch.net/healthz";
+  const url = env.GUARDIAN_HEALTH_URL || "https://api.kill-switch.net/health";
   let healthy = false;
   let detail = "";
   try {

@@ -81,9 +81,9 @@ export function createApp() {
     const cfSecretBuf = Buffer.from(cfSecret);
     app.use((req, res, next) => {
       if (req.path === "/" && req.method === "GET") return next();
-      // /healthz is an unauthenticated health endpoint for external uptime
+      // /health is an unauthenticated health endpoint for external uptime
       // monitors (e.g. the kill-switch-cf self-check) — always reachable.
-      if (req.path === "/healthz" && req.method === "GET") return next();
+      if (req.path === "/health" && req.method === "GET") return next();
       const provided = (req.headers["x-origin-secret"] as string) || "";
       if (provided.length !== cfSecret.length ||
           !timingSafeEqual(Buffer.from(provided), cfSecretBuf)) {
@@ -109,7 +109,7 @@ export function createApp() {
   // probes and the marketing surface keep working during a DB outage.
   const DB_FREE_PATHS = (p: string) =>
     p === "/" ||
-    p === "/healthz" ||
+    p === "/health" ||
     p.startsWith("/providers") ||
     p === "/rules/presets" ||
     p.startsWith("/docs");
@@ -178,7 +178,7 @@ export function createApp() {
   // configured-but-disconnected. Unauthenticated and exempt from the gate so it
   // always reports its own status — this is the signal that pages us if
   // ks-cluster0 is paused/down.
-  app.get("/healthz", (_req, res) => {
+  app.get("/health", (_req, res) => {
     const mongo = !isMongoEnabled() ? "not-configured" : (isMongoConnected() ? "connected" : "disconnected");
     const ok = mongo !== "disconnected";
     res.status(ok ? 200 : 503).json({ service: "kill-switch", status: ok ? "ok" : "degraded", mongo });
