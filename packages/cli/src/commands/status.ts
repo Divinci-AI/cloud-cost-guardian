@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { outputJson, formatTable, handleError, spinner, warn, colors as c } from "../output.js";
+import { fetchOrgContext, orgBanner } from "../org-context.js";
 import type { ClientFactory } from "../types.js";
 
 export function registerStatusCommand(program: Command, createClient: ClientFactory) {
@@ -13,13 +14,14 @@ export function registerStatusCommand(program: Command, createClient: ClientFact
         const client = createClient();
 
         // Fire all requests in parallel
-        const [accountInfo, accounts, rules, sequences, channels, analytics] = await Promise.all([
+        const [accountInfo, accounts, rules, sequences, channels, analytics, orgCtx] = await Promise.all([
           client.billing.status().catch(() => null),
           client.accounts.list().catch(() => []),
           client.rules.list().catch(() => []),
           client.database.list().catch(() => []),
           client.alerts.channels().catch(() => []),
           client.analytics.overview().catch(() => null) as Promise<any>,
+          fetchOrgContext(client),
         ]);
 
         s?.stop();
@@ -28,6 +30,9 @@ export function registerStatusCommand(program: Command, createClient: ClientFact
           outputJson({
             tier: accountInfo?.tier || "unknown",
             limits: accountInfo?.limits,
+            activeOrgId: orgCtx?.activeOrgId ?? null,
+            activeOrgName: orgCtx?.activeOrgName ?? null,
+            orgCount: orgCtx?.orgCount ?? null,
             accounts: accounts.length,
             rules: rules.length,
             activeKillSequences: sequences.length,
@@ -41,6 +46,10 @@ export function registerStatusCommand(program: Command, createClient: ClientFact
 
         // Header
         console.log(c.bold("\nKill Switch Status\n"));
+
+        // Active org — accounts/rules/alerts below are scoped to it
+        const banner = orgBanner(orgCtx);
+        if (banner) console.log(`  ${banner}`);
 
         // Tier
         const tier = accountInfo?.tier || "unknown";

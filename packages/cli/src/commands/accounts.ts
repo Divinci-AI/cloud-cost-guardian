@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import { outputJson, formatTable, formatObject, handleError, spinner, success } from "../output.js";
 import { confirm } from "../prompts.js";
+import { fetchOrgContext, orgBanner } from "../org-context.js";
+import { BIN } from "../program-name.js";
 import type { ClientFactory } from "../types.js";
 
 export function registerAccountCommands(program: Command, createClient: ClientFactory) {
@@ -16,12 +18,23 @@ export function registerAccountCommands(program: Command, createClient: ClientFa
       const json = program.opts().json;
       try {
         const client = createClient();
-        let list = await client.accounts.list();
+        // Accounts are scoped to the active org — fetch context in parallel so a
+        // "missing" account that's really in another org is obvious from the header.
+        const [listRaw, orgCtx] = await Promise.all([
+          client.accounts.list(),
+          json ? Promise.resolve(null) : fetchOrgContext(client),
+        ]);
+        let list = listRaw;
         if (opts.provider) list = list.filter((a) => a.provider === opts.provider);
         if (opts.status) list = list.filter((a) => a.status === opts.status);
         if (json) {
           outputJson(list);
         } else {
+          const banner = orgBanner(orgCtx);
+          if (banner) console.log(banner + "\n");
+          if (list.length === 0) {
+            console.log("No accounts in this org." + (orgCtx && orgCtx.orgCount > 1 ? ` Other orgs may have accounts — see: ${BIN} orgs list` : ""));
+          }
           formatTable(list, [
             { key: "id", header: "ID" },
             { key: "provider", header: "Provider" },

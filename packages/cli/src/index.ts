@@ -31,6 +31,7 @@ import { registerStatusCommand } from "./commands/status.js";
 import { registerWatchCommand } from "./commands/watch.js";
 import { registerProviderCommands } from "./commands/providers.js";
 import { registerAgentGuardCommands } from "./commands/agent-guard.js";
+import { registerDoctorCommand } from "./commands/doctor.js";
 
 import type { ClientFactory } from "./types.js";
 import { CLI_VERSION } from "./version.js";
@@ -80,6 +81,7 @@ registerOnboardCommands(program, createClient);
 registerOrgCommands(program, createClient);
 registerActivityCommands(program, createClient);
 registerStatusCommand(program, createClient);
+registerDoctorCommand(program, createClient);
 registerWatchCommand(program, createClient);
 registerProviderCommands(program, createClient);
 registerAgentGuardCommands(program);
