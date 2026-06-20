@@ -4,11 +4,11 @@
  *
  * Monitor cloud spending, kill runaway services from the terminal.
  *
- * Usage:
- *   kill-switch auth login --api-key ks_live_abc123
- *   kill-switch shield cost-runaway
- *   kill-switch check
- *   kill-switch accounts list --json
+ * Usage (also available as `kill-switch`):
+ *   ks auth login --api-key ks_live_abc123
+ *   ks shield cost-runaway
+ *   ks check
+ *   ks accounts list --json
  */
 
 import { Command } from "commander";
@@ -34,11 +34,12 @@ import { registerAgentGuardCommands } from "./commands/agent-guard.js";
 
 import type { ClientFactory } from "./types.js";
 import { CLI_VERSION } from "./version.js";
+import { BIN } from "./program-name.js";
 
 const program = new Command();
 
 program
-  .name("kill-switch")
+  .name(BIN)
   .description("Monitor cloud spending, kill runaway services, protect your infrastructure")
   .version(CLI_VERSION)
   .option("--json", "Output as JSON (for automation/scripting)")

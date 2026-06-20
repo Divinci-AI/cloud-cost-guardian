@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { outputJson, formatTable, handleError, spinner, success, colors as c } from "../output.js";
+import { BIN } from "../program-name.js";
 import type { ClientFactory } from "../types.js";
 
 const PRESETS = [
@@ -10,7 +11,7 @@ const PRESETS = [
 export function registerShieldCommands(program: Command, createClient: ClientFactory) {
   program
     .command("shield [preset]")
-    .description("Quick-apply a protection preset (e.g., kill-switch shield cost-runaway)")
+    .description(`Quick-apply a protection preset (e.g., ${BIN} shield cost-runaway)`)
     .option("--list", "List available shields")
     .option("--dry-run", "Preview what the shield would do without applying")
     .action(async (preset, opts) => {
@@ -29,7 +30,7 @@ export function registerShieldCommands(program: Command, createClient: ClientFac
               { key: "name", header: "Name", width: 30 },
               { key: "description", header: "Description", width: 50 },
             ]);
-            console.log("\nUsage: kill-switch shield <preset-id>");
+            console.log(`\nUsage: ${BIN} shield <preset-id>`);
           }
         } catch (err) {
           handleError(err, json);
@@ -38,7 +39,7 @@ export function registerShieldCommands(program: Command, createClient: ClientFac
       }
 
       if (!PRESETS.includes(preset)) {
-        handleError(new Error(`Unknown preset "${preset}". Run: kill-switch shield --list`), json);
+        handleError(new Error(`Unknown preset "${preset}". Run: ${BIN} shield --list`), json);
       }
 
       if (opts.dryRun) {
