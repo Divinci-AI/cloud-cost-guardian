@@ -168,6 +168,150 @@ function UpdateCredentialsForm({ account, onSuccess, onCancel }: {
   );
 }
 
+// Which violation categories auto-trigger a kill action (schema enum). Default ["cost"].
+const KILL_CATEGORIES: { key: string; label: string; desc: string }[] = [
+  { key: "cost", label: "Cost", desc: "spending spike / cost runaway" },
+  { key: "load", label: "Load", desc: "high CPU, ops/sec, or traffic" },
+  { key: "storage", label: "Storage", desc: "disk / quota fill" },
+  { key: "count", label: "Count", desc: "resource or instance count" },
+  { key: "security", label: "Security", desc: "anomalies / exfiltration" },
+];
+
+function AccountSettingsForm({ account, onSuccess, onCancel }: {
+  account: any;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [cats, setCats] = useState<string[]>(() =>
+    Array.isArray(account.autoKillCategories) ? account.autoKillCategories : ["cost"]);
+  const [thresholds, setThresholds] = useState<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(account.thresholds || {})) {
+      if (typeof v === "number") out[k] = String(v);
+    }
+    return out;
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const toggleCat = (key: string) =>
+    setCats(c => c.includes(key) ? c.filter(x => x !== key) : [...c, key]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      // Send the full thresholds object back (PUT replaces it). Keep only valid numbers.
+      const nextThresholds: Record<string, number> = {};
+      for (const [k, v] of Object.entries(thresholds)) {
+        const n = Number(v);
+        if (v !== "" && !Number.isNaN(n)) nextThresholds[k] = n;
+      }
+      await api.updateCloudAccount(account.id, {
+        autoKillCategories: cats,
+        thresholds: nextThresholds,
+      });
+      onSuccess();
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setSaving(false);
+  };
+
+  const thresholdKeys = Object.keys(thresholds);
+
+  return (
+    <form
+      onSubmit={e => { e.preventDefault(); handleSave(); }}
+      style={{
+        marginTop: "12px", padding: "16px",
+        background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px",
+      }}
+    >
+      <p style={{ color: "#fff", fontSize: "13px", fontWeight: "600", margin: "0 0 4px" }}>
+        Monitoring settings for {account.name}
+      </p>
+
+      <p style={{ color: "#9ca3af", fontSize: "12px", margin: "12px 0 6px", fontWeight: 600 }}>
+        Auto-kill categories
+      </p>
+      <p style={{ color: "#6b7280", fontSize: "11px", margin: "0 0 8px", lineHeight: 1.5 }}>
+        Which breach categories may trigger an auto-kill. Others still alert. Default: cost only — storage is alert-only so a fixed-tier DB filling up never auto-kills.
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "14px" }}>
+        {KILL_CATEGORIES.map(c => {
+          const on = cats.includes(c.key);
+          return (
+            <button
+              type="button"
+              key={c.key}
+              onClick={() => toggleCat(c.key)}
+              title={c.desc}
+              style={{
+                fontSize: "12px", padding: "5px 11px", borderRadius: "6px", cursor: "pointer",
+                background: on ? "rgba(194,88,0,0.18)" : "rgba(255,255,255,0.04)",
+                color: on ? "#f59e42" : "#9ca3af",
+                border: `1px solid ${on ? "rgba(194,88,0,0.5)" : "rgba(255,255,255,0.12)"}`,
+                fontWeight: on ? 600 : 400,
+              }}
+            >
+              {on ? "✓ " : ""}{c.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <p style={{ color: "#9ca3af", fontSize: "12px", margin: "4px 0 6px", fontWeight: 600 }}>
+        Thresholds
+      </p>
+      {thresholdKeys.length === 0 ? (
+        <p style={{ color: "#6b7280", fontSize: "11px", margin: "0 0 8px" }}>
+          No thresholds set for this account.
+        </p>
+      ) : (
+        thresholdKeys.map(k => (
+          <div key={k} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+            <label style={{ fontSize: "12px", color: "#9ca3af", flex: 1, fontFamily: "monospace" }}>{k}</label>
+            <input
+              type="number"
+              value={thresholds[k]}
+              onChange={e => setThresholds(t => ({ ...t, [k]: e.target.value }))}
+              style={{
+                width: "140px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: "6px", color: "#fff", padding: "6px 9px", fontSize: "13px", boxSizing: "border-box",
+              }}
+            />
+          </div>
+        ))
+      )}
+
+      {error && <p style={{ color: "#ff6b6b", fontSize: "12px", margin: "8px 0" }}>{error}</p>}
+      <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+        <button
+          type="submit"
+          disabled={saving}
+          style={{
+            background: "#c25800", color: "#fff", border: "none",
+            padding: "7px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "600",
+          }}
+        >
+          {saving ? "Saving..." : "Save settings"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            background: "transparent", color: "#9ca3af", border: "1px solid rgba(255,255,255,0.1)",
+            padding: "7px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "13px",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function CloudAccountsList() {
   const { orgVersion } = useOrg();
   const can = useCan();
@@ -175,6 +319,7 @@ export function CloudAccountsList() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [settingsId, setSettingsId] = useState<string | null>(null);
 
   const reload = () => {
     setLoading(true);
@@ -313,6 +458,14 @@ export function CloudAccountsList() {
                   onCancel={() => setEditingId(null)}
                 />
               )}
+
+              {settingsId === a.id && (
+                <AccountSettingsForm
+                  account={a}
+                  onSuccess={() => { setSettingsId(null); reload(); }}
+                  onCancel={() => setSettingsId(null)}
+                />
+              )}
             </div>
 
             <div style={{ display: "flex", gap: "8px", marginLeft: "16px", flexShrink: 0 }}>
@@ -330,9 +483,22 @@ export function CloudAccountsList() {
                   {isProtected(a) ? "Disable protection" : "Enable protection"}
                 </button>
               )}
+              {can("cloud_accounts:write") && (
+                <button
+                  onClick={() => { setSettingsId(settingsId === a.id ? null : a.id); setEditingId(null); }}
+                  title="Edit auto-kill categories and thresholds"
+                  style={{
+                    background: "rgba(255,255,255,0.06)", color: "#9ca3af",
+                    border: "1px solid rgba(255,255,255,0.1)", padding: "6px 14px",
+                    borderRadius: "6px", cursor: "pointer", fontSize: "12px",
+                  }}
+                >
+                  {settingsId === a.id ? "Cancel" : "Settings"}
+                </button>
+              )}
               {can("cloud_accounts:write") && a.lastCheckStatus !== "error" && (
                 <button
-                  onClick={() => setEditingId(editingId === a.id ? null : a.id)}
+                  onClick={() => { setEditingId(editingId === a.id ? null : a.id); setSettingsId(null); }}
                   style={{
                     background: "rgba(255,255,255,0.06)", color: "#9ca3af",
                     border: "1px solid rgba(255,255,255,0.1)", padding: "6px 14px",
