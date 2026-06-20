@@ -162,8 +162,12 @@ The CLI is designed for AI coding agents (Claude Code, Cursor, Windsurf) to set 
 export KILL_SWITCH_API_KEY=ks_live_your_key
 ks onboard --provider cloudflare --account-id ID --token TOKEN \
   --shields cost-runaway,ddos --alert-pagerduty ROUTING_KEY --json
-ks status --json           # dashboard: accounts, alerts, 30-day spend
+ks doctor                  # diagnose config, auth, active org, connectivity
+ks status --json           # dashboard: active org, accounts, alerts, 30-day spend
 ks check --json            # violations with multiplier column (e.g. 60x)
+ks accounts add mongodb --name "Prod Atlas" --atlas-public-key PUB --atlas-private-key PRIV --atlas-project-id PROJ
+ks accounts update ID --production-protected true --threshold mongodbDailyCostUSD=50
+ks apply -f ks.yaml --dry-run   # declarative integration-as-code (account + thresholds + shields + alerts)
 ks alerts add --type slack --webhook-url URL --json
 ks analytics --json        # spend summary + 7-day table + per-account
 ```

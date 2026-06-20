@@ -68,8 +68,23 @@ ks alerts test
 # Check all accounts
 ks check --json
 
-# List accounts
+# Diagnose setup (config, auth, ACTIVE ORG, connectivity, accounts, alerts)
+ks doctor
+
+# List accounts (shows the active org they belong to — accounts are org-scoped)
 ks accounts list
+
+# Connect databases / any provider (named flags mirror the checkers; --cred is a generic escape hatch)
+ks accounts add mongodb --name "Prod Atlas" --atlas-public-key PUB --atlas-private-key PRIV --atlas-project-id PROJ --atlas-cluster-name CLUSTER
+ks accounts add redis --name "Redis Cloud" --redis-cloud-key K --redis-cloud-secret S --redis-subscription-id ID
+ks accounts add neo4j --name "Aura" --neo4j-client-id ID --neo4j-client-secret SECRET
+
+# Update an account's thresholds / auto-actions / production-protection
+ks accounts update ACCOUNT_ID --threshold mongodbDailyCostUSD=50 --production-protected true
+
+# Integration-as-code: declare account + thresholds + shields + alerts in YAML/JSON, reconcile idempotently
+ks apply -f ks.yaml --dry-run      # preview (+ create / ~ update / = unchanged)
+ks apply -f ks.yaml                # apply; ${ENV} interpolated so secrets stay out of the file
 
 # Get credential help
 ks onboard --help-provider cloudflare
@@ -120,12 +135,11 @@ The token must be an **API Token** (not Global API Key), created at:
 https://dash.cloudflare.com/profile/api-tokens
 
 Required permissions:
-- Account > Account Analytics > Read  (without this the CF half reads empty — the checker now surfaces this as an auth failure instead of a false all-clear)
+- Account > Account Analytics > Read
 - Account > Workers Scripts > Edit
 - Account > Workers R2 Storage > Read
 - Account > D1 > Read
-- Zone > Zone > Read  (also required to enumerate zones for Workers Routes removal on auto-disconnect)
-- Zone > Workers Routes > Edit  (auto-disconnect removes zone [[routes]], not just workers.dev + custom domains)
+- Zone > Zone > Read
 
 Or use the "Edit Cloudflare Workers" template.
 
@@ -137,7 +151,7 @@ Required permissions:
 - Write access for auto-kill actions (stop/terminate pods, scale endpoints)
 
 ## Supported Cloud Providers
-- **Cloudflare** — Workers, Durable Objects, R2, D1, Queues, Stream, Zones, Workers AI (Neurons), AI Gateway (upstream LLM $), Vectorize
+- **Cloudflare** — Workers, Durable Objects, R2, D1, Queues, Stream, Zones
 - **GCP** — Cloud Run, Compute Engine, GKE, BigQuery, Cloud Functions, Cloud Storage
 - **AWS** — EC2, Lambda, RDS, ECS, EKS, S3, SageMaker, Cost Explorer
 - **RunPod** — GPU Pods (on-demand & spot), Serverless Endpoints, Network Volumes
