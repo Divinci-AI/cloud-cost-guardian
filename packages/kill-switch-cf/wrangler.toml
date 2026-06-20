@@ -9,10 +9,13 @@ compatibility_flags = ["nodejs_compat"]
 #   "0 */6 * * *"   = every 6 hours (default)
 #   "0 0 * * *"     = once daily
 [triggers]
-crons = ["0 */6 * * *"]
+# 6h: full CF usage/billing kill-switch.  5m: lightweight API uptime self-check.
+crons = ["0 */6 * * *", "*/5 * * * *"]
 
 [vars]
 ENVIRONMENT = "production"
+# External uptime self-check target (the Guardian API's DB-aware health endpoint).
+GUARDIAN_HEALTH_URL = "https://api.kill-switch.net/healthz"
 
 # ── Thresholds ───────────────────────────────────────────────────────────────
 # Alerts fire when ANY worker exceeds these thresholds in a single day.

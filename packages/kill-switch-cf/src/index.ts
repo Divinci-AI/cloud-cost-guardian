@@ -30,6 +30,12 @@ interface Env {
   // HTTP endpoint auth. If unset, non-health endpoints fail CLOSED (refuse).
   ADMIN_SECRET?: string;
 
+  // External uptime self-check: the Guardian API's DB-aware health endpoint.
+  // This CF Worker is independent of GCP/Mongo, so it can page us when the API
+  // (or its ks-cluster0 Atlas DB) is down — the one outage guardian-api can't
+  // self-report. Defaults to prod; override in wrangler [vars] for staging.
+  GUARDIAN_HEALTH_URL?: string;
+
   // Alert destinations (at least one recommended)
   PAGERDUTY_ROUTING_KEY?: string;  // Events API v2 integration key
   DISCORD_WEBHOOK_URL?: string;    // Discord channel webhook URL
@@ -904,9 +910,56 @@ function thresholdsSummary(env: Env) {
   };
 }
 
+/** The 5-minute cron reserved for the lightweight API uptime self-check. */
+const UPTIME_CRON = "*/5 * * * *";
+
+/**
+ * External uptime self-check. Pings the Guardian API's DB-aware /healthz from
+ * this CF Worker (independent of GCP + ks-cluster0), and alerts if it's down or
+ * degraded — the exact failure (a paused/unreachable Atlas DB) that guardian-api
+ * itself can't report, because its config lives in that same DB.
+ *
+ * PagerDuty fires every tick (it dedups by dedup_key into one incident);
+ * webhooks are gated by the cooldown so they don't spam ~288×/day.
+ */
+async function uptimeCheck(env: Env): Promise<void> {
+  const url = env.GUARDIAN_HEALTH_URL || "https://api.kill-switch.net/healthz";
+  let healthy = false;
+  let detail = "";
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10_000);
+    const res = await fetch(url, { signal: ctrl.signal, headers: { "user-agent": "kill-switch-cf-uptime" } });
+    clearTimeout(timer);
+    let body: any = {};
+    try { body = await res.json(); } catch { /* non-JSON body */ }
+    healthy = res.ok; // 200 = ok; 503 = degraded (Mongo down)
+    detail = `HTTP ${res.status}${body?.mongo ? ` mongo=${body.mongo}` : ""}`;
+  } catch (e: any) {
+    detail = `unreachable: ${e?.message ?? e}`;
+  }
+
+  if (healthy) return; // all good — no alert
+
+  const suppressWebhooks = await webhookCooldownActive(env, "guardian-uptime");
+  await sendAlerts(
+    env,
+    `Kill Switch API health check FAILED — ${detail}`,
+    "critical",
+    { endpoint: url, detail, hint: "Check guardian-api / ks-cluster0 Atlas cluster (resume if paused)." },
+    { dedupSuffix: "guardian-uptime", suppressWebhooks },
+  );
+}
+
 export default {
-  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
-    await checkUsage(env);
+  async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    // Lightweight uptime self-check on every tick (a single fetch).
+    await uptimeCheck(env);
+    // The heavy CF usage/billing kill-switch runs only on its own (6h) cron,
+    // never on the 5-minute uptime tick.
+    if (event.cron !== UPTIME_CRON) {
+      await checkUsage(env);
+    }
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {

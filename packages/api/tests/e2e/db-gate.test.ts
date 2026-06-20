@@ -71,6 +71,27 @@ describe("DB fast-fail gate", () => {
     expect(res.status).not.toBe(503);
   });
 
+  it("/healthz reports 200 ok when Mongo is connected", async () => {
+    state.enabled = true; state.connected = true;
+    const res = await request(app).get("/healthz");
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: "ok", mongo: "connected" });
+  });
+
+  it("/healthz reports 503 degraded when Mongo is enabled but down (the uptime-alert signal)", async () => {
+    state.enabled = true; state.connected = false;
+    const res = await request(app).get("/healthz");
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ status: "degraded", mongo: "disconnected" });
+  });
+
+  it("/healthz reports 200 not-configured in in-memory/test mode", async () => {
+    state.enabled = false; state.connected = false;
+    const res = await request(app).get("/healthz");
+    expect(res.status).toBe(200);
+    expect(res.body.mongo).toBe("not-configured");
+  });
+
   it("recovers live: a DB route goes 503 -> not-503 on the same server once the connection returns", async () => {
     // Mirrors the production self-heal: the background reconnect loop flips
     // isMongoConnected back to true, and the SAME running process starts
