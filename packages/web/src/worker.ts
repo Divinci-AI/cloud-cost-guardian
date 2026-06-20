@@ -12,23 +12,24 @@ interface Env {
 
 // Defense-in-depth headers on every asset response.
 //
-// The ENFORCED CSP stays permissive about https: sources because Clerk injects
-// scripts, iframes, and workers at runtime, and a wrong per-host allowlist would
-// re-lock the dashboard (see the 2026-06-20 Access-gate lockout). To tighten it
-// safely we ship the per-host allowlist as Content-Security-Policy-Report-Only
-// FIRST: it blocks nothing, only reports what it *would* block. Watch the browser
-// console through a real Clerk sign-in (+ Stripe checkout); once the report-only
-// policy is violation-free, promote it into 'Content-Security-Policy' and drop
-// the permissive one. Hosts below: Clerk FAPI (clerk.kill-switch.net, from the
-// pk_live key) + clerk.accounts.dev, Turnstile (challenges.cloudflare.com),
-// Stripe, Google Fonts, and the API.
-const CSP_REPORT_ONLY = [
+// ENFORCED per-host CSP. Replaces the old `default-src 'self' https:` wildcard
+// (which let ANY https origin inject scripts) with an allowlist of exactly what
+// the app loads. Verified 2026-06-20 via browser automation across the welcome,
+// settings, dashboard, and billing views: the only origins loaded are self,
+// api/clerk.kill-switch.net, img.clerk.com, and static.cloudflareinsights.com —
+// all covered below, with zero securitypolicyviolation events. clerk.accounts.dev
+// / Turnstile / Stripe are included defensively for the logged-out sign-in +
+// checkout flows. `unsafe-inline`/`unsafe-eval` are kept — Clerk + the bundler
+// need them; removing those is a separate, report-only-first step.
+// Rollback: restore the previous `default-src 'self' https: data: blob:
+// 'unsafe-inline' 'unsafe-eval'` line and redeploy.
+const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.kill-switch.net https://*.clerk.accounts.dev https://challenges.cloudflare.com https://js.stripe.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.kill-switch.net https://*.clerk.accounts.dev https://challenges.cloudflare.com https://js.stripe.com https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.accounts.dev https://*.kill-switch.net",
-  "connect-src 'self' https://clerk.kill-switch.net https://*.clerk.accounts.dev https://api.kill-switch.net https://*.kill-switch.net https://*.stripe.com",
+  "connect-src 'self' https://clerk.kill-switch.net https://*.clerk.accounts.dev https://api.kill-switch.net https://*.kill-switch.net https://*.stripe.com https://static.cloudflareinsights.com",
   "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://*.clerk.accounts.dev",
   "worker-src 'self' blob:",
   "object-src 'none'",
@@ -37,9 +38,7 @@ const CSP_REPORT_ONLY = [
 ].join('; ');
 
 const SECURITY_HEADERS: Record<string, string> = {
-  'Content-Security-Policy':
-    "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'",
-  'Content-Security-Policy-Report-Only': CSP_REPORT_ONLY,
+  'Content-Security-Policy': CSP,
   'X-Frame-Options': 'DENY',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -57,6 +56,14 @@ function withSecurityHeaders(response: Response): Response {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    return withSecurityHeaders(await env.ASSETS.fetch(request));
+    const res = withSecurityHeaders(await env.ASSETS.fetch(request));
+    // The SPA's HTML entry must not be edge/browser-cached, or a stale cache
+    // masks deploys — including security-header changes like CSP (which is
+    // exactly what happened promoting the tightened policy). Content-hashed
+    // JS/CSS assets keep their own immutable caching.
+    if ((res.headers.get('content-type') || '').includes('text/html')) {
+      res.headers.set('Cache-Control', 'no-cache, must-revalidate');
+    }
+    return res;
   },
 };
