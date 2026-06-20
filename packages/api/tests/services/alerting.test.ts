@@ -440,6 +440,23 @@ describe("Alerting Service", () => {
       expect(payload.text).toBeDefined();
     });
 
+    it("escapes HTML in user-controlled fields (accountName, serviceName, summary)", async () => {
+      // accountName traces to req.body.name at cloud-account creation — user-controlled.
+      const xss = `<script>alert('x')</script>`;
+      await sendAlerts([emailChannel()], `summary ${xss}`, "critical", {
+        provider: "cloudflare",
+        accountName: `acct ${xss}`,
+        violations: [{ serviceName: `svc ${xss}`, metricName: "CPU", currentValue: 1, threshold: 0, severity: "critical" }],
+        actionsTaken: [`disconnect ${xss}`],
+      });
+
+      const [payload] = mockResendSend.mock.calls[0];
+      // The raw <script> tag must never appear in the rendered HTML…
+      expect(payload.html).not.toContain("<script>");
+      // …but the escaped form should, proving the content is preserved, just neutralized.
+      expect(payload.html).toContain("&lt;script&gt;");
+    });
+
     it("subject includes severity emoji and uppercased severity", async () => {
       await sendAlerts([emailChannel()], "Cost runaway", "critical", {
         provider: "cloudflare", accountName: "zombay-cf", violations,
