@@ -175,12 +175,20 @@ export function formatLimitsLines(limits: LimitsReport, now: number = Date.now()
 }
 
 /** One-line plan-limit summary for a status bar (e.g. Claude Code statusLine). */
-export function formatStatusline(limits: LimitsReport): string {
+export function formatStatusline(limits: LimitsReport, now: number = Date.now()): string {
   if (limits.source === "headers" && limits.windows.length) {
     const dot = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
-    const parts = limits.windows.map(
-      (w) => `${w.window === "5h" ? "5h" : "wk"} ${Math.round(w.utilization * 100)}%`,
-    );
+    const parts = limits.windows.map((w) => {
+      const tag = w.window === "5h" ? "5h" : "wk";
+      const base = `${tag} ${Math.round(w.utilization * 100)}%`;
+      // Weekly % is meaningless without the day-of-week context — append days left
+      // so "60%" reads as "60% with 2d to go" (under the ~14%/day budget), not alarm.
+      if (w.window === "weekly" && w.resetAt != null) {
+        const daysLeft = (w.resetAt - now) / DAY_MS;
+        if (daysLeft > 0) return `${base} (${daysLeft >= 1 ? `${daysLeft.toFixed(daysLeft < 10 ? 1 : 0)}d` : `${Math.max(1, Math.round((w.resetAt - now) / 3_600_000))}h`} left)`;
+      }
+      return base;
+    });
     return `🛡 ${dot} ${parts.join(" · ")}`;
   }
   const label = limits.tier ? tierLabel(limits.tier) : "limits";

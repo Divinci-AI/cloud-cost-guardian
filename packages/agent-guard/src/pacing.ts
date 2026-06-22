@@ -14,12 +14,19 @@
  *
  * The level (ok / warn / danger) is the worse of two signals: absolute
  * utilization against soft/danger thresholds, and pacing (burning fast enough to
- * lock out before reset). In subscription mode the guard never blocks on this —
- * it surfaces the assessment as a warning so the human can ease off or switch to
- * a cheaper model before Anthropic's own limit stops them mid-task.
+ * lock out before reset). Crucially, the *soft* warn is pace-gated once we know
+ * where we are in the window: 60% of the weekly quota with 2 days left is under
+ * the prorated daily budget (weekly ÷ 7 ≈ 14%/day) and must NOT warn — only being
+ * at/ahead of the linear pace (or projecting a lockout) escalates. The *danger*
+ * threshold stays absolute: near-exhaustion means little headroom regardless of
+ * the day. In subscription mode the guard never blocks on this — it surfaces the
+ * assessment as a warning so the human can ease off or switch to a cheaper model
+ * before Anthropic's own limit stops them mid-task.
  */
 
 import { WINDOW_MS, type LimitSnapshot, type LimitWindow, type WindowState } from "./limits.js";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface PacingThresholds {
   /** Per-window soft / danger utilization thresholds (0–1). */
@@ -116,10 +123,20 @@ export function assessWindow(
   // half the soft threshold.
   const lockoutFloor = soft * 0.5;
   const lockoutMatters = willLockOut && util >= lockoutFloor;
+
+  // The soft threshold alone is a poor signal once we know where we are in the
+  // window: 60% of the weekly quota with only 2 days left is *under* the prorated
+  // daily budget (weekly ÷ 7 ≈ 14%/day), not a problem — the user underspent
+  // earlier and has runway. So when pacing IS known, gate the bare soft warn on
+  // being at or ahead of the expected (linear) pace. When pacing is unknown (no
+  // reset time, e.g. a header-less 5h read), there's nothing to prorate against,
+  // so fall back to the absolute soft threshold. The absolute *danger* threshold
+  // stays unconditional — near-exhaustion means little headroom regardless of day.
+  const onOrAheadOfPace = burnRatio == null || burnRatio >= 1;
   let level: PacingLevel = "ok";
   if (util >= danger || (lockoutMatters && util >= soft)) level = "danger";
   else if (
-    util >= soft ||
+    (util >= soft && onOrAheadOfPace) ||
     lockoutMatters ||
     (burnRatio != null && burnRatio >= thresholds.burnRatioWarn && util >= lockoutFloor)
   )
@@ -129,6 +146,20 @@ export function assessWindow(
   const label = windowLabel(window);
   const parts: string[] = [`${label} limit ${pct}% used`];
   if (state.resetAt != null) parts.push(`resets ${fmtClock(state.resetAt, now)}`);
+  // Daily-budget framing for the weekly window: spell out the runway the way a
+  // human reasons about it — "X% left over N days" vs the even ~14%/day budget —
+  // so Claude Code gets the day-of-week context and doesn't worry too early. Only
+  // shown with ≥1 day to go: inside the final day a "%/day" rate exceeds what's
+  // even left and reads as nonsense, and the "resets <clock>" part already says when.
+  if (window === "weekly" && state.resetAt != null && util < 1) {
+    const daysLeft = (state.resetAt - now) / DAY_MS;
+    if (daysLeft >= 1) {
+      const remainingPct = Math.round((1 - util) * 100);
+      const perDayPct = Math.round(((1 - util) / daysLeft) * 100);
+      const evenDailyPct = Math.round((DAY_MS / duration) * 100); // weekly ÷ 7 ≈ 14%/day
+      parts.push(`~${remainingPct}% left over ${daysLeft.toFixed(1)}d (~${perDayPct}%/day vs ~${evenDailyPct}%/day budget)`);
+    }
+  }
   if (burnRatio != null && burnRatio >= 1.2 && level !== "ok") parts.push(`burning ${burnRatio.toFixed(1)}× pace`);
   // Only surface the lockout projection once it actually drives the level —
   // keeps low-utilization projection noise out of the message.
