@@ -6,12 +6,27 @@
 
 import { Router } from "express";
 import { GuardianAccountModel } from "../../models/guardian-account/schema.js";
+import { getAlertHistory } from "../../globals/index.js";
 import { sendAlerts } from "../../services/alerting.js";
 import { requirePermission } from "../../middleware/permissions.js";
 import { logActivity } from "../../services/activity-logger.js";
 import { TIER_LIMITS } from "../billing/index.js";
 
 export const alertRouter = Router();
+
+/**
+ * GET /alerts/history — Recent alerts fired for this org
+ */
+alertRouter.get("/history", requirePermission("alerts:read"), async (req, res, next) => {
+  try {
+    const guardianAccountId = (req as any).guardianAccountId;
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? ""), 10) || 50, 1), 200);
+    const alerts = await getAlertHistory(guardianAccountId, limit);
+    res.json({ alerts });
+  } catch (e) {
+    next(e);
+  }
+});
 
 /**
  * GET /alerts/channels — Get configured alert channels

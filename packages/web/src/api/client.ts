@@ -6,12 +6,23 @@
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8090";
 
-export class TierLimitError extends Error {
+/** Any non-2xx API response. `status` is the HTTP status (0 = network failure). */
+export class ApiError extends Error {
+  status: number;
+  body?: any;
+  constructor(message: string, status: number, body?: any) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+
+export class TierLimitError extends ApiError {
   code = "TIER_LIMIT" as const;
   currentTier: string;
   limit: number;
   constructor(message: string, currentTier: string, limit: number) {
-    super(message);
+    super(message, 403);
     this.currentTier = currentTier;
     this.limit = limit;
   }
@@ -19,6 +30,15 @@ export class TierLimitError extends Error {
 
 export function isTierLimitError(e: unknown): e is TierLimitError {
   return e instanceof TierLimitError;
+}
+
+export function isApiError(e: unknown): e is ApiError {
+  return e instanceof ApiError;
+}
+
+/** Session expired or not authenticated — distinct from "no access to this org" (403). */
+export function isAuthError(e: unknown): boolean {
+  return isApiError(e) && e.status === 401;
 }
 
 let getAccessToken: (() => Promise<string | null>) | null = null;
@@ -51,14 +71,19 @@ async function guardianFetch<T>(path: string, options: RequestInit = {}): Promis
     headers["X-Org-Id"] = activeOrgId;
   }
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch {
+    throw new ApiError("Network error — could not reach the Kill Switch API.", 0);
+  }
 
   const text = await res.text();
   let data: any;
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`API error (${res.status}): ${text.substring(0, 200)}`);
+    throw new ApiError(`API error (${res.status}): ${text.substring(0, 200)}`, res.status);
   }
 
   if (!res.ok) {
@@ -69,7 +94,10 @@ async function guardianFetch<T>(path: string, options: RequestInit = {}): Promis
         data.limit,
       );
     }
-    throw new Error(data.error || `API error: ${res.status}`);
+    if (res.status === 401) {
+      throw new ApiError(data.error || "Your session has expired. Please sign in again.", 401, data);
+    }
+    throw new ApiError(data.error || `API error: ${res.status}`, res.status, data);
   }
 
   return data as T;
@@ -213,6 +241,47 @@ export const api = {
     guardianFetch<any>(`/rules/${ruleId}`, { method: "DELETE" }),
   toggleRule: (ruleId: string) =>
     guardianFetch<any>(`/rules/${ruleId}/toggle`, { method: "POST" }),
+  preflightRule: (rule: Record<string, unknown>) =>
+    guardianFetch<any>("/rules/preflight", {
+      method: "POST",
+      body: JSON.stringify(rule),
+    }),
+  agentTrigger: (data: {
+    agentId?: string;
+    threatDescription: string;
+    severity?: string;
+    recommendedActions: { type: string; target?: string; delay?: number }[];
+    evidence?: Record<string, unknown>;
+    autoExecute?: boolean;
+  }) =>
+    guardianFetch<any>("/rules/agent/trigger", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  // Database Kill Switch
+  listDbCredentials: () => guardianFetch<any>("/database/credentials"),
+  storeDbCredential: (data: { provider: string } & Record<string, unknown>) =>
+    guardianFetch<any>("/database/credentials", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteDbCredential: (id: string) =>
+    guardianFetch<any>(`/database/credentials/${id}`, { method: "DELETE" }),
+  listKillSequences: () => guardianFetch<any>("/database/kill"),
+  getKillSequence: (id: string) => guardianFetch<any>(`/database/kill/${id}`),
+  initiateDbKill: (data: { credentialId: string; trigger: string; actions?: string[] }) =>
+    guardianFetch<any>("/database/kill", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  advanceDbKill: (id: string, credentialId: string, humanApproval?: boolean) =>
+    guardianFetch<any>(`/database/kill/${id}/advance`, {
+      method: "POST",
+      body: JSON.stringify({ credentialId, humanApproval }),
+    }),
+  abortDbKill: (id: string) =>
+    guardianFetch<any>(`/database/kill/${id}/abort`, { method: "POST" }),
 
   // Organizations
   listOrgs: () => guardianFetch<any>("/orgs"),
@@ -271,6 +340,48 @@ export const api = {
     const queryStr = qs.toString();
     return guardianFetch<any>(`/agent-guard/events${queryStr ? `?${queryStr}` : ""}`);
   },
+
+  // Usage Budgets
+  listBudgets: () => guardianFetch<any>("/budgets"),
+  getBudgetStatus: () => guardianFetch<any>("/budgets/status"),
+  createBudget: (data: {
+    name: string;
+    period: "hour" | "day" | "week" | "month" | "year";
+    budgetAmountUsd: number;
+    thresholdPcts?: number[];
+    channels?: "all" | string[];
+  }) =>
+    guardianFetch<any>("/budgets", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateBudget: (id: string, data: Partial<{
+    name: string;
+    period: string;
+    budgetAmountUsd: number;
+    thresholdPcts: number[];
+    channels: "all" | string[];
+    enabled: boolean;
+  }>) =>
+    guardianFetch<any>(`/budgets/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteBudget: (id: string) =>
+    guardianFetch<any>(`/budgets/${id}`, { method: "DELETE" }),
+
+  // Web Push
+  getVapidPublicKey: () => guardianFetch<{ publicKey: string | null }>("/push/vapid-public-key"),
+  registerPushSubscription: (data: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    guardianFetch<any>("/push/subscribe", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  removePushSubscription: (endpoint: string) =>
+    guardianFetch<any>("/push/subscribe", {
+      method: "DELETE",
+      body: JSON.stringify({ endpoint }),
+    }),
 
   // Activity Log
   getActivity: (params?: {

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { api, setActiveOrgId } from "../api/client";
+import { api, setActiveOrgId, isApiError } from "../api/client";
 
 export interface Org {
   id: string;
@@ -73,8 +73,8 @@ export function OrgProvider({ children, initialAccount }: OrgProviderProps) {
       }
     } catch (err: any) {
       console.error("[OrgContext] Failed to refresh orgs:", err);
-      // If we get a 403, the current org may have been deleted
-      if (err.message?.includes("403") || err.message?.includes("404") || err.message?.includes("don't have access")) {
+      // A 403/404 means the current org was deleted or access was revoked
+      if (isApiError(err) && (err.status === 403 || err.status === 404)) {
         setActiveOrgIdState(null);
         setActiveOrgId(null);
         setOrgVersion(v => v + 1);

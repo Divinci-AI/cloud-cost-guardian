@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useUser, useClerk } from "@clerk/clerk-react";
 import { api, isTierLimitError } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
+import { useCan } from "../../hooks/useCan";
+import { BudgetSection } from "./BudgetSection";
 
 interface AlertChannel {
   type: string;
@@ -43,6 +45,8 @@ export function SettingsPage() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const { activeOrg, teamRole, refreshOrgs, orgVersion } = useOrg();
+  const can = useCan();
+  const canEditAlerts = can("alerts:write");
   const [account, setAccount] = useState<any>(null);
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
@@ -508,18 +512,26 @@ export function SettingsPage() {
         ))}
       </div>
 
+      {/* ── Usage Budgets ──────────────────────────────── */}
+      <BudgetSection
+        alertChannelNames={channels.filter(c => c.enabled).map(c => c.name)}
+        flash={flash}
+      />
+
       {/* ── Alert Channels ─────────────────────────────── */}
-      <div style={sectionStyle}>
+      <div id="alert-channels" style={sectionStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "18px", fontWeight: "600", color: "#fff", margin: 0 }}>Alert Channels</h2>
-          <div style={{ display: "flex", gap: "8px" }}>
-            {channels.length > 0 && (
-              <button onClick={handleTestAlerts} style={btnStyle}>Test Alerts</button>
-            )}
-            <button onClick={() => setShowAddChannel(!showAddChannel)} style={{ ...btnStyle, background: showAddChannel ? "rgba(255,107,107,0.1)" : "rgba(255,255,255,0.08)" }}>
-              {showAddChannel ? "Cancel" : "Add Channel"}
-            </button>
-          </div>
+          {canEditAlerts && (
+            <div style={{ display: "flex", gap: "8px" }}>
+              {channels.length > 0 && (
+                <button onClick={handleTestAlerts} style={btnStyle}>Test Alerts</button>
+              )}
+              <button onClick={() => setShowAddChannel(!showAddChannel)} style={{ ...btnStyle, background: showAddChannel ? "rgba(255,107,107,0.1)" : "rgba(255,255,255,0.08)" }}>
+                {showAddChannel ? "Cancel" : "Add Channel"}
+              </button>
+            </div>
+          )}
         </div>
 
         {channels.length === 0 && !showAddChannel && (
@@ -528,7 +540,7 @@ export function SettingsPage() {
               No alert channels configured yet. Add one to get notified the moment a threshold is breached.
             </p>
             {/* Integration suggestion cards */}
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            {canEditAlerts && <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               {/* PagerDuty — featured */}
               <button
                 onClick={() => { setNewChannelType("pagerduty"); setShowAddChannel(true); }}
@@ -595,7 +607,7 @@ export function SettingsPage() {
                   Send alerts to your server's ops channel.
                 </p>
               </button>
-            </div>
+            </div>}
           </div>
         )}
 
@@ -609,8 +621,9 @@ export function SettingsPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <button
                 onClick={() => handleToggleChannel(i)}
+                disabled={!canEditAlerts}
                 style={{
-                  width: "36px", height: "20px", borderRadius: "10px", border: "none", cursor: "pointer",
+                  width: "36px", height: "20px", borderRadius: "10px", border: "none", cursor: canEditAlerts ? "pointer" : "default",
                   background: ch.enabled ? "#5ce2e7" : "rgba(255,255,255,0.15)", position: "relative", transition: "background 0.2s", flexShrink: 0,
                 }}
               >
@@ -625,12 +638,14 @@ export function SettingsPage() {
                 {ch.configPreview && <div style={{ fontSize: "11px", color: "#4b5563", marginTop: "2px", fontFamily: "monospace" }}>{ch.configPreview}</div>}
               </div>
             </div>
-            <button onClick={() => handleRemoveChannel(i)}
-              style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "16px", padding: "4px 8px" }}
-              title="Remove channel"
-            >
-              &#10005;
-            </button>
+            {canEditAlerts && (
+              <button onClick={() => handleRemoveChannel(i)}
+                style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", fontSize: "16px", padding: "4px 8px" }}
+                title="Remove channel"
+              >
+                &#10005;
+              </button>
+            )}
           </div>
         ))}
 

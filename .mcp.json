@@ -4,6 +4,10 @@
       "command": "node",
       "args": ["/Users/mikeumus/Documents/opus-advisor-mcp/dist/index.js"],
       "timeout": 180000
+    },
+    "chrome-devtools": {
+      "command": "/Users/mikeumus/.local/bin/chrome-devtools-mcp-brave",
+      "args": []
     }
   }
 }

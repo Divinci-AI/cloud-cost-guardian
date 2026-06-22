@@ -1,20 +1,17 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
+import { useApiQuery } from "../../hooks/useApiQuery";
+import { ErrorState } from "../../components/ErrorState";
+import { useCan } from "../../hooks/useCan";
 
 export function AlertsHistory() {
   const { orgVersion } = useOrg();
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const can = useCan();
   const [testing, setTesting] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    api.getAlertHistory()
-      .then(data => setAlerts(data.alerts || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [orgVersion]);
+  const { data, loading, error, refetch } = useApiQuery(() => api.getAlertHistory(), [orgVersion]);
+  const alerts: any[] = data?.alerts || [];
 
   const handleTest = async () => {
     setTesting(true);
@@ -40,12 +37,16 @@ export function AlertsHistory() {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
         <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", margin: 0 }}>Alert History</h1>
-        <button onClick={handleTest} disabled={testing} style={{ background: "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", padding: "8px 20px", borderRadius: "8px", cursor: "pointer", fontSize: "14px" }}>
-          {testing ? "Sending..." : "Test Alerts"}
-        </button>
+        {can("alerts:write") && (
+          <button onClick={handleTest} disabled={testing} style={{ background: "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)", padding: "8px 20px", borderRadius: "8px", cursor: "pointer", fontSize: "14px" }}>
+            {testing ? "Sending..." : "Test Alerts"}
+          </button>
+        )}
       </div>
 
-      {alerts.length === 0 ? (
+      {error ? (
+        <ErrorState message={`Couldn't load alert history: ${error}`} onRetry={refetch} />
+      ) : alerts.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
           <p style={{ fontSize: "36px", marginBottom: "12px" }}>&#128276;</p>
           <p>No alerts yet. That's a good thing!</p>

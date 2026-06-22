@@ -113,6 +113,11 @@ export const openApiSpec = {
       get: { summary: "List this org's recent agent-guard events (newest first)", operationId: "listAgentGuardEvents", tags: ["Agent Guard"], security: [{ bearerAuth: [] }],
         responses: { "200": { description: "Paginated events" } } },
     },
+    "/alerts/history": {
+      get: { summary: "List recent alerts fired for this org (newest first)", operationId: "getAlertHistory", tags: ["Alerts"], security: [{ bearerAuth: [] }],
+        parameters: [{ name: "limit", in: "query", schema: { type: "integer", default: 50, maximum: 200 } }],
+        responses: { "200": { description: "Recent alerts" } } },
+    },
     "/alerts/channels": {
       get: { summary: "List alert channels", operationId: "listAlertChannels", tags: ["Alerts"], security: [{ bearerAuth: [] }],
         responses: { "200": { description: "Configured alert channels" } } },
@@ -168,6 +173,15 @@ export const openApiSpec = {
           },
         } } } },
         responses: { "201": { description: "Rule created (pending approval or executing)" } } },
+    },
+    "/database/credentials": {
+      get: { summary: "List stored database credentials (metadata only)", operationId: "listDbCredentials", tags: ["Database"], security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Credential id, provider, key preview, created date" } } },
+      post: { summary: "Store database credentials (encrypted at rest)", operationId: "storeDbCredentials", tags: ["Database"], security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["provider"], properties: {
+          provider: { type: "string", enum: ["mongodb-atlas", "cloud-sql-postgres", "redis"] },
+        }, additionalProperties: true } } } },
+        responses: { "201": { description: "Returns credentialId" } } },
     },
     "/database/kill": {
       post: { summary: "Initiate database kill sequence", operationId: "initiateKill", tags: ["Database"], security: [{ bearerAuth: [] }],
