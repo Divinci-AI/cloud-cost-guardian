@@ -142,12 +142,15 @@ soft — if it's unavailable, agent-guard falls back to the proxy or "unknown".
 ```
 🟢 Claude Code plan limits  ·  observed just now
   [██░░░░░░░░░░░░░░░░░░]  5-hour limit 12% used, resets 9:19 AM
-  [███░░░░░░░░░░░░░░░░░]  weekly limit 17% used, resets Tue 7:59 PM
+  [███░░░░░░░░░░░░░░░░░]  weekly limit 17% used, resets Tue 7:59 PM, ~83% left over 5.0d (~17%/day vs ~14%/day budget)
   [░░░░░░░░░░░░░░░░░░░░]  weekly · Sonnet   1%
 ```
 
+The weekly line spells out the **daily budget** — your weekly cap ÷ 7 (≈ 14%/day) — and how much
+runway you actually have, so a number like 17% (or even 60%) reads as "days left", not alarm.
+
 **Always-on:** wire `agent-guard statusline` as your Claude Code **statusLine** to keep a live
-`🛡 🟢 5h 12% · wk 17%` in the status bar — it refreshes the numbers in the background
+`🛡 🟢 5h 12% · wk 17% (5.0d left)` in the status bar — it refreshes the numbers in the background
 (throttled, non-blocking) so the hook's in-session pacing warnings stay current too:
 
 ```jsonc
@@ -168,14 +171,18 @@ ANTHROPIC_BASE_URL=http://localhost:8787 claude
 
 Once those headers are seen, the session is in **subscription mode**: alert-only. agent-guard
 **never blocks** a flat-fee plan (you already paid; Anthropic's own limit is the real wall) —
-instead it *paces* you. For each window it computes burn-rate vs. a sustainable pace and
-projects whether you'll exhaust the window **before it resets**, then warns in-session and via
-your alert channels:
+instead it *paces* you. For each window it computes burn-rate vs. a sustainable pace (the **daily
+budget** = weekly cap ÷ 7 ≈ 14%/day) and projects whether you'll exhaust the window **before it
+resets**. Crucially the warning is **pace-aware**: 60% of the weekly cap with two days left is
+*under* the daily budget, so it stays quiet — it only warns when you're at or above the pace, or
+projected to lock out. (The *danger* level stays absolute: near-exhaustion means little headroom
+regardless of the day.) When it does fire, it says so in-session and via your alert channels:
 
 ```
 🟥 Claude Code plan limits  ·  observed just now
-  [████████████░░░░░░░░]  weekly limit 62% used, resets Sat 6:00 PM, burning 3.1× pace,
-                          → lockout in ~14h (5.1d before reset)
+  [████████████░░░░░░░░]  weekly limit 62% used, resets Sat 6:00 PM,
+                          ~38% left over 5.4d (~7%/day vs ~14%/day budget),
+                          burning 3.1× pace, → lockout in ~14h (5.1d before reset)
 ```
 
 `status` shows it; the hook injects it into the session even when only the hook is running
@@ -200,6 +207,11 @@ Tune the thresholds (0–1 utilization) if the proxy's pacing is too eager:
 | `--weekly-soft` / `--weekly-danger` | weekly warn / danger utilization | 0.6 / 0.85 |
 | `--5h-soft` / `--5h-danger` | 5-hour warn / danger utilization | 0.7 / 0.9 |
 | `--burn-ratio` | pace multiplier that triggers a warning | 1.5 |
+
+> The **soft** threshold is pace-gated: once a reset time is known, crossing it only warns when
+> you're at or ahead of the prorated daily budget (weekly ÷ 7), or projecting a lockout — so
+> being deep into the week's quota with little time left doesn't cry wolf. The **danger**
+> threshold is absolute.
 
 The first time the proxy sees the `unified-*` headers it writes the raw values once to
 `~/.kill-switch/agent-guard/events.jsonl` (`kind: "unified-headers-observed"`) — so you can

@@ -187,6 +187,51 @@ describe.skipIf(!haveBuild)("hook integration (compiled cli.js hook)", () => {
     expect(out.systemMessage).toMatch(/Kill Switch/);
   });
 
+  it("stays SILENT at 60% weekly with 2 days left — under the daily budget (don't worry too early)", () => {
+    // The reported case: 60% of the weekly quota but only 2 days to reset (5 days
+    // elapsed) is UNDER the prorated ~14%/day budget — runway to spare. The hook
+    // must not fire a premature pacing nudge. 5h is also low/under-pace.
+    const now = Date.now();
+    writeLimitsSnapshot({
+      fiveHour: { utilization: 0.1, resetAt: now + 3 * 3600_000 },
+      weekly: { utilization: 0.6, resetAt: now + 2 * 86_400_000 }, // 5d elapsed → under pace
+      status: "allowed",
+      observedAt: now,
+    });
+    const transcript = writeTranscript("claude-sonnet-4", 50_000, 0); // ~$0.15, under soft
+
+    const { stdout, status } = runHook(
+      { session_id: "s-underpace", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      {},
+    );
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(""); // under pace → no nudge
+  });
+
+  it("DOES nudge at the same 60% weekly when it's early-week and over pace (lockout risk)", () => {
+    // Same 60% utilization, but only 1 day elapsed (6 days left) → far over the
+    // ~14%/day pace and projected to lock out. The nudge fires and spells out the
+    // daily budget — the contrast that proves the warning is pace-aware, not absolute.
+    const now = Date.now();
+    writeLimitsSnapshot({
+      fiveHour: { utilization: 0.1, resetAt: now + 3 * 3600_000 },
+      weekly: { utilization: 0.6, resetAt: now + 6 * 86_400_000 }, // 1d elapsed → over pace
+      status: "warning",
+      observedAt: now,
+    });
+    const transcript = writeTranscript("claude-sonnet-4", 50_000, 0);
+
+    const { stdout, status } = runHook(
+      { session_id: "s-overpace", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      {},
+    );
+    expect(status).toBe(0);
+    const out = JSON.parse(stdout);
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/plan pacing/i);
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/weekly limit 60% used/);
+    expect(out.hookSpecificOutput.additionalContext).toMatch(/14%\/day budget/);
+  });
+
   it("fires a throttled background usage refresh when authorized (claims the stamp)", () => {
     // authorized (a foreground command already opted in) → the hook should claim
     // the refresh slot. NO_KEYCHAIN keeps the detached child inert (no real fetch).

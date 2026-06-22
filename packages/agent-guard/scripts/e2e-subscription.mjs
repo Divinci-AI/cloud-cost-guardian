@@ -40,7 +40,7 @@ try {
   process.exit(2);
 }
 const {
-  startProxy, buildStatusReport, formatLimitsLines, loadLimitsState,
+  startProxy, buildStatusReport, formatLimitsLines, formatStatusline, loadLimitsState,
   setBudget, emptyLedger, setSessionCost, saveLedger, refreshUsage,
 } = mod;
 
@@ -109,8 +109,17 @@ async function main() {
   const usageReport = buildStatusReport().limits;
   for (const line of formatLimitsLines(usageReport)) console.log(`  ${line}`);
   console.log("");
-  const usageWeekly = Math.round((usageReport.windows.find((w) => w.window === "weekly")?.utilization || 0) * 100);
+  const usageWeeklyWin = usageReport.windows.find((w) => w.window === "weekly");
+  const usageWeekly = Math.round((usageWeeklyWin?.utilization || 0) * 100);
   const usageOk = usageReport.source === "headers" && usageWeekly === 17;
+  // Pace-awareness: 17% used with ~4 days left is UNDER the ~14%/day budget, so it
+  // must read 🟢 (ok), and the statusline must carry the day-of-week context.
+  const usageStatusline = formatStatusline(usageReport);
+  console.log(`  statusline: ${usageStatusline}\n`);
+  const usagePaceOk =
+    usageWeeklyWin?.level === "ok" &&
+    usageStatusline.includes("🟢") &&
+    /wk 17% \(\d+(\.\d+)?d left\)/.test(usageStatusline);
   usageServer.close();
   delete process.env.AGENT_GUARD_USAGE_URL;
 
@@ -197,17 +206,18 @@ async function main() {
 
   console.log("  ── result ───────────────────────────────────────────────────");
   console.log(`  REAL limits via usage endpoint : ${usageOk ? "✓" : "✗"}  (weekly ${usageWeekly}%)`);
+  console.log(`  pace-aware 🟢 + days-left       : ${usagePaceOk ? "✓" : "✗"}  (under ~14%/day budget)`);
   console.log(`  subscription mode latched      : ${latched ? "✓" : "✗"}`);
   console.log(`  reached danger (lockout)       : ${sawDanger ? "✓" : "✗"}`);
   console.log(`  raw headers logged once        : ${loggedHeaders ? "✓" : "✗"}`);
   console.log(`  subscription session blocked   : ✗ (alert-only by design)`);
   console.log(`  billed agent STILL 402'd (F1)  : ${walled ? "✓" : "✗"}  (status ${billedRes.status})\n`);
 
-  if (usageOk && latched && sawDanger && loggedHeaders && walled) {
-    console.log("  ✅ e2e PASS — real limits from the usage endpoint, proxy pacing, and the dollar wall all hold.\n");
+  if (usageOk && usagePaceOk && latched && sawDanger && loggedHeaders && walled) {
+    console.log("  ✅ e2e PASS — real limits from the usage endpoint, pace-aware standing, proxy pacing, and the dollar wall all hold.\n");
     process.exit(0);
   }
-  console.error("  ❌ e2e FAIL — expected: usage endpoint + latch + danger + headers logged + billed agent walled.\n");
+  console.error("  ❌ e2e FAIL — expected: usage endpoint + pace-aware 🟢 + latch + danger + headers logged + billed agent walled.\n");
   process.exit(1);
 }
 

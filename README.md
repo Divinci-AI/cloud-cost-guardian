@@ -62,9 +62,11 @@ stop for Claude Code; the proxy is the dumb hard backstop for everything else
 **On a Claude Code Pro/Max subscription**, dollars are the wrong currency — you pay a
 flat fee, so the scarce resource is your plan's **rate-limit quota** (5-hour + weekly
 windows). Run Claude Code through the proxy and agent-guard reads Anthropic's own
-`anthropic-ratelimit-unified-*` headers, paces your burn rate, and warns *before* you
-lock out (`ks guard config --plan max5`). This mode is **alert-only** — it never blocks
-a plan you've already paid for.
+`anthropic-ratelimit-unified-*` headers, paces your burn rate against a **daily budget**
+(your weekly cap ÷ 7 ≈ 14%/day), and warns *before* you lock out (`ks guard config --plan
+max5`). It's day-aware — 60% of the weekly cap with two days left is under budget, so it
+stays quiet instead of crying wolf, and only speaks up when you're truly burning too fast.
+This mode is **alert-only** — it never blocks a plan you've already paid for.
 
 ## Supported Providers (15)
 

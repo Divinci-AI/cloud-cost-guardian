@@ -581,11 +581,11 @@ ks alerts test</code></pre>
         </div>
 
         <div class="callout">
-            <strong>Two currencies: dollars and plan limits.</strong> The caps above gate <strong>dollars</strong> — right for API-key (pay-as-you-go) usage. A <strong>Claude Code Pro/Max subscription</strong> is flat-fee, so the scarce resource isn't dollars but your plan's <strong>rate-limit quota</strong>. <code>ks guard usage</code> shows your <strong>real</strong> limits — the same numbers as Claude Code's <code>/usage</code> — pulled straight from Anthropic's usage endpoint: the 5-hour window, the weekly (all-models) window, and the per-model weekly (Sonnet/Opus). <code>ks guard status</code> auto-refreshes them, and the hook warns you in-session <em>before</em> you lock out. This is <strong>alert-only</strong> — it never blocks a plan you've already paid for. <em>(The token is read from your OS credential store and only ever sent to Anthropic; it's never logged or stored.)</em>
+            <strong>Two currencies: dollars and plan limits.</strong> The caps above gate <strong>dollars</strong> — right for API-key (pay-as-you-go) usage. A <strong>Claude Code Pro/Max subscription</strong> is flat-fee, so the scarce resource isn't dollars but your plan's <strong>rate-limit quota</strong>. <code>ks guard usage</code> shows your <strong>real</strong> limits — the same numbers as Claude Code's <code>/usage</code> — pulled straight from Anthropic's usage endpoint: the 5-hour window, the weekly (all-models) window, and the per-model weekly (Sonnet/Opus). <code>ks guard status</code> auto-refreshes them, and the hook warns you in-session <em>before</em> you lock out. It's <strong>pace-aware</strong>: it measures you against a daily budget (your weekly cap &divide; 7 &asymp; 14%/day), so 60% used with two days left stays quiet — it warns only when you're at or above that pace, or projected to lock out before the reset. This is <strong>alert-only</strong> — it never blocks a plan you've already paid for. <em>(The token is read from your OS credential store and only ever sent to Anthropic; it's never logged or stored.)</em>
         </div>
 
         <div class="callout">
-            <strong>Always-on status bar.</strong> Wire <code>agent-guard statusline</code> as your Claude Code <code>statusLine</code> to keep a live <code>🛡 🟢 5h 12% · wk 17%</code> in the bar — it refreshes in the background (throttled, non-blocking) so your in-session warnings stay current:
+            <strong>Always-on status bar.</strong> Wire <code>agent-guard statusline</code> as your Claude Code <code>statusLine</code> to keep a live <code>🛡 🟢 5h 12% · wk 17% (5.0d left)</code> in the bar — it refreshes in the background (throttled, non-blocking) so your in-session warnings stay current:
             <pre><code>{ "statusLine": { "type": "command", "command": "agent-guard statusline" } }</code></pre>
         </div>
 
@@ -598,7 +598,7 @@ ks alerts test</code></pre>
             <p>Fetch your <strong>real</strong> Claude Code plan limits from Anthropic's <code>/api/oauth/usage</code> endpoint &mdash; the 5-hour window, weekly (all-models), and per-model weekly (Sonnet/Opus), with reset times. No proxy and no workflow change. Reads your OAuth token from the macOS Keychain (<code>Claude Code-credentials</code>) or <code>~/.claude/.credentials.json</code>; the token is only sent to Anthropic and never logged or stored. The endpoint is undocumented, so it fails soft (falls back to the proxy / &ldquo;unknown&rdquo;).</p>
             <pre><code>🟢 Claude Code plan limits  ·  observed just now
   [██░░░░░░░░░░░░░░░░░░]  5-hour limit 12% used, resets 9:19 AM
-  [███░░░░░░░░░░░░░░░░░]  weekly limit 17% used, resets Tue 7:59 PM
+  [███░░░░░░░░░░░░░░░░░]  weekly limit 17% used, resets Tue 7:59 PM, ~83% left over 5.0d (~17%/day vs ~14%/day budget)
   [░░░░░░░░░░░░░░░░░░░░]  weekly · Sonnet   1%</code></pre>
         </div>
         <div class="cmd-group">

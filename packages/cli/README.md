@@ -161,10 +161,13 @@ resource is your plan's **rate-limit quota** in two rolling windows (5-hour + we
 
 Run Claude Code **through the proxy** and agent-guard reads Anthropic's own
 `anthropic-ratelimit-unified-*` headers — exact 5h/weekly utilization + reset times — then
-paces your burn rate and warns *before* you lock out. This is **alert-only**: it never blocks a
-plan you've already paid for. The dollar 402 is suppressed only for the anthropic proxy when
-you've pinned a subscription `--plan` or seen fresh headers — a billed OpenAI/other agent
-sharing the proxy keeps its hard wall.
+paces your burn rate and warns *before* you lock out. The pacing is **day-aware**: it measures
+you against a daily budget (your weekly cap ÷ 7 ≈ 14%/day), so 60% of the weekly cap with two
+days left stays quiet — it warns only when you're at/above that pace or projected to lock out
+(near-exhaustion always warns). This is **alert-only**: it never blocks a plan you've already
+paid for. The dollar 402 is suppressed only for the anthropic proxy when you've pinned a
+subscription `--plan` or seen fresh headers — a billed OpenAI/other agent sharing the proxy
+keeps its hard wall.
 
 ```sh
 ks guard usage                                  # easiest: REAL 5h + weekly + per-model limits (from /api/oauth/usage)
@@ -172,7 +175,7 @@ ks guard proxy                                  # alt: ANTHROPIC_BASE_URL=http:/
 ks guard config --plan max5                     # auto (detects tier from ~/.claude.json) | pro | max5 | max20
 ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5
 ks guard reset --limits                         # clear detection latch + snapshot (re-arm the dollar wall)
-ks guard status                                 # shows "weekly 62% used, resets Sat, burning 3.1× → lockout ~Thu"
+ks guard status                                 # "weekly 62% used … ~38% left over 5.4d (~7%/day vs ~14%/day budget), burning 3.1× → lockout ~Thu"
 ```
 
 Full docs: [kill-switch.net/docs/cli.html#guard](https://kill-switch.net/docs/cli.html#guard)
