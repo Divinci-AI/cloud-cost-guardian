@@ -21,6 +21,7 @@
  */
 
 import { createHash } from "crypto";
+import { KillSequenceModel } from "../models/kill-sequence/schema.js";
 
 export type DatabaseProvider = "mongodb-atlas" | "cloud-sql-postgres" | "redis";
 
@@ -93,57 +94,136 @@ interface KillSequenceStep {
 
 // ─── Kill Sequence Orchestrator ─────────────────────────────────────────────
 
-const activeSequences = new Map<string, KillSequenceState>();
+// Sequences are persisted in Mongo (GuardianKillSequence collection) so they
+// survive restarts, are shared across instances, and a step can only be
+// claimed by one /advance call at a time.
+
+const TERMINAL_STATUSES = ["completed", "failed", "aborted"];
+
+/** An /advance call that has held the in-flight lock this long is presumed
+ *  dead (instance crashed mid-step) and the lock can be reclaimed. */
+const STALE_STEP_MS = 5 * 60 * 1000;
+
+/** Thrown when another /advance call currently holds the step lock. */
+export class AdvanceInProgressError extends Error {
+  code = "ADVANCE_IN_PROGRESS" as const;
+  constructor(sequenceId: string) {
+    super(`Another advance is already executing a step for ${sequenceId}. Retry shortly.`);
+  }
+}
+
+function docToState(doc: any): KillSequenceState {
+  return {
+    id: doc.id,
+    startedAt: doc.startedAt,
+    provider: doc.provider,
+    target: doc.target,
+    trigger: doc.trigger,
+    steps: (doc.steps || []).map((s: any) => ({
+      action: s.action,
+      status: s.status,
+      result: s.result,
+      timestamp: s.timestamp,
+    })),
+    currentStep: doc.currentStep,
+    status: doc.status,
+    snapshotId: doc.snapshotId ?? undefined,
+    snapshotVerified: doc.snapshotVerified,
+  };
+}
+
+function terminalFields(status: string): Record<string, unknown> {
+  return TERMINAL_STATUSES.includes(status) ? { finishedAt: new Date() } : {};
+}
 
 /**
  * Initiate a database kill sequence.
  * Returns immediately — the sequence runs step by step.
  * Each destructive step requires the previous safety step to complete.
  */
-export function initiateKillSequence(
+export async function initiateKillSequence(
   credential: DatabaseCredential,
   trigger: string,
-  actions: DatabaseKillAction[] = ["snapshot", "verify-snapshot", "isolate", "nuke"]
-): KillSequenceState {
+  actions: DatabaseKillAction[] = ["snapshot", "verify-snapshot", "isolate", "nuke"],
+  guardianAccountId: string = "",
+): Promise<KillSequenceState> {
   const id = `dbkill-${crypto.randomUUID()}`;
   const target = credential.clusterName || credential.instanceName || credential.redisHost || "unknown";
 
-  const sequence: KillSequenceState = {
+  const doc = await KillSequenceModel.create({
     id,
+    guardianAccountId,
     startedAt: Date.now(),
     provider: credential.provider,
     target,
     trigger,
-    steps: actions.map(action => ({
-      action,
-      status: "pending" as const,
-    })),
+    steps: actions.map(action => ({ action, status: "pending" as const })),
     currentStep: 0,
     status: "running",
-    snapshotId: undefined,
     snapshotVerified: false,
-  };
+    executing: false,
+  });
 
-  activeSequences.set(id, sequence);
-  return sequence;
+  return docToState(doc);
 }
 
 /**
  * Execute the next step in a kill sequence.
- * Returns the updated state. Call repeatedly to advance.
+ * Returns the updated state, or null if no sequence matches.
+ * The step is claimed atomically — concurrent calls (second tab, second
+ * Cloud Run instance) get AdvanceInProgressError instead of double-executing.
  */
 export async function advanceKillSequence(
   sequenceId: string,
   credential: DatabaseCredential,
-  humanApproval?: boolean
-): Promise<KillSequenceState> {
-  const seq = activeSequences.get(sequenceId);
-  if (!seq) throw new Error(`Kill sequence ${sequenceId} not found`);
-  if (seq.status === "completed" || seq.status === "aborted" || seq.status === "failed") return seq;
+  humanApproval?: boolean,
+  guardianAccountId?: string,
+): Promise<KillSequenceState | null> {
+  const scope: Record<string, unknown> = { id: sequenceId };
+  if (guardianAccountId) scope.guardianAccountId = guardianAccountId;
+
+  const existing = await KillSequenceModel.findOne(scope).lean();
+  if (!existing) return null;
+  if (TERMINAL_STATUSES.includes(existing.status)) return docToState(existing);
+
+  // Atomically claim the step. Succeeds only if no other call holds the lock
+  // (or the holder went stale — crashed instance mid-step).
+  const now = Date.now();
+  const claimed = await KillSequenceModel.findOneAndUpdate(
+    {
+      ...scope,
+      status: { $in: ["running", "awaiting-confirmation"] },
+      currentStep: existing.currentStep,
+      $or: [
+        { executing: { $ne: true } },
+        { stepStartedAt: { $lt: now - STALE_STEP_MS } },
+      ],
+    },
+    { $set: { executing: true, stepStartedAt: now } },
+    { new: true },
+  ).lean();
+  if (!claimed) throw new AdvanceInProgressError(sequenceId);
+
+  const seq = docToState(claimed);
+  const release = async (extra: Record<string, unknown> = {}) => {
+    await KillSequenceModel.updateOne({ id: sequenceId }, {
+      $set: {
+        steps: seq.steps,
+        currentStep: seq.currentStep,
+        status: seq.status,
+        snapshotId: seq.snapshotId,
+        snapshotVerified: seq.snapshotVerified,
+        executing: false,
+        ...terminalFields(seq.status),
+        ...extra,
+      },
+    });
+  };
 
   const step = seq.steps[seq.currentStep];
   if (!step) {
     seq.status = "completed";
+    await release();
     return seq;
   }
 
@@ -152,6 +232,7 @@ export async function advanceKillSequence(
     step.status = "failed";
     step.result = "SAFETY BLOCK: Cannot nuke without verified snapshot. Run snapshot + verify first.";
     seq.status = "failed";
+    await release();
     return seq;
   }
 
@@ -159,6 +240,7 @@ export async function advanceKillSequence(
   if (step.action === "nuke" && !humanApproval) {
     seq.status = "awaiting-confirmation";
     step.result = "Awaiting human confirmation to nuke database. Snapshot verified: " + seq.snapshotId;
+    await release();
     return seq;
   }
 
@@ -182,6 +264,7 @@ export async function advanceKillSequence(
 
     if (!result.success) {
       seq.status = "failed";
+      await release();
       return seq;
     }
 
@@ -195,25 +278,50 @@ export async function advanceKillSequence(
     seq.status = "failed";
   }
 
+  await release();
   return seq;
 }
 
 /**
  * Abort a kill sequence (stops at current step, no further actions)
  */
-export function abortKillSequence(sequenceId: string): KillSequenceState | null {
-  const seq = activeSequences.get(sequenceId);
-  if (!seq) return null;
-  seq.status = "aborted";
-  return seq;
+export async function abortKillSequence(
+  sequenceId: string,
+  guardianAccountId?: string,
+): Promise<KillSequenceState | null> {
+  const scope: Record<string, unknown> = { id: sequenceId };
+  if (guardianAccountId) scope.guardianAccountId = guardianAccountId;
+  const doc = await KillSequenceModel.findOneAndUpdate(
+    scope,
+    { $set: { status: "aborted", executing: false, finishedAt: new Date() } },
+    { new: true },
+  ).lean();
+  return doc ? docToState(doc) : null;
 }
 
-export function getKillSequence(sequenceId: string): KillSequenceState | null {
-  return activeSequences.get(sequenceId) || null;
+export async function getKillSequence(
+  sequenceId: string,
+  guardianAccountId?: string,
+): Promise<KillSequenceState | null> {
+  const scope: Record<string, unknown> = { id: sequenceId };
+  if (guardianAccountId) scope.guardianAccountId = guardianAccountId;
+  const doc = await KillSequenceModel.findOne(scope).lean();
+  return doc ? docToState(doc) : null;
 }
 
-export function listActiveSequences(): KillSequenceState[] {
-  return Array.from(activeSequences.values()).filter(s => s.status === "running" || s.status === "awaiting-confirmation");
+/**
+ * List an org's sequences: everything in-flight, plus anything that finished
+ * in the last 24h so operators can see the outcome.
+ */
+export async function listActiveSequences(guardianAccountId: string): Promise<KillSequenceState[]> {
+  const docs = await KillSequenceModel.find({
+    guardianAccountId,
+    $or: [
+      { status: { $in: ["running", "awaiting-confirmation"] } },
+      { finishedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    ],
+  }).sort({ startedAt: -1 }).limit(50).lean();
+  return docs.map(docToState);
 }
 
 // ─── Step Execution ─────────────────────────────────────────────────────────

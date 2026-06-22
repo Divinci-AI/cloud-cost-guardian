@@ -11,7 +11,18 @@ if (!CLERK_PUBLISHABLE_KEY) {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+    <ClerkProvider
+      publishableKey={CLERK_PUBLISHABLE_KEY}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      afterSignOutUrl="/sign-in"
+      appearance={{
+        layout: {
+          termsPageUrl: "https://kill-switch.net/terms.html",
+          privacyPageUrl: "https://kill-switch.net/privacy.html",
+        },
+      }}
+    >
       <App />
     </ClerkProvider>
   </React.StrictMode>

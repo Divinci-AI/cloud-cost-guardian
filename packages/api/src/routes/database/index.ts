@@ -17,6 +17,7 @@ import {
   abortKillSequence,
   getKillSequence,
   listActiveSequences,
+  AdvanceInProgressError,
   type DatabaseCredential,
   type DatabaseKillAction,
 } from "../../services/database-kill-switch.js";
@@ -24,9 +25,39 @@ import {
   storeGenericCredential,
   getGenericCredential,
   deleteCredential,
+  EncryptedCredentialModel,
 } from "../../models/encrypted-credential/schema.js";
+import { CloudAccountModel } from "../../models/cloud-account/schema.js";
 
 export const databaseRouter = Router();
+
+const DB_PROVIDERS = ["mongodb-atlas", "cloud-sql-postgres", "redis"];
+
+/**
+ * GET /database/credentials — List stored database credentials (metadata only,
+ * never decrypted). Excludes credentials linked to cloud accounts so the
+ * monitoring creds for provider "redis" don't show up as kill targets.
+ */
+databaseRouter.get("/credentials", requirePermission("kill_switch:read"), async (req: any, res, next) => {
+  try {
+    const guardianAccountId = req.guardianAccountId;
+    const [creds, linked] = await Promise.all([
+      EncryptedCredentialModel.find({ guardianAccountId, provider: { $in: DB_PROVIDERS } }).lean(),
+      CloudAccountModel.find({ guardianAccountId }).select("credentialId").lean(),
+    ]);
+    const linkedIds = new Set(linked.map((a: any) => String(a.credentialId)));
+    res.json({
+      credentials: creds
+        .filter((c: any) => !linkedIds.has(String(c._id)))
+        .map((c: any) => ({
+          id: String(c._id),
+          provider: c.provider,
+          keyPreview: c.keyPreview,
+          createdAt: c.createdAt,
+        })),
+    });
+  } catch (e) { next(e); }
+});
 
 /**
  * POST /database/credentials — Store database credentials encrypted
@@ -42,9 +73,8 @@ databaseRouter.post("/credentials", requirePermission("kill_switch:trigger"), as
       return res.status(400).json({ error: "Missing provider" });
     }
 
-    const validProviders = ["mongodb-atlas", "cloud-sql-postgres", "redis"];
-    if (!validProviders.includes(provider)) {
-      return res.status(400).json({ error: `Invalid provider. Must be one of: ${validProviders.join(", ")}` });
+    if (!DB_PROVIDERS.includes(provider)) {
+      return res.status(400).json({ error: `Invalid provider. Must be one of: ${DB_PROVIDERS.join(", ")}` });
     }
 
     // Determine a preview field based on provider
@@ -103,8 +133,7 @@ databaseRouter.post("/kill", requirePermission("kill_switch:trigger"), async (re
     if (!decrypted) return res.status(404).json({ error: "Credential not found" });
     credential = decrypted as DatabaseCredential;
 
-    const sequence = initiateKillSequence(credential, trigger, actions);
-    (sequence as any).guardianAccountId = guardianAccountId;
+    const sequence = await initiateKillSequence(credential, trigger, actions, guardianAccountId);
 
     logActivity({
       orgId: guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
@@ -128,13 +157,6 @@ databaseRouter.post("/kill", requirePermission("kill_switch:trigger"), async (re
 databaseRouter.post("/kill/:id/advance", requirePermission("kill_switch:trigger"), async (req: any, res, next) => {
   try {
     const guardianAccountId = req.guardianAccountId;
-    const sequence = getKillSequence(req.params.id);
-
-    if (!sequence) return res.status(404).json({ error: "Kill sequence not found" });
-    if ((sequence as any).guardianAccountId && (sequence as any).guardianAccountId !== guardianAccountId) {
-      return res.status(403).json({ error: "Not authorized to advance this sequence" });
-    }
-
     const { credentialId, humanApproval } = req.body;
 
     if (!credentialId) {
@@ -145,7 +167,16 @@ databaseRouter.post("/kill/:id/advance", requirePermission("kill_switch:trigger"
     if (!decrypted) return res.status(404).json({ error: "Credential not found" });
     const credential = decrypted as DatabaseCredential;
 
-    const updated = await advanceKillSequence(req.params.id, credential, humanApproval);
+    let updated;
+    try {
+      updated = await advanceKillSequence(req.params.id, credential, humanApproval, guardianAccountId);
+    } catch (e: any) {
+      if (e instanceof AdvanceInProgressError) {
+        return res.status(409).json({ error: e.message });
+      }
+      throw e;
+    }
+    if (!updated) return res.status(404).json({ error: "Kill sequence not found" });
 
     logActivity({
       orgId: guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
@@ -171,47 +202,40 @@ databaseRouter.post("/kill/:id/advance", requirePermission("kill_switch:trigger"
 /**
  * POST /database/kill/:id/abort — Abort a kill sequence
  */
-databaseRouter.post("/kill/:id/abort", requirePermission("kill_switch:trigger"), (req: any, res) => {
-  const guardianAccountId = req.guardianAccountId;
-  const sequence = getKillSequence(req.params.id);
+databaseRouter.post("/kill/:id/abort", requirePermission("kill_switch:trigger"), async (req: any, res, next) => {
+  try {
+    const guardianAccountId = req.guardianAccountId;
+    const aborted = await abortKillSequence(req.params.id, guardianAccountId);
 
-  if (!sequence) return res.status(404).json({ error: "Kill sequence not found" });
-  if ((sequence as any).guardianAccountId && (sequence as any).guardianAccountId !== guardianAccountId) {
-    return res.status(403).json({ error: "Not authorized to abort this sequence" });
-  }
+    if (!aborted) return res.status(404).json({ error: "Kill sequence not found" });
 
-  const aborted = abortKillSequence(req.params.id);
+    logActivity({
+      orgId: guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "kill_switch.abort", resourceType: "database_kill", resourceId: req.params.id,
+      ipAddress: req.ip,
+    });
 
-  logActivity({
-    orgId: guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
-    action: "kill_switch.abort", resourceType: "database_kill", resourceId: req.params.id,
-    ipAddress: req.ip,
-  });
-
-  res.json({ sequenceId: aborted!.id, status: aborted!.status, message: "Kill sequence aborted" });
+    res.json({ sequenceId: aborted.id, status: aborted.status, message: "Kill sequence aborted" });
+  } catch (e) { next(e); }
 });
 
 /**
  * GET /database/kill/:id — Get status of a kill sequence (ownership verified)
  */
-databaseRouter.get("/kill/:id", requirePermission("kill_switch:read"), (req: any, res) => {
-  const guardianAccountId = req.guardianAccountId;
-  const sequence = getKillSequence(req.params.id);
-
-  if (!sequence) return res.status(404).json({ error: "Kill sequence not found" });
-  if ((sequence as any).guardianAccountId && (sequence as any).guardianAccountId !== guardianAccountId) {
-    return res.status(403).json({ error: "Not authorized to view this sequence" });
-  }
-
-  res.json(sequence);
+databaseRouter.get("/kill/:id", requirePermission("kill_switch:read"), async (req: any, res, next) => {
+  try {
+    const sequence = await getKillSequence(req.params.id, req.guardianAccountId);
+    if (!sequence) return res.status(404).json({ error: "Kill sequence not found" });
+    res.json(sequence);
+  } catch (e) { next(e); }
 });
 
 /**
  * GET /database/kill — List active kill sequences (filtered to current user)
  */
-databaseRouter.get("/kill", requirePermission("kill_switch:read"), (req: any, res) => {
-  const guardianAccountId = req.guardianAccountId;
-  const all = listActiveSequences();
-  const mine = all.filter(s => (s as any).guardianAccountId === guardianAccountId);
-  res.json({ sequences: mine });
+databaseRouter.get("/kill", requirePermission("kill_switch:read"), async (req: any, res, next) => {
+  try {
+    const sequences = await listActiveSequences(req.guardianAccountId);
+    res.json({ sequences });
+  } catch (e) { next(e); }
 });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
+import { useCan } from "../../hooks/useCan";
 
 interface RuleCondition {
   metric: string;
@@ -103,6 +104,7 @@ function triggerColor(trigger: string): string {
 
 export function RulesPage() {
   const { orgVersion } = useOrg();
+  const can = useCan();
   const [rules, setRules] = useState<KillSwitchRule[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +117,17 @@ export function RulesPage() {
   const [editForensics, setEditForensics] = useState(true);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [preflighting, setPreflighting] = useState(false);
+  const [preflight, setPreflight] = useState<any>(null);
+  const [showEmergency, setShowEmergency] = useState(false);
+  const [threatDescription, setThreatDescription] = useState("");
+  const [threatSeverity, setThreatSeverity] = useState("critical");
+  const [emergencyActions, setEmergencyActions] = useState<{ type: string; target: string }[]>([
+    { type: "disconnect", target: "*" },
+  ]);
+  const [autoExecute, setAutoExecute] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+  const [triggerResult, setTriggerResult] = useState<string>("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -159,6 +172,21 @@ export function RulesPage() {
     setEditName(rule.name);
     setEditCooldown(rule.cooldownMinutes ?? 60);
     setEditForensics(rule.forensicsEnabled !== false);
+    setPreflight(null);
+  };
+
+  const handlePreflight = async () => {
+    if (!editing) return;
+    setPreflighting(true);
+    setPreflight(null);
+    try {
+      const res = await api.preflightRule({ ruleId: editing.id });
+      setPreflight(res);
+    } catch (e: any) {
+      setPreflight({ error: e.message });
+    } finally {
+      setPreflighting(false);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -178,6 +206,33 @@ export function RulesPage() {
       setError(e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEmergencyTrigger = async () => {
+    const actions = emergencyActions.filter(a => a.type);
+    if (!threatDescription.trim() || actions.length === 0) return;
+    if (autoExecute && !window.confirm(
+      "Execute immediately? The kill actions will run without further approval against all matching, non-protected services."
+    )) return;
+    setTriggering(true);
+    setError("");
+    setTriggerResult("");
+    try {
+      const res = await api.agentTrigger({
+        agentId: "web-dashboard",
+        threatDescription: threatDescription.trim(),
+        severity: threatSeverity,
+        recommendedActions: actions.map(a => ({ type: a.type, target: a.target.trim() || "*" })),
+        autoExecute,
+      });
+      setTriggerResult(res.message || (autoExecute ? "Kill switch executing." : "Rule created, awaiting approval."));
+      setThreatDescription("");
+      load(); // the created rule appears in the list
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setTriggering(false);
     }
   };
 
@@ -207,13 +262,28 @@ export function RulesPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: 700, color: "#fff", margin: "0 0 8px" }}>
-          Kill Switch Rules
-        </h1>
-        <p style={{ color: "#8b8fa3", fontSize: "14px", margin: 0 }}>
-          Programmable shields that auto-fire when usage or security thresholds are breached.
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "24px", flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: 700, color: "#fff", margin: "0 0 8px" }}>
+            Kill Switch Rules
+          </h1>
+          <p style={{ color: "#8b8fa3", fontSize: "14px", margin: 0 }}>
+            Programmable shields that auto-fire when usage or security thresholds are breached.
+          </p>
+        </div>
+        {can("kill_switch:trigger") && (
+          <button
+            type="button"
+            onClick={() => { setShowEmergency(true); setTriggerResult(""); }}
+            style={{
+              background: "rgba(255,107,107,0.12)", color: "#ff6b6b",
+              border: "1px solid rgba(255,107,107,0.35)", padding: "9px 20px",
+              borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: 600, flexShrink: 0,
+            }}
+          >
+            ⚠ Emergency trigger
+          </button>
+        )}
       </div>
 
       {error && (
@@ -223,6 +293,7 @@ export function RulesPage() {
       )}
 
       <div style={{ marginBottom: "32px" }}>
+        {can("rules:write") && (
         <button
           type="button"
           onClick={() => setShowPresets(!showPresets)}
@@ -230,6 +301,7 @@ export function RulesPage() {
         >
           {showPresets ? "Hide preset shields" : "+ Add preset shield"}
         </button>
+        )}
         {showPresets && (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {presets.map(p => (
@@ -306,29 +378,143 @@ export function RulesPage() {
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", color: "#c4c5ca" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: can("rules:write") ? "pointer" : "default", fontSize: "13px", color: "#c4c5ca" }}>
                     <input
                       type="checkbox"
                       checked={rule.enabled}
-                      disabled={togglingId === rule.id}
+                      disabled={togglingId === rule.id || !can("rules:write")}
                       onChange={() => handleToggle(rule.id)}
                     />
                     {rule.enabled ? "On" : "Off"}
                   </label>
-                  <button type="button" onClick={() => openEdit(rule)} style={btnSecondary}>
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(rule)}
-                    style={{ ...btnSecondary, color: "#ff6b6b", borderColor: "rgba(255,107,107,0.3)" }}
-                  >
-                    Delete
-                  </button>
+                  {can("rules:write") && (
+                    <button type="button" onClick={() => openEdit(rule)} style={btnSecondary}>
+                      Edit
+                    </button>
+                  )}
+                  {can("rules:delete") && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(rule)}
+                      style={{ ...btnSecondary, color: "#ff6b6b", borderColor: "rgba(255,107,107,0.3)" }}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {showEmergency && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "24px",
+          }}
+          onClick={() => !triggering && setShowEmergency(false)}
+        >
+          <div
+            style={{ ...cardStyle, maxWidth: "540px", width: "100%", background: "#141b33", border: "1px solid rgba(255,107,107,0.3)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ fontFamily: "Outfit, sans-serif", color: "#ff6b6b", margin: "0 0 8px" }}>⚠ Emergency kill trigger</h3>
+            <p style={{ fontSize: "13px", color: "#9ca3af", margin: "0 0 20px", lineHeight: 1.5 }}>
+              Report an active threat and fire kill actions across this org's accounts.
+              By default this creates a rule awaiting approval; check "execute immediately" to fire now.
+            </p>
+            <div style={{ marginBottom: "16px" }}>
+              <label style={labelStyle}>What's happening? (required)</label>
+              <textarea
+                style={{ ...inputStyle, minHeight: "70px", resize: "vertical" as const, fontFamily: "inherit" }}
+                value={threatDescription}
+                onChange={e => setThreatDescription(e.target.value)}
+                placeholder="e.g. Leaked API key being used to spin up crypto-mining workers"
+              />
+            </div>
+            <div style={{ marginBottom: "16px", maxWidth: "200px" }}>
+              <label style={labelStyle}>Severity</label>
+              <select style={inputStyle} value={threatSeverity} onChange={e => setThreatSeverity(e.target.value)}>
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+            <label style={labelStyle}>Kill actions</label>
+            {emergencyActions.map((a, i) => (
+              <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
+                <select
+                  style={{ ...inputStyle, width: "auto", flex: 1 }}
+                  value={a.type}
+                  onChange={e => setEmergencyActions(prev => prev.map((x, j) => j === i ? { ...x, type: e.target.value } : x))}
+                >
+                  <option value="disconnect">Disconnect (remove routes)</option>
+                  <option value="scale-down">Scale down to 0</option>
+                  <option value="block-traffic">Block traffic (WAF)</option>
+                  <option value="isolate">Isolate (network)</option>
+                  <option value="pause-zone">Pause zone (CF)</option>
+                  <option value="stop-instances">Stop instances</option>
+                  <option value="rotate-creds">Rotate credentials</option>
+                  <option value="snapshot">Snapshot only (forensics)</option>
+                </select>
+                <input
+                  style={{ ...inputStyle, width: "auto", flex: 1 }}
+                  value={a.target}
+                  placeholder="target service or * for all"
+                  onChange={e => setEmergencyActions(prev => prev.map((x, j) => j === i ? { ...x, target: e.target.value } : x))}
+                />
+                {emergencyActions.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setEmergencyActions(prev => prev.filter((_, j) => j !== i))}
+                    style={{ ...btnSecondary, padding: "6px 10px" }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setEmergencyActions(prev => [...prev, { type: "disconnect", target: "*" }])}
+              style={{ ...btnSecondary, marginBottom: "16px" }}
+            >
+              + Add action
+            </button>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px", fontSize: "14px", color: "#ff9d42", cursor: "pointer" }}>
+              <input type="checkbox" checked={autoExecute} onChange={e => setAutoExecute(e.target.checked)} />
+              Execute immediately (skip human approval)
+            </label>
+            {triggerResult && (
+              <p style={{ fontSize: "13px", color: "#4ade80", marginBottom: "16px" }}>{triggerResult}</p>
+            )}
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setShowEmergency(false)} disabled={triggering} style={btnSecondary}>
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleEmergencyTrigger}
+                disabled={triggering || !threatDescription.trim()}
+                style={{
+                  background: "rgba(255,107,107,0.15)", color: "#ff6b6b",
+                  border: "1px solid rgba(255,107,107,0.4)", padding: "8px 18px",
+                  borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 600,
+                  opacity: !threatDescription.trim() ? 0.5 : 1,
+                }}
+              >
+                {triggering ? "Triggering..." : autoExecute ? "Fire kill switch" : "Create for approval"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -374,13 +560,68 @@ export function RulesPage() {
             <p style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "20px" }}>
               Conditions and actions are fixed for this rule. Use the API or CLI for advanced edits.
             </p>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <button type="button" onClick={() => setEditing(null)} disabled={saving} style={btnSecondary}>
-                Cancel
+
+            {preflight && (
+              <div style={{ marginBottom: "20px", padding: "14px 16px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", maxHeight: "220px", overflowY: "auto" }}>
+                {preflight.error ? (
+                  <p style={{ color: "#ff6b6b", fontSize: "13px", margin: 0 }}>Preview failed: {preflight.error}</p>
+                ) : (
+                  <>
+                    <p style={{ color: "#fff", fontSize: "13px", fontWeight: 600, margin: "0 0 8px" }}>
+                      If this rule fired right now:
+                    </p>
+                    <p style={{ color: "#c4c5ca", fontSize: "13px", margin: "0 0 8px", lineHeight: 1.6 }}>
+                      {preflight.summary.accountsWouldFire} of {preflight.summary.accountsConsidered} account(s) would be
+                      acted on ({preflight.summary.accountsTriggered} currently match the conditions)
+                      {preflight.summary.totalEstimatedDailySavingsUSD > 0 &&
+                        ` — est. $${preflight.summary.totalEstimatedDailySavingsUSD}/day stopped`}.
+                    </p>
+                    {preflight.rule.cooldownActive && (
+                      <p style={{ color: "#ffcc00", fontSize: "12px", margin: "0 0 8px" }}>
+                        ⏳ Cooldown active — a real trigger would be suppressed until {new Date(preflight.rule.cooldownExpiresAt).toLocaleString()}.
+                      </p>
+                    )}
+                    {preflight.summary.protectedCollisions > 0 && (
+                      <p style={{ color: "#ffcc00", fontSize: "12px", margin: "0 0 8px" }}>
+                        ⚠ {preflight.summary.protectedCollisions} action(s) collide with protected services and would be skipped.
+                      </p>
+                    )}
+                    {preflight.summary.degradedProviders > 0 && (
+                      <p style={{ color: "#ffa07a", fontSize: "12px", margin: "0 0 8px" }}>
+                        ⚠ {preflight.summary.degradedProviders} provider(s) reported degraded health — results may be incomplete.
+                      </p>
+                    )}
+                    <ul style={{ margin: 0, paddingLeft: "18px" }}>
+                      {(preflight.perAccount || []).map((a: any) => (
+                        <li key={a.cloudAccountId} style={{ color: "#9ca3af", fontSize: "12px", lineHeight: 1.7 }}>
+                          <span style={{ color: "#c4c5ca" }}>{a.accountName}</span> ({a.provider}):{" "}
+                          {a.error
+                            ? <span style={{ color: "#ff6b6b" }}>error — {a.error}</span>
+                            : a.wouldFire
+                              ? <span style={{ color: "#ff6b6b" }}>would fire</span>
+                              : a.triggered
+                                ? <span style={{ color: "#ffcc00" }}>conditions met (suppressed)</span>
+                                : "no action"}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "12px", justifyContent: "space-between" }}>
+              <button type="button" onClick={handlePreflight} disabled={preflighting || saving} style={btnSecondary}>
+                {preflighting ? "Simulating..." : "Preview impact"}
               </button>
-              <button type="button" onClick={handleSaveEdit} disabled={saving} style={btnPrimary}>
-                {saving ? "Saving..." : "Save"}
-              </button>
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button type="button" onClick={() => setEditing(null)} disabled={saving} style={btnSecondary}>
+                  Cancel
+                </button>
+                <button type="button" onClick={handleSaveEdit} disabled={saving} style={btnPrimary}>
+                  {saving ? "Saving..." : "Save"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

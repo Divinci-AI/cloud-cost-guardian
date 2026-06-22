@@ -235,6 +235,13 @@ export function BillingPage() {
           );
         })}
       </div>
+
+      <p style={{ textAlign: "center", marginTop: "28px", color: "#6b7280", fontSize: "13px", lineHeight: 1.6 }}>
+        By subscribing, you agree to our{" "}
+        <a href="https://kill-switch.net/terms.html" style={{ color: "#8b8fa3" }}>Terms of Service</a>
+        {" "}and{" "}
+        <a href="https://kill-switch.net/privacy.html" style={{ color: "#8b8fa3" }}>Privacy Policy</a>.
+      </p>
     </div>
   );
 }

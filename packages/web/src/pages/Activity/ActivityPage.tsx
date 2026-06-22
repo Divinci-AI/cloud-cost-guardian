@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
+import { useCan } from "../../hooks/useCan";
 
 const ACTION_LABELS: Record<string, string> = {
   "cloud_account.create": "Connected cloud account",
@@ -42,6 +43,7 @@ const ACTION_FILTER_OPTIONS = [
 
 export function ActivityPage() {
   const { activeOrg, orgVersion } = useOrg();
+  const can = useCan();
   const [entries, setEntries] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -51,9 +53,11 @@ export function ActivityPage() {
   const limit = 25;
 
   const isTierGated = !activeOrg || (activeOrg.tier !== "team" && activeOrg.tier !== "enterprise");
+  // Server restricts /activity to owner/admin (activity:read)
+  const isRoleGated = !can("activity:read");
 
   useEffect(() => {
-    if (isTierGated || !activeOrg) {
+    if (isTierGated || isRoleGated || !activeOrg) {
       setLoading(false);
       return;
     }
@@ -70,7 +74,20 @@ export function ActivityPage() {
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, [page, actionFilter, activeOrg, isTierGated, orgVersion]);
+  }, [page, actionFilter, activeOrg, isTierGated, isRoleGated, orgVersion]);
+
+  if (isRoleGated && !isTierGated) {
+    return (
+      <div>
+        <h1 style={{ fontSize: "24px", fontWeight: 600, color: "#fff", marginBottom: "16px" }}>Activity Log</h1>
+        <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
+          <p style={{ fontSize: "16px", color: "#c4c5ca", margin: 0 }}>
+            The activity log is only visible to organization owners and admins.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isTierGated) {
     return (

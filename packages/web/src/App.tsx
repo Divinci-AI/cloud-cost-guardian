@@ -30,6 +30,7 @@ import { AcceptInvitePage } from "./pages/Team/AcceptInvitePage";
 import { ActivityPage } from "./pages/Activity/ActivityPage";
 import { AgentGuardPage } from "./pages/AgentGuard/AgentGuardPage";
 import { RulesPage } from "./pages/Rules/RulesPage";
+import { DatabaseKillPage } from "./pages/Database/DatabaseKillPage";
 import { CliAuthPage } from "./pages/CliAuth/CliAuthPage";
 import { SiteFooter } from "./components/SiteFooter";
 
@@ -101,6 +102,7 @@ function AuthenticatedApp() {
             <Link to="/" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Dashboard</Link>
             <Link to="/accounts" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Accounts</Link>
             <Link to="/rules" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Rules</Link>
+            <Link to="/database" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Databases</Link>
             <Link to="/agent-guard" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Agent Guard</Link>
             <Link to="/alerts" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Alerts</Link>
             <Link to="/activity" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Activity</Link>
@@ -133,6 +135,7 @@ function AuthenticatedApp() {
             <Route path="/accounts/connect/neon" element={<ConnectNeon />} />
             <Route path="/accounts/connect/neo4j" element={<ConnectNeo4j />} />
             <Route path="/rules" element={<RulesPage />} />
+            <Route path="/database" element={<DatabaseKillPage />} />
             <Route path="/alerts" element={<AlertsHistory />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/agent-guard" element={<AgentGuardPage />} />

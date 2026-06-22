@@ -141,7 +141,11 @@ billingRouter.get("/status", requirePermission("billing:read"), async (req, res,
     // paid-tier usage). Both are wrong — derive the org's backing from the owner.
     let tierIsBacked: boolean;
     let backingTransientError: boolean;
-    if (account.type === "personal") {
+    // Only an explicit "organization" takes the owner-backed path. A missing type
+    // (legacy doc, or a .lean() read where schema defaults don't apply) means personal —
+    // routing it through the org path would look up a nonexistent owner and wrongly
+    // strip a paying user to free.
+    if (account.type !== "organization") {
       tierIsBacked = hasLiveSub;
       backingTransientError = retrieveFailed;
     } else {

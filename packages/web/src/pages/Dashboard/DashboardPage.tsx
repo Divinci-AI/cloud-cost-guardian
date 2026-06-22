@@ -7,6 +7,8 @@ import {
 } from "recharts";
 import { api } from "../../api/client";
 import { useOrg } from "../../context/OrgContext";
+import { ErrorState } from "../../components/ErrorState";
+import { useCan } from "../../hooks/useCan";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -170,24 +172,34 @@ function AccountTooltip({ active, payload, label }: any) {
 
 export function DashboardPage() {
   const { orgVersion } = useOrg();
+  const can = useCan();
   const [accounts, setAccounts] = useState<CloudAccount[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadVersion, setReloadVersion] = useState(0);
   const [checking, setChecking] = useState(false);
   const [days, setDays] = useState(30);
   const [hasPagerDuty, setHasPagerDuty] = useState(false);
 
   useEffect(() => {
+    setLoadError(null);
     Promise.all([
-      api.listCloudAccounts().catch(() => ({ accounts: [] })),
+      // Accounts are the dashboard's backbone — surface failure instead of
+      // rendering a misleading "no accounts" state. Analytics and channels
+      // degrade gracefully (chart/nudge simply absent).
+      api.listCloudAccounts(),
       api.getAnalyticsOverview(days).catch(() => null),
       api.listAlertChannels().catch(() => ({ channels: [] })),
     ]).then(([accountsData, analyticsData, channelsData]) => {
       setAccounts(accountsData.accounts || []);
       setAnalytics(analyticsData);
       setHasPagerDuty((channelsData.channels || []).some((c: any) => c.type === "pagerduty" && c.enabled !== false));
+    }).catch((err) => {
+      console.error(err);
+      setLoadError(err?.message || "Failed to load dashboard data.");
     }).finally(() => setLoading(false));
-  }, [days, orgVersion]);
+  }, [days, orgVersion, reloadVersion]);
 
   const runManualCheck = async () => {
     setChecking(true);
@@ -209,6 +221,14 @@ export function DashboardPage() {
     return (
       <div style={{ display: "flex", justifyContent: "center", padding: "80px" }}>
         <p style={{ color: "#9ca3af" }}>Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ padding: "40px 0" }}>
+        <ErrorState message={`Couldn't load the dashboard: ${loadError}`} onRetry={() => setReloadVersion(v => v + 1)} />
       </div>
     );
   }
@@ -283,21 +303,23 @@ export function DashboardPage() {
             <option value={30}>30 days</option>
             <option value={90}>90 days</option>
           </select>
-          <button
-            onClick={runManualCheck}
-            disabled={checking}
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.15)",
-              padding: "8px 20px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "14px",
-            }}
-          >
-            {checking ? "Checking..." : "Run Check"}
-          </button>
+          {can("check:trigger") && (
+            <button
+              onClick={runManualCheck}
+              disabled={checking}
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                color: "#fff",
+                border: "1px solid rgba(255,255,255,0.15)",
+                padding: "8px 20px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
+            >
+              {checking ? "Checking..." : "Run Check"}
+            </button>
+          )}
           <Link
             to="/accounts/connect/cloudflare"
             style={{
@@ -607,13 +629,15 @@ export function DashboardPage() {
           <p style={{ color: "#9ca3af", marginBottom: "20px" }}>
             Cost data will appear here after your first monitoring check.
           </p>
-          <button
-            onClick={runManualCheck}
-            disabled={checking}
-            style={{ background: "#c25800", color: "#fff", border: "none", padding: "10px 24px", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "600" }}
-          >
-            {checking ? "Running..." : "Run First Check"}
-          </button>
+          {can("check:trigger") && (
+            <button
+              onClick={runManualCheck}
+              disabled={checking}
+              style={{ background: "#c25800", color: "#fff", border: "none", padding: "10px 24px", borderRadius: "8px", cursor: "pointer", fontSize: "14px", fontWeight: "600" }}
+            >
+              {checking ? "Running..." : "Run First Check"}
+            </button>
+          )}
         </div>
         )
       )}
