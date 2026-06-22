@@ -122,7 +122,22 @@ describe("formatStatusline — status-bar one-liner", () => {
       }),
     });
     const r = buildLimitsReport(cfg("auto"), emptyLedger(), now);
-    expect(formatStatusline(r)).toBe("🛡 🟢 5h 26% · wk 19%");
+    // The weekly token carries day-of-week context (3 days to reset) so "19%"
+    // reads as runway, not alarm; the 5h token stays bare.
+    expect(formatStatusline(r, now)).toBe("🛡 🟢 5h 26% · wk 19% (3.0d left)");
+  });
+
+  it("shows hours left for the weekly token inside the final day", () => {
+    saveLimitsState({
+      ...emptyLimitsState(),
+      subscriptionDetected: true,
+      snapshot: snapshot({
+        fiveHour: { utilization: 0.26, resetAt: now + 3 * HOUR },
+        weekly: { utilization: 0.8, resetAt: now + 10 * HOUR },
+      }),
+    });
+    const r = buildLimitsReport(cfg("auto"), emptyLedger(), now);
+    expect(formatStatusline(r, now)).toBe("🛡 🟢 5h 26% · wk 80% (10h left)");
   });
 
   it("falls back to tier + 'usage pending' with no live data", () => {

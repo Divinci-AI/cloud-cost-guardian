@@ -1171,7 +1171,9 @@
                     Claude Code&#8217;s 5-hour and weekly limits are invisible until they lock you out mid-task.
                     <strong>Agent Guard</strong> puts your real plan usage &#8212; the 5-hour window, the weekly cap,
                     and the per-model weekly &#8212; right in your status bar, pulled straight from Anthropic, and
-                    warns you <em>before</em> you lock out. The same guard caps runaway API spend. Free,
+                    warns you <em>before</em> you lock out. It paces you against a daily budget &#8212; your weekly
+                    cap &divide;&nbsp;7 &#8212; so being 60% in with two days left stays calm, not alarmed, and it only
+                    speaks up when you&#8217;re truly burning too fast. The same guard caps runaway API spend. Free,
                     open-source, works with Claude Code today.
                 </div>
             </div>
@@ -1196,7 +1198,7 @@
                         <div class="ag-gauge">
                             <div class="ag-grow"><span>weekly &middot; all models</span><b>17%</b></div>
                             <div class="ag-track"><div class="ag-fill" style="--w:17%"></div></div>
-                            <div class="ag-reset">resets Tue 7:59&nbsp;PM</div>
+                            <div class="ag-reset">resets Tue 7:59&nbsp;PM &middot; ~14%/day budget &middot; on track</div>
                         </div>
                         <div class="ag-gauge">
                             <div class="ag-grow"><span>weekly &middot; Sonnet</span><b>1%</b></div>
@@ -1204,7 +1206,7 @@
                             <div class="ag-reset">resets Tue 7:59&nbsp;PM</div>
                         </div>
                         <div class="ag-gauge">
-                            <div class="ag-grow"><span>heavy week &middot; on pace to lock out</span><b>86%</b></div>
+                            <div class="ag-grow"><span>heavy week &middot; ~3&times; your ~14%/day budget</span><b>86%</b></div>
                             <div class="ag-track"><div class="ag-fill warm" style="--w:86%"></div></div>
                             <div class="ag-reset">&#8594; lockout ~Thu &middot; resets Sat 6:00&nbsp;PM</div>
                         </div>
@@ -1213,7 +1215,7 @@
                 <div class="ag-statusline">
                     <span>&#10035; Opus&nbsp;4.8</span>
                     <span class="sl-dim">41k ctx</span>
-                    <span class="sl-shield">&#128737;&#65039; <span class="sl-dot"></span> 5h 12% &middot; wk 17%</span>
+                    <span class="sl-shield">&#128737;&#65039; <span class="sl-dot"></span> 5h 12% &middot; wk 17% (5.0d&nbsp;left)</span>
                     <span class="sl-dim">resets 9:19&nbsp;AM</span>
                 </div>
             </div>

@@ -60,6 +60,20 @@ describe("assessWindow — pacing math", () => {
     expect(a.level).toBe("warn"); // 0.75 >= 0.7 soft, < 0.9 danger
   });
 
+  it("60% used with 2 days left is ok and spells out the daily budget", () => {
+    // The real-world report: at ~60% of the weekly limit with only 2 days to go,
+    // ~40% remains over 2 days ≈ 20%/day — above the even ~14%/day budget — so
+    // there's no reason to worry. Level stays ok and the message frames the runway.
+    const now = 1_700_000_000_000;
+    const resetAt = now + 2 * 24 * HOUR; // 5 days elapsed of a 7-day window
+    const a = assessWindow("weekly", { utilization: 0.6, resetAt }, T, now);
+    expect(a.burnRatio!).toBeLessThan(1);
+    expect(a.willLockOutBeforeReset).toBe(false);
+    expect(a.level).toBe("ok");
+    expect(a.message).toMatch(/~40% left over 2\.0d/);
+    expect(a.message).toMatch(/~20%\/day vs ~14%\/day budget/);
+  });
+
   it("message reads like a human warning", () => {
     const now = 1_700_000_000_000;
     const resetAt = now + 6 * 24 * HOUR;
@@ -73,11 +87,24 @@ describe("assessWindow — boundary conditions", () => {
   const now = 1_700_000_000_000;
   const halfWeekReset = now + WEEK / 2; // on-pace baseline (50% elapsed)
 
-  it("exactly at the soft threshold (and under pace) is warn, not ok", () => {
-    // 60% used but 80% elapsed → under pace, no lockout, so the level is driven
-    // purely by the absolute soft threshold (= warn, not escalated to danger).
+  it("at the soft threshold but UNDER pace is ok, not warn (don't worry too early)", () => {
+    // 60% used but 80% elapsed → under the prorated daily budget with runway to
+    // spare. The bare soft threshold must NOT fire here — only being at/ahead of
+    // the linear pace (or projecting a lockout) escalates.
     const underPaceReset = now + WEEK * 0.2;
     const a = assessWindow("weekly", { utilization: 0.6, resetAt: underPaceReset }, T, now); // soft = 0.6
+    expect(a.willLockOutBeforeReset).toBe(false);
+    expect(a.burnRatio!).toBeLessThan(1);
+    expect(a.level).toBe("ok");
+  });
+
+  it("at the soft threshold and ON pace (no lockout) is warn", () => {
+    // 60% used at 60% elapsed → burnRatio ≈ 1, exhaustion lands right at reset
+    // (not before), so no lockout — but you're at the soft line and on pace to
+    // hit the wall, which warrants a gentle warn.
+    const onPaceReset = now + WEEK * 0.4; // 60% elapsed
+    const a = assessWindow("weekly", { utilization: 0.6, resetAt: onPaceReset }, T, now);
+    expect(a.burnRatio!).toBeCloseTo(1, 1);
     expect(a.willLockOutBeforeReset).toBe(false);
     expect(a.level).toBe("warn");
   });
