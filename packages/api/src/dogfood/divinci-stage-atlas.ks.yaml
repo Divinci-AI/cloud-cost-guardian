@@ -4,7 +4,7 @@
 #   ks apply -f divinci-stage-atlas.ks.yaml --dry-run    # preview
 #   ks apply -f divinci-stage-atlas.ks.yaml              # apply
 #
-# Secrets stay in the environment — ${ENV} is interpolated before parse:
+# Secrets stay in the environment — the ATLAS_* placeholders below are interpolated:
 #   set -a; . private-keys/staging/atlas-api.env; set +a
 #
 # NOTE: `ks apply` reconciles the ACCOUNT (thresholds + flags) and preset
@@ -16,7 +16,7 @@
 account:
   provider: mongodb
   name: Divinci Staging Atlas
-  credential:                       # only used on first create; ${ENV} interpolated
+  credential:                       # only used on first create; ATLAS_* interpolated from env
     mongodbSubType: atlas
     atlasPublicKey: ${ATLAS_PUBLIC_KEY}
     atlasPrivateKey: ${ATLAS_PRIVATE_KEY}
