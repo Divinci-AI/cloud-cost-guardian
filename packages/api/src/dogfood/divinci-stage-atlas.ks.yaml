@@ -1,0 +1,37 @@
+# Divinci Staging Atlas — Kill Switch integration-as-code (for `ks apply`)
+#
+# Declarative equivalent of divinci-stage-atlas.config.ts for the KS CLI:
+#   ks apply -f divinci-stage-atlas.ks.yaml --dry-run    # preview
+#   ks apply -f divinci-stage-atlas.ks.yaml              # apply
+#
+# Secrets stay in the environment — ${ENV} is interpolated before parse:
+#   set -a; . private-keys/staging/atlas-api.env; set +a
+#
+# NOTE: `ks apply` reconciles the ACCOUNT (thresholds + flags) and preset
+# `shields`/`alerts` only — it does NOT express custom rules. The cost⇒pause /
+# conn⇒snapshot rules are created separately with `ks rules create` (see the
+# README/handoff), or in one shot via divinci-stage-atlas.setup.ts. This file's
+# job — raising the 10GB storage trip to 100GB and setting the flags — is what
+# actually stops the false auto-pausing on normal testing load.
+account:
+  provider: mongodb
+  name: Divinci Staging Atlas
+  credential:                       # only used on first create; ${ENV} interpolated
+    mongodbSubType: atlas
+    atlasPublicKey: ${ATLAS_PUBLIC_KEY}
+    atlasPrivateKey: ${ATLAS_PRIVATE_KEY}
+    atlasProjectId: ${ATLAS_PROJECT_ID}
+    atlasClusterName: divinci-stage-api-cluster0
+  # Reality-based thresholds (M30, 7-day baseline 2026-06-22: ~22GB disk,
+  # conns max 149, ops ~70, ~$10.5/day). Storage/conn/ops are alert-only.
+  thresholds:
+    mongodbStorageSizeGB: 100       # was 10 → permanently tripped on real ~22GB
+    mongodbActiveConnections: 1200  # normal max ~149
+    mongodbOpsPerSec: 5000          # normal ~70
+    mongodbCollectionCount: 1000
+    mongodbDailyCostUSD: 40         # M30 ~$10.5/day; only a cost runaway trips
+    monthlySpendLimitUSD: 1200
+  protectedServices: []             # staging MAY be paused (on cost only)
+  productionProtected: false        # allows the cost rule's pause-cluster to fire
+  autoDisconnect: false             # mongodb default action is a no-op on Atlas
+  autoDelete: false                 # never auto-DELETE staging
