@@ -35,6 +35,10 @@ interface Env {
   // (or its ks-cluster0 Atlas DB) is down — the one outage guardian-api can't
   // self-report. Defaults to prod; override in wrangler [vars] for staging.
   GUARDIAN_HEALTH_URL?: string;
+  // Consecutive failed uptime checks required before paging (debounce). A single
+  // transient 503 — a brief Atlas reconnect blip the API self-heals within one
+  // 5-min tick — shouldn't page; only a sustained outage should. Default 3 (~15m).
+  UPTIME_FAILURE_THRESHOLD?: string;
 
   // Alert destinations (at least one recommended)
   PAGERDUTY_ROUTING_KEY?: string;  // Events API v2 integration key
@@ -939,16 +943,46 @@ async function uptimeCheck(env: Env): Promise<void> {
     detail = `unreachable: ${e?.message ?? e}`;
   }
 
-  if (healthy) return; // all good — no alert
+  // Debounce: a single transient 503 (a brief Atlas reconnect blip the API
+  // self-heals within one tick) shouldn't page — only a sustained outage should.
+  // Track the consecutive-failure streak in KV; reset it the moment we're healthy.
+  const streak = await uptimeFailureStreak(env, healthy);
+  if (healthy) return; // all good — streak reset, no alert
+
+  const threshold = Math.max(1, parseInt(env.UPTIME_FAILURE_THRESHOLD || "3"));
+  if (streak < threshold) {
+    console.error(`[kill-switch] uptime degraded (${streak}/${threshold} consecutive) — ${detail}; debouncing before page`);
+    return; // transient blip — wait for a sustained streak
+  }
 
   const suppressWebhooks = await webhookCooldownActive(env, "guardian-uptime");
   await sendAlerts(
     env,
-    `Kill Switch API health check FAILED — ${detail}`,
+    `Kill Switch API health check FAILED — ${detail} (${streak} consecutive checks, ~${streak * 5}m)`,
     "critical",
-    { endpoint: url, detail, hint: "Check guardian-api / ks-cluster0 Atlas cluster (resume if paused)." },
+    { endpoint: url, detail, consecutiveFailures: streak, hint: "Check guardian-api / ks-cluster0 Atlas cluster (resume if paused)." },
     { dedupSuffix: "guardian-uptime", suppressWebhooks },
   );
+}
+
+/**
+ * Consecutive-failure streak for the uptime check, backed by ALERT_STATE KV.
+ * Returns the current streak (incremented on failure, reset to 0 when healthy).
+ * Without KV we can't debounce, so we fail toward alerting (treat every failure
+ * as already past the threshold) rather than risk swallowing a real outage.
+ */
+async function uptimeFailureStreak(env: Env, healthy: boolean): Promise<number> {
+  if (!env.ALERT_STATE) return healthy ? 0 : Number.MAX_SAFE_INTEGER;
+  const key = "uptime:streak";
+  if (healthy) {
+    await env.ALERT_STATE.delete(key);
+    return 0;
+  }
+  const next = (parseInt((await env.ALERT_STATE.get(key)) || "0") || 0) + 1;
+  // Expire so a stale count can't linger forever if checks stop running; an hour
+  // comfortably spans the few ticks needed to reach the threshold.
+  await env.ALERT_STATE.put(key, String(next), { expirationTtl: 3600 });
+  return next;
 }
 
 export default {
