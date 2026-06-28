@@ -119,7 +119,8 @@ async function main() {
   const usagePaceOk =
     usageWeeklyWin?.level === "ok" &&
     usageStatusline.includes("🟢") &&
-    /wk 17% \(\d+(\.\d+)?d left\)/.test(usageStatusline);
+    /17%w/.test(usageStatusline) &&
+    /\d+(\.\d+)?wd/.test(usageStatusline);
   usageServer.close();
   delete process.env.AGENT_GUARD_USAGE_URL;
 

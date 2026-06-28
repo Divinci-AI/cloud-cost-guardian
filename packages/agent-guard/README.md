@@ -150,7 +150,7 @@ The weekly line spells out the **daily budget** — your weekly cap ÷ 7 (≈ 14
 runway you actually have, so a number like 17% (or even 60%) reads as "days left", not alarm.
 
 **Always-on:** wire `agent-guard statusline` as your Claude Code **statusLine** to keep a live
-`🛡 🟢 5h 12% · wk 17% (5.0d left)` in the status bar — it refreshes the numbers in the background
+`🛡 🟢 12%5h · 17%w · 9%d · 5.0wd` in the status bar — it refreshes the numbers in the background
 (throttled, non-blocking) so the hook's in-session pacing warnings stay current too:
 
 ```jsonc

@@ -178,18 +178,25 @@ export function formatLimitsLines(limits: LimitsReport, now: number = Date.now()
 export function formatStatusline(limits: LimitsReport, now: number = Date.now()): string {
   if (limits.source === "headers" && limits.windows.length) {
     const dot = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
-    const parts = limits.windows.map((w) => {
-      const tag = w.window === "5h" ? "5h" : "wk";
-      const base = `${tag} ${Math.round(w.utilization * 100)}%`;
-      // Weekly % is meaningless without the day-of-week context — append days left
-      // so "60%" reads as "60% with 2d to go" (under the ~14%/day budget), not alarm.
-      if (w.window === "weekly" && w.resetAt != null) {
-        const daysLeft = (w.resetAt - now) / DAY_MS;
-        if (daysLeft > 0) return `${base} (${daysLeft >= 1 ? `${daysLeft.toFixed(daysLeft < 10 ? 1 : 0)}d` : `${Math.max(1, Math.round((w.resetAt - now) / 3_600_000))}h`} left)`;
+    const five = limits.windows.find((w) => w.window === "5h");
+    const weekly = limits.windows.find((w) => w.window === "weekly");
+    // Compact pill: "10%5h · 52%w · 13%d · 2.9wd" — percent-before-label, then the
+    // derived daily burn and weekly days-left, so the whole pacing picture fits one line.
+    const tokens: string[] = [];
+    if (five) tokens.push(`${Math.round(five.utilization * 100)}%5h`);
+    if (weekly) {
+      tokens.push(`${Math.round(weekly.utilization * 100)}%w`);
+      if (weekly.resetAt != null) {
+        // Daily burn = weekly used ÷ days elapsed this week = your average %/day,
+        // to read against the ~14%/day budget (weekly ÷ 7). Skip the first half-day,
+        // where too little has elapsed to divide into a meaningful rate.
+        const daysElapsed = (WINDOW_MS.weekly - (weekly.resetAt - now)) / DAY_MS;
+        if (daysElapsed >= 0.5) tokens.push(`${Math.round((weekly.utilization / daysElapsed) * 100)}%d`);
+        const daysLeft = (weekly.resetAt - now) / DAY_MS;
+        if (daysLeft > 0) tokens.push(`${daysLeft.toFixed(1)}wd`);
       }
-      return base;
-    });
-    return `🛡 ${dot} ${parts.join(" · ")}`;
+    }
+    return `🛡 ${dot} ${tokens.join(" · ")}`;
   }
   const label = limits.tier ? tierLabel(limits.tier) : "limits";
   return `🛡 ${label} · usage pending`;
