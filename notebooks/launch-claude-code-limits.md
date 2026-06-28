@@ -16,7 +16,7 @@ Thursday. 🧱
 
 `agent-guard` now puts your *real* limits in your status bar:
 
-🛡 🟢 5h 12% · wk 17% (5.0d left)
+🛡 🟢 12%5h · 17%w · 9%d · 5.0wd
 
 5-hour, weekly, per-model. Straight from Anthropic. Warns you before you lock out.
 
@@ -39,7 +39,7 @@ open GitHub issues begging for visibility. The data exists; nothing surfaces it 
 
 So we built it into **Agent Guard** (our free, open-source kill switch for coding agents):
 
-🛡 🟢 5h 12% · wk 17% (5.0d left)
+🛡 🟢 12%5h · 17%w · 9%d · 5.0wd
 
 Your real limits — the 5-hour window, the weekly all-models cap, *and* the per-model Sonnet/
 Opus weekly — live in your status bar, and the guard warns you in-session **before** you lock
@@ -92,7 +92,7 @@ We kept hitting it ourselves. So we fixed it.
 `agent-guard` (the free, open-source kill switch for coding agents) now shows your **real**
 Claude Code limits:
 
-    🛡 🟢 5h 12% · wk 17% (5.0d left)
+    🛡 🟢 12%5h · 17%w · 9%d · 5.0wd
 
 Run it once:
 
@@ -105,7 +105,7 @@ Run it once:
 
 That's the 5-hour window, the weekly all-models cap, **and** the per-model Sonnet/Opus weekly —
 each with its real reset time. Wire `agent-guard statusline` into Claude Code and that little
-`🛡 🟢 5h 12% · wk 17% (5.0d left)` lives in your status bar, refreshing quietly in the background. When
+`🛡 🟢 12%5h · 17%w · 9%d · 5.0wd` lives in your status bar, refreshing quietly in the background. When
 you're burning fast enough to lock out before the reset, the guard says so — **in-session,
 before it happens.**
 

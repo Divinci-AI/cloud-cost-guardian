@@ -120,7 +120,8 @@ ks guard reset --limits                           # clear the subscription detec
 > 14%/day), so 60% used with 2 days left stays quiet (under pace) — it only warns at/above the
 > daily pace or when projecting a lockout; the danger level stays absolute. The weekly message
 > spells out the runway ("~40% left over 2.0d (~20%/day vs ~14%/day budget)") and the statusline
-> weekly token carries days-left ("wk 17% (5.0d left)").
+> is a compact pill ("🛡 🟢 12%5h · 17%w · 9%d · 5.0wd" — 5h%, weekly%, avg daily burn = weekly÷days-elapsed,
+> and weekly-days-left).
 > Dollar soft-cap warns are also suppressed in subscription mode. The dollar 402 is suppressed **only** for the anthropic proxy when you've
 > pinned a subscription `--plan` or seen fresh `unified-*` headers (within 5h) — so a billed
 > OpenAI/other agent sharing the proxy keeps its hard wall. State in

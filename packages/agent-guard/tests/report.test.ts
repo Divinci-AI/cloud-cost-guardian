@@ -122,12 +122,12 @@ describe("formatStatusline — status-bar one-liner", () => {
       }),
     });
     const r = buildLimitsReport(cfg("auto"), emptyLedger(), now);
-    // The weekly token carries day-of-week context (3 days to reset) so "19%"
-    // reads as runway, not alarm; the 5h token stays bare.
-    expect(formatStatusline(r, now)).toBe("🛡 🟢 5h 26% · wk 19% (3.0d left)");
+    // Compact pill: percent-before-label, plus derived daily burn (weekly ÷ days
+    // elapsed = 19% ÷ 4d = ~5%/day) and weekly days-left (3.0wd).
+    expect(formatStatusline(r, now)).toBe("🛡 🟢 26%5h · 19%w · 5%d · 3.0wd");
   });
 
-  it("shows hours left for the weekly token inside the final day", () => {
+  it("shows fractional weekly-days-left inside the final day", () => {
     saveLimitsState({
       ...emptyLimitsState(),
       subscriptionDetected: true,
@@ -137,7 +137,8 @@ describe("formatStatusline — status-bar one-liner", () => {
       }),
     });
     const r = buildLimitsReport(cfg("auto"), emptyLedger(), now);
-    expect(formatStatusline(r, now)).toBe("🛡 🟢 5h 26% · wk 80% (10h left)");
+    // ~6.6 days elapsed → daily burn 80% ÷ 6.58 ≈ 12%/day; 10h left ≈ 0.4wd.
+    expect(formatStatusline(r, now)).toBe("🛡 🟢 26%5h · 80%w · 12%d · 0.4wd");
   });
 
   it("falls back to tier + 'usage pending' with no live data", () => {
