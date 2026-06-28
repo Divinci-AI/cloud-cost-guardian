@@ -12,8 +12,32 @@ type Severity = "critical" | "error" | "warning" | "info";
 
 const GITHUB_API_HOST = "api.github.com";
 
-/** Base URL of the dashboard, used to build deep links in alerts. */
-const APP_BASE_URL = (process.env.APP_BASE_URL || "https://app.kill-switch.net").replace(/\/$/, "");
+/**
+ * Base URL of the dashboard, used to build deep links in alerts.
+ * Guard against a scheme-less override (e.g. "app.kill-switch.net") — an invalid
+ * button URL makes Slack reject the whole Block Kit message.
+ */
+const APP_BASE_URL = (() => {
+  let base = (process.env.APP_BASE_URL || "https://app.kill-switch.net").trim().replace(/\/$/, "");
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+  return base;
+})();
+
+/**
+ * How far a metric is over its threshold, as a display string ("3×").
+ * Single source of truth so every channel agrees (Slack/email/GitHub/CLI used to
+ * each re-implement this and disagree on the edge cases). Uses ceil so a 1.4×
+ * breach reads ">1×" rather than being floored to a misleading "1×", and guards
+ * against non-numeric / zero-threshold input.
+ */
+function overMultiplier(currentValue: unknown, threshold: unknown): string {
+  const cur = Number(currentValue);
+  const thr = Number(threshold);
+  if (!Number.isFinite(cur) || !Number.isFinite(thr) || thr <= 0) return "";
+  const ratio = cur / thr;
+  // One decimal under 2× so a 1.4× breach isn't rounded away; whole numbers above.
+  return ratio < 2 ? `${ratio.toFixed(1)}×` : `${Math.round(ratio)}×`;
+}
 
 /**
  * Escape the three characters Slack treats as control sequences in mrkdwn.
@@ -132,6 +156,9 @@ async function alertDiscord(channel: AlertChannel, summary: string, severity: Se
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      // Neutralize @everyone/@here/role mass-mentions that could be smuggled in
+      // via attacker-influenced field values (same untrusted `details` Slack escapes).
+      allowed_mentions: { parse: [] },
       embeds: [{
         title: `Cloud Cost Alert [${severity.toUpperCase()}]`,
         description: summary,
@@ -156,9 +183,14 @@ async function alertSlack(channel: AlertChannel, summary: string, severity: Seve
 
   // Deep link to where the responder can act. We don't have per-account routes
   // yet, so point at the accounts list (kill controls) or the alerts history.
-  const cloudAccountId = details.cloudAccountId ? String(details.cloudAccountId) : "";
   const actionUrl = `${APP_BASE_URL}/accounts`;
   const historyUrl = `${APP_BASE_URL}/alerts`;
+
+  // Slack rejects a section whose text exceeds 3000 chars (invalid_blocks → the
+  // whole message, fallback included, is dropped). Keep us safely under it.
+  const SLACK_SECTION_LIMIT = 2900;
+  const clampSection = (s: string) =>
+    s.length > SLACK_SECTION_LIMIT ? `${s.slice(0, SLACK_SECTION_LIMIT - 1)}…` : s;
 
   // Header + summary. Every interpolated string is escaped so a hostile
   // service/metric/account name can't smuggle a link or @here mention.
@@ -185,11 +217,12 @@ async function alertSlack(channel: AlertChannel, summary: string, severity: Seve
   const MAX_ROWS = 10;
   if (violations.length > 0) {
     const rows = violations.slice(0, MAX_ROWS).map((v: any) => {
-      const mult = v.threshold > 0 ? ` _(${Math.round(v.currentValue / v.threshold)}×)_` : "";
+      const m = overMultiplier(v.currentValue, v.threshold);
+      const mult = m ? ` _(${m})_` : "";
       return `• *${escapeSlack(v.serviceName)}* — ${escapeSlack(v.metricName)}: ${escapeSlack(v.currentValue)} (limit ${escapeSlack(v.threshold)})${mult}`;
     });
     if (violations.length > MAX_ROWS) rows.push(`…and ${violations.length - MAX_ROWS} more`);
-    blocks.push({ type: "section", text: { type: "mrkdwn", text: rows.join("\n") } });
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: clampSection(rows.join("\n")) } });
   }
 
   // What the kill switch already did, if anything.
@@ -210,15 +243,28 @@ async function alertSlack(channel: AlertChannel, summary: string, severity: Seve
     ],
   });
 
-  await fetch(webhookUrl, {
+  const fallbackText = `${emoji} Cloud Cost Alert [${severity.toUpperCase()}]\n${escapeSlack(summary)}`;
+  const res = await fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       // Plain-text fallback (notifications, screen readers, clients without Block Kit).
-      text: `${emoji} Cloud Cost Alert [${severity.toUpperCase()}]\n${escapeSlack(summary)}`,
+      text: fallbackText,
       blocks,
     }),
   });
+
+  // Don't let a Block Kit rejection silently swallow a critical alert: log it, and
+  // retry once with just the plain-text payload so the notification still lands.
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[guardian] Slack alert rejected: ${res.status} ${body} — retrying as plain text`);
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: fallbackText }),
+    }).catch(err => console.error(`[guardian] Slack plain-text retry failed: ${err}`));
+  }
 }
 
 async function alertWebhook(channel: AlertChannel, summary: string, severity: Severity, details: Record<string, unknown>): Promise<void> {
@@ -259,7 +305,7 @@ async function alertEmail(channel: AlertChannel, summary: string, severity: Seve
   // Build HTML body
   const violations = (details.violations as any[] | undefined) ?? [];
   const violationRows = violations.map((v: any) => {
-    const multiplier = v.threshold > 0 ? `${Math.round(v.currentValue / v.threshold)}×` : "";
+    const multiplier = overMultiplier(v.currentValue, v.threshold);
     return `<tr>
       <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;">${v.serviceName ?? ""}</td>
       <td style="padding:6px 12px;border-bottom:1px solid #2a2f4a;">${v.metricName ?? ""}</td>
@@ -333,7 +379,8 @@ async function alertEmail(channel: AlertChannel, summary: string, severity: Seve
     ``,
     violations.length > 0 ? "Violations:" : "",
     ...violations.map((v: any) => {
-      const mult = v.threshold > 0 ? ` (${Math.round(v.currentValue / v.threshold)}×)` : "";
+      const m = overMultiplier(v.currentValue, v.threshold);
+      const mult = m ? ` (${m})` : "";
       return `  ${v.serviceName}: ${v.metricName} = ${v.currentValue} (limit: ${v.threshold})${mult}`;
     }),
     ``,
@@ -373,6 +420,7 @@ async function alertGitHub(channel: AlertChannel, summary: string, severity: Sev
     metricName: String(v.metricName ?? ""),
     currentValue: v.currentValue,
     threshold: v.threshold,
+    // Machine-consumed by the dispatched workflow — keep the lowercase "Nx" contract.
     multiplier: v.threshold > 0 ? `${Math.round(v.currentValue / v.threshold)}x` : "N/A",
     severity: v.severity,
   }));

@@ -137,6 +137,54 @@ describe("Alerting Service", () => {
     expect(serialized).toContain("&amp;");
   });
 
+  it("retries Slack as plain text when Block Kit is rejected", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 400, text: async () => "invalid_blocks" });
+    const channels: AlertChannel[] = [{
+      type: "slack",
+      name: "Ops",
+      config: { webhookUrl: "https://hooks.slack.com/services/T00/B00/xxx" },
+      enabled: true,
+    }];
+
+    await sendAlerts(channels, "critical spike", "critical", {});
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const retryBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    expect(retryBody.blocks).toBeUndefined();         // plain-text only
+    expect(retryBody.text).toContain("critical spike"); // alert still lands
+  });
+
+  it("does not floor a fractional over-threshold breach to 1×", async () => {
+    const channels: AlertChannel[] = [{
+      type: "slack",
+      name: "Ops",
+      config: { webhookUrl: "https://hooks.slack.com/services/T00/B00/xxx" },
+      enabled: true,
+    }];
+
+    await sendAlerts(channels, "alert", "critical", {
+      violations: [{ serviceName: "svc", metricName: "cost", currentValue: 140, threshold: 100 }],
+    });
+
+    const serialized = JSON.stringify(JSON.parse(mockFetch.mock.calls[0][1].body).blocks);
+    expect(serialized).toContain("1.4×");
+    expect(serialized).not.toContain("(1×)");
+  });
+
+  it("suppresses Discord mass-mentions via allowed_mentions", async () => {
+    const channels: AlertChannel[] = [{
+      type: "discord",
+      name: "Discord",
+      config: { webhookUrl: "https://discord.com/api/webhooks/1/abc" },
+      enabled: true,
+    }];
+
+    await sendAlerts(channels, "alert", "critical", {});
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.allowed_mentions).toEqual({ parse: [] });
+  });
+
   it("sends to custom webhook with standard payload", async () => {
     const channels: AlertChannel[] = [{
       type: "webhook",
