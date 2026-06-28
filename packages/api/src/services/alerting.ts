@@ -12,6 +12,22 @@ type Severity = "critical" | "error" | "warning" | "info";
 
 const GITHUB_API_HOST = "api.github.com";
 
+/** Base URL of the dashboard, used to build deep links in alerts. */
+const APP_BASE_URL = (process.env.APP_BASE_URL || "https://app.kill-switch.net").replace(/\/$/, "");
+
+/**
+ * Escape the three characters Slack treats as control sequences in mrkdwn.
+ * Without this, an attacker-influenced field (service/metric/account name) could
+ * inject a clickable <url|phish> link or a <!here>/<!channel> mass-mention.
+ * See: https://api.slack.com/reference/surfaces/formatting#escaping
+ */
+function escapeSlack(s: unknown): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 /**
  * SSRF Protection: Validate webhook URLs are safe to call.
  * Blocks private/internal IPs and non-HTTPS URLs.
@@ -136,12 +152,71 @@ async function alertSlack(channel: AlertChannel, summary: string, severity: Seve
   if (!webhookUrl || !isUrlSafe(webhookUrl)) return;
 
   const emojiMap = { critical: ":rotating_light:", error: ":warning:", warning: ":large_yellow_circle:", info: ":information_source:" };
+  const emoji = emojiMap[severity];
+
+  // Deep link to where the responder can act. We don't have per-account routes
+  // yet, so point at the accounts list (kill controls) or the alerts history.
+  const cloudAccountId = details.cloudAccountId ? String(details.cloudAccountId) : "";
+  const actionUrl = `${APP_BASE_URL}/accounts`;
+  const historyUrl = `${APP_BASE_URL}/alerts`;
+
+  // Header + summary. Every interpolated string is escaped so a hostile
+  // service/metric/account name can't smuggle a link or @here mention.
+  const blocks: Array<Record<string, unknown>> = [
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `${emoji} *Cloud Cost Alert [${severity.toUpperCase()}]*\n${escapeSlack(summary)}` },
+    },
+  ];
+
+  // Context line: provider / account / daily cost.
+  const contextBits: string[] = [];
+  if (details.provider) contextBits.push(`*Provider:* ${escapeSlack(details.provider)}`);
+  if (details.accountName) contextBits.push(`*Account:* ${escapeSlack(details.accountName)}`);
+  if (typeof details.totalEstimatedDailyCost === "number") {
+    contextBits.push(`*Est. daily:* $${(details.totalEstimatedDailyCost as number).toFixed(2)}`);
+  }
+  if (contextBits.length > 0) {
+    blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: contextBits.join("  ·  ") }] });
+  }
+
+  // Per-violation breakdown (service / metric / value vs limit / ×over), capped.
+  const violations = (details.violations as any[] | undefined) ?? [];
+  const MAX_ROWS = 10;
+  if (violations.length > 0) {
+    const rows = violations.slice(0, MAX_ROWS).map((v: any) => {
+      const mult = v.threshold > 0 ? ` _(${Math.round(v.currentValue / v.threshold)}×)_` : "";
+      return `• *${escapeSlack(v.serviceName)}* — ${escapeSlack(v.metricName)}: ${escapeSlack(v.currentValue)} (limit ${escapeSlack(v.threshold)})${mult}`;
+    });
+    if (violations.length > MAX_ROWS) rows.push(`…and ${violations.length - MAX_ROWS} more`);
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: rows.join("\n") } });
+  }
+
+  // What the kill switch already did, if anything.
+  const actionsTaken = (details.actionsTaken as string[] | undefined) ?? [];
+  if (actionsTaken.length > 0) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `:white_check_mark: *Action taken:* ${escapeSlack(actionsTaken.join(", "))}` }],
+    });
+  }
+
+  // Action buttons — one-click into the dashboard.
+  blocks.push({
+    type: "actions",
+    elements: [
+      { type: "button", text: { type: "plain_text", text: "Open in Kill Switch" }, url: actionUrl, style: "primary" },
+      { type: "button", text: { type: "plain_text", text: "Alert history" }, url: historyUrl },
+    ],
+  });
 
   await fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      text: `${emojiMap[severity]} *Cloud Cost Alert [${severity.toUpperCase()}]*\n${summary}`,
+      // Plain-text fallback (notifications, screen readers, clients without Block Kit).
+      text: `${emoji} Cloud Cost Alert [${severity.toUpperCase()}]\n${escapeSlack(summary)}`,
+      blocks,
     }),
   });
 }

@@ -82,6 +82,61 @@ describe("Alerting Service", () => {
     expect(body.text).toContain("Server overloaded");
   });
 
+  it("renders Block Kit with a deep link, violation rows, and actions taken", async () => {
+    const channels: AlertChannel[] = [{
+      type: "slack",
+      name: "Ops",
+      config: { webhookUrl: "https://hooks.slack.com/services/T00/B00/xxx" },
+      enabled: true,
+    }];
+
+    await sendAlerts(channels, "GCP cost alert: 1 service exceeded thresholds", "critical", {
+      provider: "gcp",
+      accountName: "Divinci Prod",
+      cloudAccountId: "abc123",
+      totalEstimatedDailyCost: 42.5,
+      violations: [{ serviceName: "guardian-api", metricName: "dailyCostUSD", currentValue: 100, threshold: 25 }],
+      actionsTaken: ["scale-down"],
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(Array.isArray(body.blocks)).toBe(true);
+    const serialized = JSON.stringify(body.blocks);
+    // Deep link button into the dashboard
+    expect(serialized).toContain("https://app.kill-switch.net/accounts");
+    expect(serialized).toContain("Open in Kill Switch");
+    // Violation breakdown with ×over multiplier
+    expect(serialized).toContain("guardian-api");
+    expect(serialized).toContain("4×");
+    // Action-taken context line
+    expect(serialized).toContain("scale-down");
+  });
+
+  it("escapes Slack control chars so alert content can't inject links or @here", async () => {
+    const channels: AlertChannel[] = [{
+      type: "slack",
+      name: "Ops",
+      config: { webhookUrl: "https://hooks.slack.com/services/T00/B00/xxx" },
+      enabled: true,
+    }];
+
+    // A hostile service label, the same shape as the injection probe seen in Slack.
+    await sendAlerts(channels, "alert", "critical", {
+      provider: "gcp",
+      accountName: "Prod",
+      violations: [{ serviceName: "<https://evil.example/phish|CLICK HERE> & <!here>", metricName: "x", currentValue: 1, threshold: 1 }],
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const serialized = JSON.stringify(body.blocks);
+    // The raw control sequences must NOT survive verbatim…
+    expect(serialized).not.toContain("evil.example/phish|CLICK HERE>");
+    expect(serialized).not.toContain("<!here>");
+    // …they must be escaped instead.
+    expect(serialized).toContain("&lt;");
+    expect(serialized).toContain("&amp;");
+  });
+
   it("sends to custom webhook with standard payload", async () => {
     const channels: AlertChannel[] = [{
       type: "webhook",
