@@ -45,11 +45,33 @@ describe("assessWindow — pacing math", () => {
     expect(a.message).not.toMatch(/lockout/);
   });
 
-  it("absolute danger threshold trips even when perfectly on pace", () => {
+  it("danger threshold trips when at/over pace (on pace at high utilization)", () => {
     const now = 1_700_000_000_000;
     const resetAt = now + WEEK * 0.1; // 90% elapsed
     const a = assessWindow("weekly", { utilization: 0.9, resetAt }, T, now);
-    expect(a.level).toBe("danger"); // 0.9 >= weeklyDangerPct 0.85
+    expect(a.burnRatio!).toBeGreaterThanOrEqual(1);
+    expect(a.level).toBe("danger"); // 0.9 >= danger AND on pace
+  });
+
+  it("89% weekly with ~8 hours left is OK, not danger — under pace, won't lock out", () => {
+    // The reported case: high cumulative utilization but near reset, averaging
+    // UNDER the ~14%/day budget (89% over ~6.7 days ≈ 13%/day) with 11% to spend in
+    // 8h. Won't lock out → the absolute 85% danger threshold must NOT scream red.
+    const now = 1_700_000_000_000;
+    const resetAt = now + 8 * HOUR; // ~6.7 days elapsed
+    const a = assessWindow("weekly", { utilization: 0.89, resetAt }, T, now);
+    expect(a.burnRatio!).toBeLessThan(1);
+    expect(a.willLockOutBeforeReset).toBe(false);
+    expect(a.level).toBe("ok");
+  });
+
+  it("89% weekly while OVER pace (early week) is danger", () => {
+    // Same 89%, but only ~2 days elapsed → far over pace and projected to lock out.
+    const now = 1_700_000_000_000;
+    const resetAt = now + 5 * 24 * HOUR;
+    const a = assessWindow("weekly", { utilization: 0.89, resetAt }, T, now);
+    expect(a.burnRatio!).toBeGreaterThan(1);
+    expect(a.level).toBe("danger");
   });
 
   it("handles a missing reset time (no burn ratio, util-only level)", () => {

@@ -18,8 +18,11 @@
  * where we are in the window: 60% of the weekly quota with 2 days left is under
  * the prorated daily budget (weekly ÷ 7 ≈ 14%/day) and must NOT warn — only being
  * at/ahead of the linear pace (or projecting a lockout) escalates. The *danger*
- * threshold stays absolute: near-exhaustion means little headroom regardless of
- * the day. In subscription mode the guard never blocks on this — it surfaces the
+ * threshold is pace-gated the same way: 89% of the weekly cap with 8 hours left is
+ * under the daily budget and won't lock out, so it shouldn't scream red. That's
+ * safe because high utilization while under pace only happens near reset (under
+ * pace ⇒ lots of the window elapsed) — a real lockout still escalates via the
+ * projection regardless of pace. In subscription mode the guard never blocks — it surfaces the
  * assessment as a warning so the human can ease off or switch to a cheaper model
  * before Anthropic's own limit stops them mid-task.
  */
@@ -124,17 +127,20 @@ export function assessWindow(
   const lockoutFloor = soft * 0.5;
   const lockoutMatters = willLockOut && util >= lockoutFloor;
 
-  // The soft threshold alone is a poor signal once we know where we are in the
-  // window: 60% of the weekly quota with only 2 days left is *under* the prorated
-  // daily budget (weekly ÷ 7 ≈ 14%/day), not a problem — the user underspent
-  // earlier and has runway. So when pacing IS known, gate the bare soft warn on
-  // being at or ahead of the expected (linear) pace. When pacing is unknown (no
-  // reset time, e.g. a header-less 5h read), there's nothing to prorate against,
-  // so fall back to the absolute soft threshold. The absolute *danger* threshold
-  // stays unconditional — near-exhaustion means little headroom regardless of day.
+  // Absolute thresholds alone are a poor signal once we know where we are in the
+  // window — the real question is "at this burn rate, will I run out before reset?"
+  // 60% of the weekly quota with 2 days left, or even 89% with 8 hours left, is
+  // *under* the prorated daily budget (weekly ÷ 7 ≈ 14%/day): you underspent and
+  // have runway, so neither should alarm. So when pacing IS known, gate BOTH the
+  // soft and danger utilization thresholds on being at/ahead of the expected
+  // (linear) pace. This is safe even for danger: high utilization while UNDER pace
+  // can only happen late in the window (under pace ⇒ util < elapsed/duration ⇒ lots
+  // elapsed ⇒ near reset), exactly where a lockout can't land. A genuine lockout
+  // risk still escalates via the willLockOut path below regardless of pace. When
+  // pacing is unknown (no reset time), fall back to the absolute thresholds.
   const onOrAheadOfPace = burnRatio == null || burnRatio >= 1;
   let level: PacingLevel = "ok";
-  if (util >= danger || (lockoutMatters && util >= soft)) level = "danger";
+  if ((util >= danger && onOrAheadOfPace) || (lockoutMatters && util >= soft)) level = "danger";
   else if (
     (util >= soft && onOrAheadOfPace) ||
     lockoutMatters ||
