@@ -163,8 +163,10 @@ Run Claude Code **through the proxy** and agent-guard reads Anthropic's own
 `anthropic-ratelimit-unified-*` headers — exact 5h/weekly utilization + reset times — then
 paces your burn rate and warns *before* you lock out. The pacing is **day-aware**: it measures
 you against a daily budget (your weekly cap ÷ 7 ≈ 14%/day), so 60% of the weekly cap with two
-days left stays quiet — it warns only when you're at/above that pace or projected to lock out
-(near-exhaustion always warns). This is **alert-only**: it never blocks a plan you've already
+days left stays quiet — it warns only when you're at/above that pace or projected to lock out.
+Both soft and danger are pace-gated, so even 89% with hours left, under pace, stays calm (high
+util under pace only happens near reset); a projected lockout still escalates. This is
+**alert-only**: it never blocks a plan you've already
 paid for. The dollar 402 is suppressed only for the anthropic proxy when you've pinned a
 subscription `--plan` or seen fresh headers — a billed OpenAI/other agent sharing the proxy
 keeps its hard wall.

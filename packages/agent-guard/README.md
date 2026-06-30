@@ -175,8 +175,10 @@ instead it *paces* you. For each window it computes burn-rate vs. a sustainable 
 budget** = weekly cap ÷ 7 ≈ 14%/day) and projects whether you'll exhaust the window **before it
 resets**. Crucially the warning is **pace-aware**: 60% of the weekly cap with two days left is
 *under* the daily budget, so it stays quiet — it only warns when you're at or above the pace, or
-projected to lock out. (The *danger* level stays absolute: near-exhaustion means little headroom
-regardless of the day.) When it does fire, it says so in-session and via your alert channels:
+projected to lock out. The *danger* level is pace-gated the same way: 89% of the cap with 8 hours
+left, under pace, won't lock out, so it stays calm rather than screaming red — high utilization
+while under pace only happens near reset, where a lockout can't land (a real projected lockout
+still escalates regardless of pace). When it does fire, it says so in-session and via your alert channels:
 
 ```
 🟥 Claude Code plan limits  ·  observed just now
@@ -208,10 +210,11 @@ Tune the thresholds (0–1 utilization) if the proxy's pacing is too eager:
 | `--5h-soft` / `--5h-danger` | 5-hour warn / danger utilization | 0.7 / 0.9 |
 | `--burn-ratio` | pace multiplier that triggers a warning | 1.5 |
 
-> The **soft** threshold is pace-gated: once a reset time is known, crossing it only warns when
-> you're at or ahead of the prorated daily budget (weekly ÷ 7), or projecting a lockout — so
-> being deep into the week's quota with little time left doesn't cry wolf. The **danger**
-> threshold is absolute.
+> Both the **soft** and **danger** thresholds are pace-gated: once a reset time is known, crossing
+> either only escalates when you're at or ahead of the prorated daily budget (weekly ÷ 7), or
+> projecting a lockout — so being deep into the week's quota with little time left doesn't cry wolf
+> (89% with 8h left, under pace, stays calm). A genuine projected lockout still escalates
+> regardless of pace.
 
 The first time the proxy sees the `unified-*` headers it writes the raw values once to
 `~/.kill-switch/agent-guard/events.jsonl` (`kind: "unified-headers-observed"`) — so you can

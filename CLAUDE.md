@@ -118,7 +118,9 @@ ks guard reset --limits                           # clear the subscription detec
 > session run, pacing the real rate-limit quota instead (burn-rate vs. reset, projected lockout).
 > The weekly warning is **pace-aware**: it's measured against a daily budget (weekly cap ÷ 7 ≈
 > 14%/day), so 60% used with 2 days left stays quiet (under pace) — it only warns at/above the
-> daily pace or when projecting a lockout; the danger level stays absolute. The weekly message
+> daily pace or when projecting a lockout. Both the soft AND danger levels are pace-gated (89%
+> weekly with 8h left, under pace, won't lock out → stays calm, not red — high util under pace
+> only happens near reset); a genuine projected lockout still escalates regardless of pace. The weekly message
 > spells out the runway ("~40% left over 2.0d (~20%/day vs ~14%/day budget)") and the statusline
 > is a compact pill ("🛡 🟢 12%5h · 17%w · 9%d · 5.0wd" — 5h%, weekly%, avg daily burn = weekly÷days-elapsed,
 > and weekly-days-left).
