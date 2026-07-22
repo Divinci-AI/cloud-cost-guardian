@@ -12,6 +12,8 @@
 
 import { Command } from "commander";
 import { fileURLToPath } from "node:url";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { runHook } from "./hook.js";
 import { startProxy, resolveUpstream } from "./proxy.js";
 import {
@@ -22,6 +24,7 @@ import {
   writePause,
   clearPause,
   pausePath,
+  guardDir,
 } from "./config.js";
 import { loadLedger, rollingDailyCost } from "./ledger.js";
 import { evaluate } from "./budget.js";
@@ -146,6 +149,17 @@ program
       }
     } catch {
       /* ignore */
+    }
+
+    // Support hook: `touch ~/.kill-switch/agent-guard/DEBUG_STDIN` and the next
+    // render records exactly what Claude Code sent, so we can see which fields are
+    // actually available (the documented list may lag the payload). Off by default.
+    try {
+      if (stdinRaw.trim() && existsSync(join(guardDir(), "DEBUG_STDIN"))) {
+        writeFileSync(join(guardDir(), "statusline-stdin.debug.json"), stdinRaw);
+      }
+    } catch {
+      /* diagnostic only */
     }
 
     let fromStdin = false;
