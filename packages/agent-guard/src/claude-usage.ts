@@ -39,7 +39,27 @@ import {
 interface UsageMeta {
   lastFetchAt?: number;
   authorized?: boolean;
+  /**
+   * Epoch ms before which we must NOT call the endpoint again. Set from a 429's
+   * `retry-after`, or from exponential backoff after repeated failures. Without
+   * this we re-tried every 120s straight through an hour-long `retry-after`,
+   * which kept the rate limit alive (~300 rejected calls in 10h) — the endpoint
+   * looked "dead" when it was only telling us to wait.
+   */
+  retryAfterUntil?: number;
+  /** Consecutive failed fetches, drives the exponential backoff. Cleared on success. */
+  failureStreak?: number;
 }
+
+/** Outcome of one endpoint call — lets the caller distinguish 429 from a blip. */
+export type UsageFetchResult =
+  | { ok: true; usage: UsageResponse }
+  | { ok: false; status: number | null; retryAfterMs: number | null };
+
+/** Backoff bounds for non-429 failures (429 uses the server's retry-after). */
+const BACKOFF_BASE_MS = 5 * 60_000; // 5 min
+const BACKOFF_MAX_MS = 60 * 60_000; // 1 h
+const RATE_LIMIT_FALLBACK_MS = 60 * 60_000; // 429 with no/absurd retry-after
 
 export function loadUsageMeta(): UsageMeta {
   try {
@@ -64,7 +84,10 @@ export function saveUsageMeta(patch: UsageMeta): void {
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const OAUTH_BETA = "oauth-2025-04-20";
-const DEFAULT_THROTTLE_MS = 120_000; // don't hammer the endpoint
+// The statusLine stdin `rate_limits` payload is now the primary source, so the
+// endpoint is only a fallback — poll it gently. (Was 120s, which combined with
+// the hook firing on every tool call and no 429 backoff to keep us rate-limited.)
+const DEFAULT_THROTTLE_MS = 600_000; // 10 min
 
 /**
  * Best-effort read of the Claude Code OAuth access token from the OS credential
@@ -136,12 +159,22 @@ export function isAllowedUsageUrl(raw: string): boolean {
   }
 }
 
-/** GET the usage endpoint with the given token. Returns null on any failure. */
-export async function fetchUsage(token: string, timeoutMs = 8000): Promise<UsageResponse | null> {
-  // AGENT_GUARD_USAGE_URL may point at a local proxy or test server, but the
-  // token only ever leaves for Anthropic or loopback — never an arbitrary host.
+/** Parse a `retry-after` header (delta-seconds or HTTP-date) into ms from now. */
+function parseRetryAfter(raw: string | null, now: number): number | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (/^\d+$/.test(s)) return Number(s) * 1000;
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? null : Math.max(0, t - now);
+}
+
+/**
+ * GET the usage endpoint, reporting *why* it failed so the caller can back off.
+ * A 429 carries `retry-after` (Anthropic sends ~1h) which we must honour.
+ */
+export async function fetchUsageResult(token: string, timeoutMs = 8000): Promise<UsageFetchResult> {
   const url = process.env.AGENT_GUARD_USAGE_URL || USAGE_URL;
-  if (!isAllowedUsageUrl(url)) return null; // refuse to send the credential off-limits
+  if (!isAllowedUsageUrl(url)) return { ok: false, status: null, retryAfterMs: null };
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -158,11 +191,26 @@ export async function fetchUsage(token: string, timeoutMs = 8000): Promise<Usage
     } finally {
       clearTimeout(t);
     }
-    if (!res.ok) return null;
-    return (await res.json()) as UsageResponse;
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        retryAfterMs: parseRetryAfter(res.headers.get("retry-after"), Date.now()),
+      };
+    }
+    return { ok: true, usage: (await res.json()) as UsageResponse };
   } catch {
-    return null;
+    return { ok: false, status: null, retryAfterMs: null };
   }
+}
+
+/** GET the usage endpoint with the given token. Returns null on any failure. */
+export async function fetchUsage(token: string, timeoutMs = 8000): Promise<UsageResponse | null> {
+  // AGENT_GUARD_USAGE_URL may point at a local proxy or test server, but the
+  // token only ever leaves for Anthropic or loopback — never an arbitrary host
+  // (enforced inside fetchUsageResult).
+  const r = await fetchUsageResult(token, timeoutMs);
+  return r.ok ? r.usage : null;
 }
 
 /**
@@ -212,6 +260,10 @@ export async function refreshUsage(
   if (!opts.force && meta.lastFetchAt && now - meta.lastFetchAt < throttle && loadLimitsState().snapshot) {
     return null; // recent enough — use the cached snapshot
   }
+  // Honour an active backoff even when forced: the endpoint answers a 429 with an
+  // hour-long `retry-after`, and calling anyway is what kept us locked out. A
+  // forced call during cooldown would only push the window further out.
+  if (meta.retryAfterUntil && now < meta.retryAfterUntil) return null;
   const token = readOAuthToken();
   if (!token) {
     saveUsageMeta({ lastFetchAt: now }); // don't re-attempt every call when there's no token
@@ -222,11 +274,22 @@ export async function refreshUsage(
   // to let background refreshes run. This is the gate for G1.
   if (opts.foreground) saveUsageMeta({ authorized: true });
 
-  const usage = await fetchUsage(token, opts.timeoutMs);
-  saveUsageMeta({ lastFetchAt: now }); // throttle stamp — separate file, never touches the snapshot
-  if (!usage) return null;
+  const result = await fetchUsageResult(token, opts.timeoutMs);
+  if (!result.ok) {
+    // Back off so a rate limit can actually expire. 429 → obey the server's
+    // retry-after; anything else → exponential (5m, 10m, 20m … capped at 1h).
+    const streak = (meta.failureStreak ?? 0) + 1;
+    const backoff =
+      result.status === 429
+        ? Math.min(result.retryAfterMs ?? RATE_LIMIT_FALLBACK_MS, BACKOFF_MAX_MS) || RATE_LIMIT_FALLBACK_MS
+        : Math.min(BACKOFF_BASE_MS * 2 ** (streak - 1), BACKOFF_MAX_MS);
+    saveUsageMeta({ lastFetchAt: now, failureStreak: streak, retryAfterUntil: now + backoff });
+    return null;
+  }
+  // Success — clear any backoff so we're free to poll normally again.
+  saveUsageMeta({ lastFetchAt: now, failureStreak: 0, retryAfterUntil: 0 });
 
-  const snapshot = usageToSnapshot(usage, now);
+  const snapshot = usageToSnapshot(result.usage, now);
   saveLimitsState({ ...loadLimitsState(), subscriptionDetected: true, snapshot });
   return snapshot;
 }

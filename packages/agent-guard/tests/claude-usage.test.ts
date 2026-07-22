@@ -183,3 +183,95 @@ describe("refreshUsage — full flow against a mock endpoint", () => {
     expect(loadUsageMeta().authorized).toBeUndefined();
   });
 });
+
+/**
+ * 429 backoff. The endpoint answers an over-eager poller with
+ * `429 rate_limit_error` + `retry-after: ~3600`. We previously collapsed every
+ * non-2xx into `null` and re-tried on a flat 120s throttle, so ~300 rejected
+ * calls in 10h kept the limit alive and the feature looked dead. Honour the
+ * server's cooldown instead.
+ */
+describe("refreshUsage — 429 / retry-after backoff", () => {
+  let prevHome: string | undefined;
+  let home: string;
+  let server: Server | undefined;
+  let hits = 0;
+
+  beforeEach(() => {
+    prevHome = process.env.HOME;
+    home = mkdtempSync(join(tmpdir(), "ag-429-"));
+    process.env.HOME = home;
+    process.env.AGENT_GUARD_NO_KEYCHAIN = "1";
+    mkdirSync(join(home, ".claude"), { recursive: true });
+    writeFileSync(join(home, ".claude", ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "t" } }));
+    hits = 0;
+  });
+  afterEach(async () => {
+    if (server) await new Promise<void>((r) => server!.close(() => r()));
+    server = undefined;
+    delete process.env.AGENT_GUARD_USAGE_URL;
+    delete process.env.AGENT_GUARD_NO_KEYCHAIN;
+    if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome;
+  });
+
+  async function serve(status: number, headers: Record<string, string> = {}, body = "{}") {
+    server = createServer((_req, res) => {
+      hits++;
+      res.writeHead(status, { "content-type": "application/json", ...headers });
+      res.end(body);
+    });
+    const port = await new Promise<number>((r) => server!.listen(0, "127.0.0.1", () => r((server!.address() as AddressInfo).port)));
+    process.env.AGENT_GUARD_USAGE_URL = `http://127.0.0.1:${port}`;
+  }
+
+  it("records the server's retry-after and then STOPS calling — even when forced", async () => {
+    await serve(429, { "retry-after": "3519" });
+
+    expect(await refreshUsage(now, { force: true, foreground: true })).toBeNull();
+    expect(hits).toBe(1);
+    const meta = loadUsageMeta();
+    expect(meta.retryAfterUntil).toBe(now + 3519 * 1000); // exactly the server's window
+    expect(meta.failureStreak).toBe(1);
+
+    // Any call inside the cooldown must not touch the network — this is the loop
+    // that previously kept us rate-limited.
+    for (const t of [now + 1000, now + 60_000, now + 3518 * 1000]) {
+      expect(await refreshUsage(t, { force: true, foreground: true })).toBeNull();
+    }
+    expect(hits).toBe(1); // still just the one call
+  });
+
+  it("resumes once the cooldown expires, and success clears the backoff", async () => {
+    await serve(429, { "retry-after": "60" });
+    await refreshUsage(now, { force: true, foreground: true });
+    expect(hits).toBe(1);
+
+    // Past the window → allowed to try again.
+    await new Promise<void>((r) => server!.close(() => r()));
+    await serve(200, {}, JSON.stringify({ five_hour: { utilization: 10, resets_at: null } }));
+    const snap = await refreshUsage(now + 61_000, { force: true, foreground: true });
+
+    expect(snap).not.toBeNull();
+    expect(snap!.fiveHour!.utilization).toBeCloseTo(0.1);
+    const meta = loadUsageMeta();
+    expect(meta.failureStreak).toBe(0);
+    expect(meta.retryAfterUntil).toBe(0); // cleared — free to poll normally
+  });
+
+  it("falls back to a sane cooldown when a 429 carries no retry-after", async () => {
+    await serve(429);
+    await refreshUsage(now, { force: true, foreground: true });
+    expect(loadUsageMeta().retryAfterUntil).toBe(now + 60 * 60_000); // 1h default
+  });
+
+  it("backs off exponentially on non-429 failures (5m → 10m), capped", async () => {
+    await serve(500);
+    await refreshUsage(now, { force: true, foreground: true });
+    expect(loadUsageMeta().retryAfterUntil).toBe(now + 5 * 60_000);
+
+    const t2 = now + 5 * 60_000 + 1;
+    await refreshUsage(t2, { force: true, foreground: true });
+    expect(loadUsageMeta().failureStreak).toBe(2);
+    expect(loadUsageMeta().retryAfterUntil).toBe(t2 + 10 * 60_000);
+  });
+});

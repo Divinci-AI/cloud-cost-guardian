@@ -167,3 +167,50 @@ describe("honest no-proxy output (no fabricated %)", () => {
     expect(text).toMatch(/7d \$5301/); // honest absolute rolling cost
   });
 });
+
+/**
+ * Staleness. A snapshot that stopped refreshing must never be rendered as live
+ * numbers: a 10-hour-old "0%" looks identical to a real 0% but is simply wrong,
+ * and it's the same fabricated-percentage we refuse to show anywhere else.
+ */
+describe("stale snapshots — say so instead of quoting old numbers", () => {
+  it("marks an aged snapshot stale, refuses to colour off it, and says 'limits stale'", () => {
+    saveLimitsState({
+      ...emptyLimitsState(),
+      subscriptionDetected: true,
+      snapshot: snapshot({
+        fiveHour: { utilization: 0.9, resetAt: now + 2 * HOUR },
+        weekly: { utilization: 0.95, resetAt: now + 2 * DAY },
+        observedAt: now - 10 * 60 * 60_000, // 10 hours ago
+      }),
+    });
+    const r = buildLimitsReport(cfg("auto"), emptyLedger(), now);
+
+    expect(r.stale).toBe(true);
+    expect(r.ageMs).toBe(10 * 60 * 60_000);
+    // 95% weekly would normally be danger — but we won't grade stale data.
+    expect(r.level).toBe("ok");
+
+    const bar = formatStatusline(r, now);
+    expect(bar).toMatch(/limits stale/);
+    expect(bar).not.toMatch(/90%|95%|🟥|🟡/); // no confident numbers, no alarm colour
+
+    expect(formatLimitsLines(r, now).join("\n")).toMatch(/STALE/);
+  });
+
+  it("a fresh snapshot is not stale and still renders real numbers", () => {
+    saveLimitsState({
+      ...emptyLimitsState(),
+      subscriptionDetected: true,
+      snapshot: snapshot({
+        fiveHour: { utilization: 0.5, resetAt: now + 2 * HOUR },
+        weekly: { utilization: 0.25, resetAt: now + 5 * DAY },
+        observedAt: now - 60_000, // a minute ago
+      }),
+    });
+    const r = buildLimitsReport(cfg("auto"), emptyLedger(), now);
+    expect(r.stale).toBe(false);
+    // 2 days elapsed → daily burn 25% ÷ 2 = 12.5 ≈ 13%/day.
+    expect(formatStatusline(r, now)).toBe("🛡 🟢 50%5h · 25%w · 13%d · 5.0wd");
+  });
+});

@@ -22,6 +22,13 @@ import { detectPlanTier, tierLabel, type SubscriptionTier } from "./claude-code.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * How old a snapshot may be before we stop stating it as fact. With statusLine
+ * stdin as the primary source this refreshes on every render, so anything older
+ * than this means the feed is broken — say so rather than showing a stale number.
+ */
+const STALE_AFTER_MS = 30 * 60 * 1000; // 30 min
+
 export interface LimitsReport {
   /** "headers" = real proxy data; "none" = no live data (show tier + cost only). */
   source: "headers" | "none";
@@ -39,6 +46,15 @@ export interface LimitsReport {
   /** Extra display-only windows (per-model weekly) from the OAuth usage endpoint. */
   extras: ExtraWindow[];
   level: PacingLevel;
+  /**
+   * True when the snapshot is too old to state as fact. We must never render an
+   * aged reading as a confident number — a 10-hour-old "0%" is indistinguishable
+   * from a real 0% but is simply wrong, and it's exactly the fabricated-percentage
+   * we refuse to show elsewhere. Stale reports render as "stale" and never nudge.
+   */
+  stale: boolean;
+  /** Age of the snapshot in ms, or null when there's no live data at all. */
+  ageMs: number | null;
   /** Absolute rolling cost (API-equivalent USD) — honest local signal, not a limit %. */
   cost: { fiveHourUSD: number; dailyUSD: number; weeklyUSD: number };
 }
@@ -90,6 +106,8 @@ export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number)
       (w) => !(w.resetAt != null && w.resetAt <= now),
     );
     if (windows.length) {
+      const ageMs = now - snap.observedAt;
+      const stale = ageMs > STALE_AFTER_MS;
       return {
         source: "headers",
         plan,
@@ -99,7 +117,10 @@ export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number)
         observedAt: snap.observedAt,
         windows,
         extras: snap.extras ?? [],
-        level: worstLevel(windows),
+        // A stale reading isn't a safe basis for a level — don't colour or nudge off it.
+        level: stale ? "ok" : worstLevel(windows),
+        stale,
+        ageMs,
         cost,
       };
     }
@@ -126,6 +147,8 @@ export function buildLimitsReport(cfg: GuardConfig, ledger: Ledger, now: number)
     windows: [],
     extras: [],
     level: "ok",
+    stale: false,
+    ageMs: null,
     cost,
   };
 }
@@ -149,6 +172,16 @@ function ageString(observedAt: number, now: number): string {
  * both the `agent-guard` and `ks guard` status views stay identical.
  */
 export function formatLimitsLines(limits: LimitsReport, now: number = Date.now()): string[] {
+  // Aged snapshot → be explicit rather than quoting numbers we can't stand behind.
+  if (limits.source === "headers" && limits.stale) {
+    return [
+      `⚪ Claude Code plan limits — STALE (last read ${limits.observedAt ? ageString(limits.observedAt, now) : "—"})`,
+      `   The live feed isn't updating, so these numbers are not shown. Claude Code supplies`,
+      `   limits to the statusLine, so open a session with \`agent-guard statusline\` wired up,`,
+      `   or run \`agent-guard usage\` (the endpoint backs off when rate-limited).`,
+    ];
+  }
+
   // Real proxy data → real percentages.
   if (limits.source === "headers") {
     const icon = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
@@ -176,6 +209,10 @@ export function formatLimitsLines(limits: LimitsReport, now: number = Date.now()
 
 /** One-line plan-limit summary for a status bar (e.g. Claude Code statusLine). */
 export function formatStatusline(limits: LimitsReport, now: number = Date.now()): string {
+  // Never dress an aged reading up as live numbers — say it's stale instead.
+  if (limits.source === "headers" && limits.stale) {
+    return `🛡 ⚪ limits stale${limits.ageMs != null ? ` (${ageString(limits.observedAt ?? 0, now)})` : ""}`;
+  }
   if (limits.source === "headers" && limits.windows.length) {
     const dot = limits.level === "danger" ? "🟥" : limits.level === "warn" ? "🟡" : "🟢";
     const five = limits.windows.find((w) => w.window === "5h");
