@@ -171,8 +171,16 @@ paid for. The dollar 402 is suppressed only for the anthropic proxy when you've 
 subscription `--plan` or seen fresh headers — a billed OpenAI/other agent sharing the proxy
 keeps its hard wall.
 
+**Where the numbers come from:** wire `ks guard statusline` as your Claude Code `statusLine` and
+that's it — Claude Code pipes `rate_limits` (5h + weekly) on stdin, so the live numbers cost **no
+network call, no credential read, and can't be rate-limited**. `ks guard usage` hits Anthropic's
+undocumented `/api/oauth/usage` only as a fallback and to top up the **per-model** weekly that
+stdin doesn't carry (at most hourly, honouring the endpoint's `429`/`retry-after` cooldown). If
+the feed goes stale, the guard says `⚪ limits stale` rather than quoting an old number.
+
 ```sh
-ks guard usage                                  # easiest: REAL 5h + weekly + per-model limits (from /api/oauth/usage)
+ks guard statusline                             # BEST: live 5h + weekly from Claude Code's statusLine stdin (no network)
+ks guard usage                                  # fallback + per-model weekly (undocumented endpoint, backs off on 429/401)
 ks guard proxy                                  # alt: ANTHROPIC_BASE_URL=http://localhost:8787 claude (in-flight headers)
 ks guard config --plan max5                     # auto (detects tier from ~/.claude.json) | pro | max5 | max20
 ks guard config --weekly-soft 0.6 --weekly-danger 0.85 --burn-ratio 1.5

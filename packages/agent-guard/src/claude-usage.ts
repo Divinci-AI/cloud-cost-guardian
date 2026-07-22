@@ -90,6 +90,15 @@ const OAUTH_BETA = "oauth-2025-04-20";
 const DEFAULT_THROTTLE_MS = 600_000; // 10 min
 
 /**
+ * How often to top up the per-model weekly extras when statusLine stdin is
+ * already supplying 5h + weekly. stdin has no per-model breakdown, and that can
+ * be the *tighter* limit (e.g. weekly-all-models 31% while a per-model weekly sits
+ * at 56%), so we still reach for the endpoint — just rarely, and always subject to
+ * the 429/401 backoff.
+ */
+export const EXTRAS_REFRESH_MS = 60 * 60_000; // 1 h
+
+/**
  * Best-effort read of the Claude Code OAuth access token from the OS credential
  * store. Returns null (never throws, never logs the token) if unavailable.
  */
@@ -311,6 +320,9 @@ export function triggerBackgroundRefresh(cliJsPath: string, now: number, throttl
     // otherwise we'd pop a surprise Keychain prompt mid-session.
     if (!meta.authorized) return;
     if (meta.lastFetchAt && now - meta.lastFetchAt < throttleMs) return; // recent enough
+    // Don't even spawn the child while the endpoint has told us to wait — it would
+    // just no-op inside refreshUsage.
+    if (meta.retryAfterUntil && now < meta.retryAfterUntil) return;
 
     // Claim the slot so concurrent renders/tool-calls skip the spawn…
     const prev = meta.lastFetchAt;
