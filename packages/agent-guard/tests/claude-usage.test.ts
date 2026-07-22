@@ -121,6 +121,18 @@ describe("triggerBackgroundRefresh — G1 authorization gate", () => {
     triggerBackgroundRefresh("/tmp/ks-nonexistent-refresh.js", now);
     expect(loadUsageMeta().lastFetchAt).toBe(now);
   });
+
+  it("does NOT spawn while the endpoint's backoff is still running", () => {
+    // A 429/401 cooldown is in effect — spawning a child would just no-op inside
+    // refreshUsage, so don't even pay for the process.
+    saveUsageMeta({ authorized: true, retryAfterUntil: now + 30 * 60_000 });
+    triggerBackgroundRefresh("/tmp/ks-nonexistent-refresh.js", now);
+    expect(loadUsageMeta().lastFetchAt).toBeUndefined(); // no slot claimed
+
+    // …and resumes once the cooldown has passed.
+    triggerBackgroundRefresh("/tmp/ks-nonexistent-refresh.js", now + 31 * 60_000);
+    expect(loadUsageMeta().lastFetchAt).toBe(now + 31 * 60_000);
+  });
 });
 
 describe("refreshUsage — full flow against a mock endpoint", () => {

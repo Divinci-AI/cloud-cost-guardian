@@ -97,9 +97,14 @@ ks guard pause --minutes 30                       # escape hatch (also: ks guard
 ks guard proxy --flavor openai                    # hard 402 wall for non-Claude-Code agents
 
 # Subscription limit awareness (Claude Code Pro/Max) — ALERT-ONLY, never blocks
-ks guard usage                                    # BEST: fetch REAL 5h + weekly + per-model limits from Anthropic's
-                                                  #   /api/oauth/usage (token from macOS Keychain / ~/.claude/.credentials.json).
-                                                  #   `ks guard status` also auto-refreshes this (throttled 120s). No proxy needed.
+ks guard statusline                               # BEST (0.2.0+): wire as Claude Code's statusLine. Claude Code pipes
+                                                  #   rate_limits.{five_hour,seven_day} on stdin — DOCUMENTED, no network,
+                                                  #   no credential read, can't be rate-limited, fresh every render.
+                                                  #   This is the PRIMARY source; the hook reads the snapshot it persists.
+ks guard usage                                    # FALLBACK + per-model weekly (stdin has no per-model breakdown).
+                                                  #   Undocumented /api/oauth/usage (token from Keychain / ~/.claude/.credentials.json);
+                                                  #   429s hard (hour-long retry-after) and 401s once the token expires, so it
+                                                  #   honours retry-after + backs off 5m→1h. Only ~hourly when stdin is working.
 ks guard proxy                                    # alt: run Claude Code THROUGH it (ANTHROPIC_BASE_URL=http://localhost:8787 claude)
                                                   #   → reads anthropic-ratelimit-unified-* headers in-flight (5h + weekly only)
 ks guard config --plan max5                       # auto (detect from ~/.claude.json) | pro | max5 | max20

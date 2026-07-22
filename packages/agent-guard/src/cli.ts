@@ -31,7 +31,7 @@ import { evaluate } from "./budget.js";
 import { fmtUSD } from "./cost.js";
 import { installHook, setBudget, setLimits, resetLedger } from "./ops.js";
 import { buildStatusReport, formatLimitsLines, formatStatusline, formatStatusReport } from "./report.js";
-import { refreshUsage, triggerBackgroundRefresh } from "./claude-usage.js";
+import { refreshUsage, triggerBackgroundRefresh, EXTRAS_REFRESH_MS } from "./claude-usage.js";
 import { parseStatuslineRateLimits, loadLimitsState, saveLimitsState } from "./limits.js";
 
 const program = new Command();
@@ -183,15 +183,16 @@ program
       /* malformed payload — fall through to the endpoint */
     }
 
-    // Only hit the network when stdin didn't give us live limits (non-subscriber,
-    // first render of a session, or an older Claude Code).
-    if (!fromStdin) {
-      try {
-        const cliPath = fileURLToPath(import.meta.url);
-        triggerBackgroundRefresh(cliPath, Date.now());
-      } catch {
-        /* best-effort */
-      }
+    // Network use is now the exception. Without stdin limits (non-subscriber, first
+    // render of a session, older Claude Code) the endpoint is our only source, so
+    // refresh at the normal cadence. With stdin limits we're already covered for 5h +
+    // weekly and only reach out hourly to top up the per-model extras stdin can't
+    // give us. Both paths respect the 429/401 backoff.
+    try {
+      const cliPath = fileURLToPath(import.meta.url);
+      triggerBackgroundRefresh(cliPath, Date.now(), fromStdin ? EXTRAS_REFRESH_MS : undefined);
+    } catch {
+      /* best-effort */
     }
     try {
       process.stdout.write(formatStatusline(buildStatusReport().limits));

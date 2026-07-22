@@ -115,10 +115,40 @@ scarce resource isn't dollars — it's your plan's rate-limit quota, in two roll
 - a **5-hour** window (burst protection), and
 - a **weekly** (7-day) window — the real lockout risk, "resets a couple times a month".
 
-### Easiest: `agent-guard usage`
+### Easiest: wire up the statusLine
 
-Pull your **real** limits straight from Anthropic — the same data `/usage` shows — no proxy, no
-workflow change:
+Claude Code hands its status bar a JSON payload on stdin, and for Pro/Max sessions that
+payload includes your live standing:
+
+```jsonc
+// .claude/settings.json (or settings.local.json)
+{ "statusLine": { "type": "command", "command": "agent-guard statusline" } }
+```
+
+That's the whole setup. `agent-guard statusline` reads `rate_limits.five_hour` and
+`rate_limits.seven_day` off stdin and keeps a live pill in your bar:
+
+```
+🛡 🟢 12%5h · 17%w · 9%d · 5.0wd
+```
+
+This is the **primary source**, and it's the good kind of boring: it's
+[documented](https://code.claude.com/docs/en/statusline), needs **no network call**, **no
+credential read**, and **can't be rate-limited**. It also refreshes on every render, so the
+snapshot the hook paces against is always current.
+
+Two things it can't do, both by design:
+
+- `rate_limits` only appears for **Claude.ai Pro/Max** subscribers, and only **after the first
+  API response** in a session — so the very first render of a session falls back to the endpoint.
+- It carries **no per-model breakdown**. If you have a per-model weekly (e.g. a model-specific
+  cap sitting at 56% while your all-models weekly is at 31%), *that* is your real constraint and
+  stdin won't show it — see below.
+
+### Filling the gaps: `agent-guard usage`
+
+For the per-model weekly, and when stdin isn't available, agent-guard falls back to Anthropic's
+`/api/oauth/usage` endpoint:
 
 ```sh
 agent-guard usage     # → 5-hour, weekly, and per-model (Sonnet/Opus) weekly utilization + resets
@@ -126,9 +156,15 @@ agent-guard usage     # → 5-hour, weekly, and per-model (Sonnet/Opus) weekly u
 
 It reads your Claude Code OAuth token from the OS credential store (macOS Keychain
 `Claude Code-credentials`, or `~/.claude/.credentials.json` on Linux — used only as a Bearer
-header, **never logged or stored**) and GETs the `/api/oauth/usage` endpoint. `status`
-auto-refreshes this (throttled to 120s). The endpoint is **undocumented**, so every call fails
-soft — if it's unavailable, agent-guard falls back to the proxy or "unknown".
+header, **never logged or stored**). When statusLine stdin is already supplying 5h + weekly,
+this runs at most **hourly**, purely to top up the per-model extras.
+
+> ⚠️ **The endpoint is undocumented and genuinely unreliable** — it rate-limits aggressively
+> (`429` with an hour-long `retry-after`) and returns `401` once the stored OAuth token expires.
+> agent-guard now **honours the server's cooldown** (and backs off exponentially, 5m→1h, on other
+> failures) instead of retrying into the wall; an earlier build hammered it every 120s and kept
+> itself locked out. Treat per-model numbers as best-effort: if the endpoint is unavailable,
+> you'll still get 5h + weekly from stdin, and the guard says so rather than guessing.
 
 > **macOS Keychain:** the first `agent-guard usage`/`status` may pop a Keychain prompt — click
 > **Always Allow** so it doesn't ask again. Background auto-refresh (from the hook/statusLine)
@@ -149,14 +185,10 @@ soft — if it's unavailable, agent-guard falls back to the proxy or "unknown".
 The weekly line spells out the **daily budget** — your weekly cap ÷ 7 (≈ 14%/day) — and how much
 runway you actually have, so a number like 17% (or even 60%) reads as "days left", not alarm.
 
-**Always-on:** wire `agent-guard statusline` as your Claude Code **statusLine** to keep a live
-`🛡 🟢 12%5h · 17%w · 9%d · 5.0wd` in the status bar — it refreshes the numbers in the background
-(throttled, non-blocking) so the hook's in-session pacing warnings stay current too:
-
-```jsonc
-// .claude/settings.json (or settings.local.json)
-{ "statusLine": { "type": "command", "command": "agent-guard statusline" } }
-```
+**Never a stale number.** If the feed stops updating, agent-guard says so instead of quoting an
+old reading — a 10-hour-old "0%" is indistinguishable from a real 0% but is simply wrong. A
+snapshot older than 30 minutes renders as `🛡 ⚪ limits stale (…)`, is never graded into a
+warning level, and never fires a pacing nudge.
 
 ### Alternative: the proxy
 
