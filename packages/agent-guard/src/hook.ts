@@ -230,6 +230,8 @@ export async function runHook(): Promise<void> {
 function limitNudge(rec: SessionRecord, ledger: Ledger, now: number, limits: LimitsReport | null): string | null {
   try {
     if (!limits || !limits.windows.length) return null;
+    // Never pace off an aged reading — a stale snapshot can be hours out of date.
+    if (limits.stale) return null;
     const urgent =
       limits.windows.find((w) => w.level === "danger") ?? limits.windows.find((w) => w.level === "warn");
     if (!urgent) return null;

@@ -29,6 +29,7 @@ import { fmtUSD } from "./cost.js";
 import { installHook, setBudget, setLimits, resetLedger } from "./ops.js";
 import { buildStatusReport, formatLimitsLines, formatStatusline, formatStatusReport } from "./report.js";
 import { refreshUsage, triggerBackgroundRefresh } from "./claude-usage.js";
+import { parseStatuslineRateLimits, loadLimitsState, saveLimitsState } from "./limits.js";
 
 const program = new Command();
 program
@@ -126,12 +127,18 @@ program
   .command("statusline")
   .description("Claude Code statusLine command: print live plan limits (and keep them fresh)")
   .action(async () => {
-    // Drain stdin (Claude Code pipes its render JSON) so we don't EPIPE; we don't
-    // need its contents for the limit display.
+    // Read stdin: Claude Code pipes its render JSON, and for Pro/Max sessions that
+    // payload carries `rate_limits` — the documented, zero-network source for our
+    // 5h + weekly standing. Prefer it over the (undocumented, rate-limited) usage
+    // endpoint; we only reach for the network when it isn't there.
+    let stdinRaw = "";
     try {
       if (!process.stdin.isTTY) {
         await new Promise<void>((resolve) => {
-          process.stdin.on("data", () => {});
+          process.stdin.setEncoding("utf8");
+          process.stdin.on("data", (c) => {
+            stdinRaw += c;
+          });
           process.stdin.on("end", () => resolve());
           process.stdin.on("error", () => resolve());
           setTimeout(resolve, 200);
@@ -140,12 +147,37 @@ program
     } catch {
       /* ignore */
     }
-    // Refresh in the background (non-blocking) so the bar renders instantly from cache.
+
+    let fromStdin = false;
     try {
-      const cliPath = fileURLToPath(import.meta.url);
-      triggerBackgroundRefresh(cliPath, Date.now());
+      if (stdinRaw.trim()) {
+        const now = Date.now();
+        const snap = parseStatuslineRateLimits(JSON.parse(stdinRaw), now);
+        if (snap) {
+          const prev = loadLimitsState();
+          // Carry forward per-model extras: stdin has no per-model breakdown, and
+          // they're display-only (the `usage` command refreshes them from the endpoint).
+          saveLimitsState({
+            ...prev,
+            subscriptionDetected: true,
+            snapshot: { ...snap, extras: prev.snapshot?.extras },
+          });
+          fromStdin = true;
+        }
+      }
     } catch {
-      /* best-effort */
+      /* malformed payload — fall through to the endpoint */
+    }
+
+    // Only hit the network when stdin didn't give us live limits (non-subscriber,
+    // first render of a session, or an older Claude Code).
+    if (!fromStdin) {
+      try {
+        const cliPath = fileURLToPath(import.meta.url);
+        triggerBackgroundRefresh(cliPath, Date.now());
+      } catch {
+        /* best-effort */
+      }
     }
     try {
       process.stdout.write(formatStatusline(buildStatusReport().limits));

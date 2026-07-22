@@ -255,6 +255,25 @@ describe.skipIf(!haveBuild)("hook integration (compiled cli.js hook)", () => {
     expect(readUsageMeta().lastFetchAt).toBeUndefined(); // gated off
   });
 
+  it("does NOT nudge off an AGED snapshot (stale data is not a basis to pace)", () => {
+    // Windows are still live (resets in the future) and would normally be danger,
+    // but the reading is 10h old — the feed is broken, so stay silent.
+    const now = Date.now();
+    writeLimitsSnapshot({
+      fiveHour: { utilization: 0.95, resetAt: now + 2 * 3600_000 },
+      weekly: { utilization: 0.97, resetAt: now + 2 * 86_400_000 },
+      status: "statusline",
+      observedAt: now - 10 * 3600_000,
+    });
+    const transcript = writeTranscript("claude-sonnet-4", 50_000, 0);
+    const { stdout, status } = runHook(
+      { session_id: "s-aged", transcript_path: transcript, hook_event_name: "PreToolUse" },
+      {},
+    );
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe("");
+  });
+
   it("does NOT nudge on a stale snapshot whose window already reset (F2)", () => {
     const now = Date.now();
     writeLimitsSnapshot({

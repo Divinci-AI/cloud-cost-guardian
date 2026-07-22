@@ -3,6 +3,7 @@ import {
   parseUtilization,
   parseReset,
   parseUnifiedHeaders,
+  parseStatuslineRateLimits,
   recordHeaders,
   limitNotifyKey,
   unifiedHeaderDump,
@@ -113,5 +114,65 @@ describe("limitNotifyKey", () => {
   it("re-keys per window+level+reset so a new window re-alerts", () => {
     expect(limitNotifyKey("weekly", "danger", 111)).toBe("weekly:danger:111");
     expect(limitNotifyKey("weekly", "danger", 222)).not.toBe(limitNotifyKey("weekly", "danger", 111));
+  });
+});
+
+/**
+ * Claude Code's statusLine stdin `rate_limits` — the documented, zero-network
+ * source that replaced polling the (undocumented, rate-limited) usage endpoint.
+ * Docs: used_percentage is 0–100; resets_at is Unix epoch SECONDS; the object is
+ * absent for non-subscribers and before the session's first API response, and
+ * each window may be independently absent.
+ */
+describe("parseStatuslineRateLimits — Claude Code statusLine stdin", () => {
+  const now = 1_700_000_000_000;
+
+  it("maps used_percentage (0–100) and epoch-SECONDS resets_at", () => {
+    const resetSecs = Math.floor(now / 1000) + 3600; // 1h out, in seconds
+    const s = parseStatuslineRateLimits(
+      { rate_limits: { five_hour: { used_percentage: 50, resets_at: resetSecs }, seven_day: { used_percentage: 25, resets_at: resetSecs } } },
+      now,
+    )!;
+    expect(s.fiveHour!.utilization).toBeCloseTo(0.5);
+    expect(s.weekly!.utilization).toBeCloseTo(0.25);
+    // Seconds must be scaled to ms — not read as a 1970 timestamp.
+    expect(s.fiveHour!.resetAt).toBe(resetSecs * 1000);
+    expect(s.status).toBe("statusline");
+    expect(s.observedAt).toBe(now);
+  });
+
+  it("reads a 1% window as 0.01, not 1.0", () => {
+    const s = parseStatuslineRateLimits({ rate_limits: { seven_day: { used_percentage: 1 } } }, now)!;
+    expect(s.weekly!.utilization).toBeCloseTo(0.01);
+  });
+
+  it("handles each window being independently absent", () => {
+    const s = parseStatuslineRateLimits({ rate_limits: { five_hour: { used_percentage: 12 } } }, now)!;
+    expect(s.fiveHour!.utilization).toBeCloseTo(0.12);
+    expect(s.weekly).toBeNull();
+    expect(s.fiveHour!.resetAt).toBeNull(); // no resets_at given
+  });
+
+  it("returns null when rate_limits is missing → caller falls back to the endpoint", () => {
+    // Non-subscriber, or before the first API response of a session.
+    expect(parseStatuslineRateLimits({ model: { display_name: "Opus" } }, now)).toBeNull();
+    expect(parseStatuslineRateLimits({ rate_limits: {} }, now)).toBeNull();
+    expect(parseStatuslineRateLimits({}, now)).toBeNull();
+    expect(parseStatuslineRateLimits(null, now)).toBeNull();
+  });
+
+  it("ignores malformed window values rather than inventing a number", () => {
+    const s = parseStatuslineRateLimits(
+      { rate_limits: { five_hour: { used_percentage: "nope" as any }, seven_day: { used_percentage: 30 } } },
+      now,
+    )!;
+    expect(s.fiveHour).toBeNull();
+    expect(s.weekly!.utilization).toBeCloseTo(0.3);
+  });
+
+  it("clamps out-of-range percentages into 0–1", () => {
+    const s = parseStatuslineRateLimits({ rate_limits: { five_hour: { used_percentage: 140 }, seven_day: { used_percentage: -5 } } }, now)!;
+    expect(s.fiveHour!.utilization).toBe(1);
+    expect(s.weekly!.utilization).toBe(0);
   });
 });

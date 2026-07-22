@@ -180,6 +180,53 @@ export function parseUnifiedHeaders(h: HeaderGetter, now: number): LimitSnapshot
 }
 
 /** Stable dedup key for a pacing alert: re-alerts when the window resets. */
+/**
+ * The slice of Claude Code's statusLine stdin payload we consume. Claude Code
+ * pipes this JSON on every status-bar render; `rate_limits` is the **documented,
+ * zero-network** source for subscription standing — no endpoint, no throttling,
+ * no credential read. Everything else on the payload is ignored.
+ *
+ * Per the docs: `rate_limits` appears only for Claude.ai (Pro/Max) subscribers
+ * and only *after the first API response* in a session, and each window may be
+ * independently absent — so every field here is optional and we fail soft to
+ * the endpoint fallback.
+ */
+export interface StatuslineRateWindow {
+  /** 0–100 percent of the window consumed. */
+  used_percentage?: number | null;
+  /** Unix epoch **seconds** when the window resets (parseReset handles the units). */
+  resets_at?: number | string | null;
+}
+export interface StatuslineInput {
+  rate_limits?: {
+    five_hour?: StatuslineRateWindow | null;
+    seven_day?: StatuslineRateWindow | null;
+  } | null;
+}
+
+function statuslineWindow(w: StatuslineRateWindow | null | undefined, now: number): WindowState | null {
+  if (!w || typeof w.used_percentage !== "number" || !Number.isFinite(w.used_percentage)) return null;
+  return {
+    utilization: Math.max(0, Math.min(1, w.used_percentage / 100)),
+    resetAt: parseReset(w.resets_at == null ? null : String(w.resets_at), now),
+  };
+}
+
+/**
+ * Map Claude Code's statusLine stdin JSON into a {@link LimitSnapshot}.
+ * Returns null when the payload carries no usable `rate_limits` (not a
+ * subscriber, first render of a session, or malformed) so the caller can fall
+ * back to the OAuth usage endpoint.
+ */
+export function parseStatuslineRateLimits(input: unknown, now: number): LimitSnapshot | null {
+  const rl = (input as StatuslineInput | null | undefined)?.rate_limits;
+  if (!rl || typeof rl !== "object") return null;
+  const fiveHour = statuslineWindow(rl.five_hour, now);
+  const weekly = statuslineWindow(rl.seven_day, now);
+  if (!fiveHour && !weekly) return null;
+  return { fiveHour, weekly, status: "statusline", observedAt: now };
+}
+
 export function limitNotifyKey(window: LimitWindow, level: string, resetAt: number | null): string {
   return `${window}:${level}:${resetAt ?? 0}`;
 }
